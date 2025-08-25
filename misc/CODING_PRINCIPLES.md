@@ -417,7 +417,7 @@ Regularly run these tools for formatting and linting. eg:
 ```sh
 # Docs
 uvx --from md-toc md_toc --in-place github --header-levels 4 README.md scripts/*.md
-uvx rumdl check . --fix
+uvx rumdl check . --fix --respect-gitignore -d MD013
 
 
 # Formatting
