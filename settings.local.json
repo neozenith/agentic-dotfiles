@@ -21,6 +21,7 @@
       "Bash(grep:*)",
       "Bash(mkdir:*)",
       "WebFetch(domain:docs.anthropic.com)",
+      "WebFetch(domain:packaging.python.org)",
       "Bash(ps:*)",
       "Bash(uv run:*)",
       "WebSearch",
@@ -32,7 +33,6 @@
       "Bash(uv add:*)",
       "mcp__ide__getDiagnostics",
       "Bash(test:*)",
-      "Bash(mq:*)",
       "Bash(awk:*)",
       "Bash(sed:*)"
     ],
