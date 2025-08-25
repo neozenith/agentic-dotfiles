@@ -14,7 +14,7 @@ git submodule add https://github.com/neozenith/agentic-dotfiles.git .claude
 ### Update
 
 ```sh
-git submodule ...?? 🤷🏻‍♂️
+git submodule update --init --recursive --remote
 ```
 
 ## Option #2: gitignored clone
