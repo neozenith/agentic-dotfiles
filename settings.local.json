@@ -34,7 +34,9 @@
       "mcp__ide__getDiagnostics",
       "Bash(test:*)",
       "Bash(awk:*)",
-      "Bash(sed:*)"
+      "Bash(sed:*)",
+      "Bash(make test:*)",
+      "Bash(uvx isort:*)"
     ],
     "deny": [
       "Read(.env)",
