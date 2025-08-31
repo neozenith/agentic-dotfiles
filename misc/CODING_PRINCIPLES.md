@@ -527,6 +527,7 @@ Before refactoring code, ask:
 
 - Target >75% code coverage (ideal).
 - Target >50% code coverage is also pragmatically acceptable.
+- Never lower the `--cov-fail-under=` threshold. Once we achieve a certain level, it should never regress.
 - Use parametrised tests where possible to maximise least test code vs maxium scenarios covered.
 
 **Philosophy:**
