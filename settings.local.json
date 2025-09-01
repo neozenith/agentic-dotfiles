@@ -28,7 +28,7 @@
       "Bash(duckdb:*)",
       "Bash(uvx ruff format:*)",
       "Bash(sqlite3:*)",
-      "Bash(claude -p :*",
+      "Bash(claude -p :*)",
       "Bash(uv run claude-observer:*)",
       "Bash(uv add:*)",
       "mcp__ide__getDiagnostics",
