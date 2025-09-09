@@ -36,7 +36,8 @@
       "Bash(awk:*)",
       "Bash(sed:*)",
       "Bash(make test:*)",
-      "Bash(uvx isort:*)"
+      "Bash(uvx isort:*)",
+      "mcp__serena"
     ],
     "deny": [
       "Read(.env)",
