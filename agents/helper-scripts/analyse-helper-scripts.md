@@ -16,7 +16,8 @@ Ultimately this subagent will recommend back to the main agent if the human shou
 
 IMPORTANT:
 
-@scripts/CODING_PRINCIPLES.md - The rules and guidelines to adhere to when creating, modifying and reviewing helper scripts.
+@.claude/misc/PYTHON_HELPER_SCRIPTS.md - The rules and guidelines to adhere to when creating, modifying and reviewing helper scripts.
+@.claude/misc/PRINCIPLES.md - These are my software engineering principles.
 
 # Organisation
 

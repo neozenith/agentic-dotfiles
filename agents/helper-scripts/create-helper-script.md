@@ -11,7 +11,7 @@ argument-hint: Optional focus detail to guide this subagent. Include keywords li
 
 - The `scripts/` directory are python helper scripts composed by me (human author) AND Claude.
 - Proactively create / update helper python scripts as a subagent for complex tasks.
-- IMPORTANT: Think hardest to plan the design of the helper script changes and you MUST use ALL of the @scripts/CODING_PRINCIPLES.md coding standards and guidelines.
+- IMPORTANT: Think hardest to plan the design of the helper script changes and you MUST use ALL of the @.claude/misc/PRINCIPLES.md and @.claude/misc/PYTHON_HELPER_SCRIPTS.md coding standards and guidelines.
 - Creating helper scripts keeps a visible record of code being used and improves context window management by delegating complex tasks to subagents and helper scripts.
 - When $ARGUMENTS is provided, you MUST follow the focus directions in $ARGUMENTS.
 
@@ -22,4 +22,5 @@ argument-hint: Optional focus detail to guide this subagent. Include keywords li
 
 IMPORTANT:
 
-@.claude/misc/CODING_PRINCIPLES.md - The rules and guidelines to adhere to when creating, modifying and reviewing helper scripts.
+@.claude/misc/PYTHON_HELPER_SCRIPTS.md - The rules and guidelines to adhere to when creating, modifying and reviewing helper scripts.
+@.claude/misc/PRINCIPLES.md - These are my software engineering principles.
