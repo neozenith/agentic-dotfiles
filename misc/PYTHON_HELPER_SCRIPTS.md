@@ -2,15 +2,14 @@
 
 <!--TOC-->
 
-- [Coding Principles](#coding-principles)
+- [Python Coding Conventions](#python-coding-conventions)
   - [Script Guidelines](#script-guidelines)
-    - [Naming Helper Scripts](#naming-helper-scripts)
     - [Running Scripts](#running-scripts)
     - [Script Dependencies](#script-dependencies)
+    - [Naming Helper Scripts](#naming-helper-scripts)
     - [Environment Variables](#environment-variables)
     - [Git Integration](#git-integration)
     - [Helper Functions](#helper-functions)
-    - [Interacting with AWS](#interacting-with-aws)
     - [Handling Files](#handling-files)
     - [Configuration, Paths and Caching](#configuration-paths-and-caching)
     - [Logging Output](#logging-output)
@@ -18,6 +17,7 @@
     - [Main Function Integration](#main-function-integration)
     - [Testing](#testing)
     - [Triage Script Output Format](#triage-script-output-format)
+    - [Interacting with AWS](#interacting-with-aws)
     - [System Documentation](#system-documentation)
     - [Quality Assurance](#quality-assurance)
 

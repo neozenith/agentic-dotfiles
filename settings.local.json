@@ -37,7 +37,8 @@
       "Bash(sed:*)",
       "Bash(make test:*)",
       "Bash(uvx isort:*)",
-      "mcp__serena"
+      "mcp__serena",
+      "Bash(make:*)"
     ],
     "deny": [
       "Read(.env)",

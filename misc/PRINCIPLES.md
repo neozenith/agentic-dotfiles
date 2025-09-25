@@ -1,6 +1,7 @@
 # Principles
 
 <!--TOC-->
+
 - [Principles](#principles)
   - [High Quality](#high-quality)
   - [Lens of Pragmatism](#lens-of-pragmatism)
@@ -12,6 +13,8 @@
     - [Examples of What NOT to refactor:](#examples-of-what-not-to-refactor)
     - [Examples of What TO refactor / fix:](#examples-of-what-to-refactor--fix)
   - [Testing Strategy](#testing-strategy)
+  - [Running Python Scripts](#running-python-scripts)
+
 <!--TOC-->
 
 ## High Quality
@@ -119,3 +122,30 @@ Before refactoring code, ask:
 - to then form **hypothesis** 
 - and then synthesize **experiments**
 - in the form of new **tests** or new **triage** scripts.
+
+## Failure Modes
+
+### Consider Graceful Fallbacks Dangerous
+
+- Do not implement graceful fallbacks unless explicitly directed. These often create silent failure modes.
+- The system either works as designed or it is really noisy when something is wrong and halts.
+- We want to catch broken parts of the system early and have correct implementations before it gets to production.
+- Graceful fallbacks give an incorrect measure of success.
+
+## Running Python Scripts
+
+NEVER run arbitrary `python` commands. Especially `python -c '...'`.
+
+Create the python script first even if it is a temporary one. 
+
+Each script should run independently using `uv` like:
+
+```sh
+uv run scripts/script_name_here.py
+```
+
+You should be able to extract full usage information with the `--help` flag.
+
+```sh
+uv run scripts/script_name_here.py --help
+```
