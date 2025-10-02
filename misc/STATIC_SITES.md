@@ -577,7 +577,13 @@ document.addEventListener("DOMContentLoaded", initializeML);
 
 ### Deck.GL
 
-Deck.GL is a WebGL-powered framework for visualizing large-scale data with high performance. Here's the implementation pattern for effective 3D visualization:
+Deck.GL is a WebGL-powered framework for visualizing large-scale data with high performance. We have two distinct Deck.GL usage patterns: **3D visualizations** and **geospatial map overlays**.
+
+---
+
+#### Pattern 1: 3D Visualization (Point Clouds, Embeddings)
+
+For visualizing 3D data like embeddings, point clouds, or scientific data. Here's the implementation pattern for effective 3D visualization:
 
 #### HTML Setup
 
@@ -862,6 +868,592 @@ document.addEventListener("DOMContentLoaded", () => {
   }, 100);
 });
 ```
+
+---
+
+#### Pattern 2: Geospatial Map Overlays (GeoJSON, Transport Networks)
+
+For visualizing geospatial data on interactive maps with MapLibre GL base maps. This pattern is optimized for large-scale GeoJSON datasets, multi-layer overlays, and interactive selections.
+
+##### HTML Setup
+
+```html
+<!-- Deck.GL with MapLibre GL base map -->
+<script src="https://unpkg.com/deck.gl@latest/dist.min.js"></script>
+<script src="https://unpkg.com/maplibre-gl@3.0.0/dist/maplibre-gl.js"></script>
+<link href="https://unpkg.com/maplibre-gl@3.0.0/dist/maplibre-gl.css" rel="stylesheet" />
+
+<!-- Optional: DuckDB for data queries -->
+<script type="module">
+  import * as duckdb from 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@latest/+esm';
+  window.duckdb = duckdb;
+</script>
+
+<!-- Optional: Plotly for charts -->
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+```
+
+##### Key Architecture Components
+
+**1. Layer Configuration System**
+
+Use JSON configuration files to define all map layers externally:
+
+```json
+{
+  "version": "2024-09-24-15:45",
+  "colors": {
+    "fill5min": [0, 200, 100, 20],
+    "line5min": [0, 150, 75, 200],
+    "hover": [255, 150, 0, 120]
+  },
+  "layers": [
+    {
+      "id": "isochrones-5min",
+      "type": "GeoJsonLayer",
+      "data": "./data/5.geojson",
+      "filled": true,
+      "stroked": true,
+      "pickable": false,
+      "getFillColor": "color:fill5min",
+      "getLineColor": "color:line5min",
+      "getLineWidth": 1,
+      "highlightColor": "color:hover"
+    },
+    {
+      "id": "postcodes",
+      "type": "GeoJsonLayer",
+      "data": "./data/postcodes.geojson",
+      "pickable": true,
+      "autoHighlight": true,
+      "getFillColor": [200, 50, 200, 0],
+      "getLineColor": [200, 50, 200, 100],
+      "getLineWidth": 6
+    }
+  ]
+}
+```
+
+**Benefits:**
+- **Separation of concerns**: Visual config separate from code
+- **Easy updates**: Non-developers can modify layer visibility, colors, widths
+- **Color references**: `"color:fill5min"` references color palette
+- **Layer management**: Toggle layers on/off without code changes
+
+**2. Deck.GL with MapLibre GL Base Map**
+
+```javascript
+// Initialize MapLibre GL JS base map
+const { DeckGL, GeoJsonLayer, ScatterplotLayer } = deck;
+
+const INITIAL_VIEW_STATE = {
+  longitude: 144.9631,
+  latitude: -37.8136,
+  zoom: 11,
+  pitch: 0,
+  bearing: 0
+};
+
+// Create Deck instance with MapLibre integration
+window.deckgl = new DeckGL({
+  container: 'container',
+  mapStyle: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
+  initialViewState: INITIAL_VIEW_STATE,
+  controller: true,
+  getTooltip: ({ object }) => {
+    if (!object) return null;
+    return {
+      html: createTooltipHTML(object),
+      style: {
+        background: 'rgba(0, 0, 0, 0.8)',
+        color: 'white',
+        padding: '8px',
+        borderRadius: '4px'
+      }
+    };
+  },
+  onClick: ({ object, layer }) => {
+    if (object && layer.props.pickable) {
+      handleSelection(object, layer);
+    }
+  }
+});
+```
+
+**3. Dynamic Layer Creation from Config**
+
+```javascript
+// Function to resolve color references
+function resolveColorReference(value, colors) {
+  if (typeof value === "string" && value.startsWith("color:")) {
+    const colorKey = value.substring(6);
+    return colors[colorKey] || [255, 255, 255, 255];
+  }
+  return value;
+}
+
+// Function to create layers from config
+function createLayersFromConfig(config) {
+  if (!config || !config.layers) return [];
+
+  const colors = config.colors || {};
+
+  return config.layers.map((layerConfig) => {
+    const processedConfig = { ...layerConfig };
+
+    // Resolve color references
+    ["getFillColor", "getLineColor", "highlightColor"].forEach((prop) => {
+      if (processedConfig[prop]) {
+        processedConfig[prop] = resolveColorReference(
+          processedConfig[prop],
+          colors
+        );
+      }
+    });
+
+    // Handle special cases (e.g., dynamic data loading)
+    if (processedConfig.id === "real-estate-candidates") {
+      // Load and process GeoJSON
+      fetch(processedConfig.data)
+        .then(response => response.json())
+        .then(geojson => {
+          const features = geojson.features.map(feature => ({
+            ...feature.properties,
+            coordinates: feature.geometry.coordinates,
+            geometry: feature.geometry
+          }));
+
+          // Handle color extraction from properties
+          if (processedConfig.getFillColor === "ptv_walkability_colour") {
+            processedConfig.getFillColor = (d) => {
+              const hex = d.ptv_walkability_colour;
+              return hexToRgbA(hex) || [255, 255, 255, 255];
+            };
+          }
+
+          processedConfig.data = features;
+
+          // Update layer dynamically
+          const newLayer = new GeoJsonLayer(processedConfig);
+          const currentLayers = window.deckgl.props.layers || [];
+          const filtered = currentLayers.filter(l => l.id !== processedConfig.id);
+          window.deckgl.setProps({ layers: [...filtered, newLayer] });
+        });
+
+      // Return placeholder while loading
+      return new GeoJsonLayer({
+        ...processedConfig,
+        data: []
+      });
+    }
+
+    // Remove type property (not needed by deck.gl)
+    delete processedConfig.type;
+
+    return new GeoJsonLayer(processedConfig);
+  });
+}
+
+// Load and apply configuration
+fetch("./layers_config.json")
+  .then(response => response.json())
+  .then(config => {
+    const layers = createLayersFromConfig(config);
+    window.deckgl.setProps({ layers });
+    console.log(`Loaded ${layers.length} layers from config`);
+  })
+  .catch(error => {
+    console.error("Error loading layer configuration:", error);
+  });
+```
+
+**4. Interactive Layer Controls**
+
+```javascript
+// Layer visibility management
+const layerVisibility = {
+  "isochrones-5min": true,
+  "isochrones-15min": true,
+  "postcodes": true,
+  "lga-boundaries": true,
+  "suburbs-sal": true
+};
+
+function toggleLayer(layerId) {
+  layerVisibility[layerId] = !layerVisibility[layerId];
+
+  const updatedLayers = window.deckgl.props.layers.map(layer => {
+    if (layer.id === layerId) {
+      return layer.clone({ visible: layerVisibility[layerId] });
+    }
+    return layer;
+  });
+
+  window.deckgl.setProps({ layers: updatedLayers });
+}
+
+// Setup UI checkboxes
+document.querySelectorAll('.layer-item input[type="checkbox"]').forEach(checkbox => {
+  checkbox.addEventListener('change', (e) => {
+    const layerId = e.target.dataset.layerId;
+    toggleLayer(layerId);
+  });
+});
+```
+
+**5. Selection Management System**
+
+```javascript
+// Multi-selection with type-based limits
+const MAX_SELECTIONS_BY_TYPE = {
+  "real-estate-candidates": 2,
+  "postcodes": 2,
+  "lga": 2,
+  "sal": 2,
+  "ptv-stops-tram": 1,
+  "ptv-stops-train": 1
+};
+
+let selectedItems = [];
+
+function handleSelection(object, layer) {
+  const layerType = getLayerType(layer.id);
+  const maxSelections = MAX_SELECTIONS_BY_TYPE[layerType] || 1;
+
+  // Check if already selected
+  const existingIndex = selectedItems.findIndex(item =>
+    item.id === object.id && item.type === layerType
+  );
+
+  if (existingIndex !== -1) {
+    // Remove if clicking again
+    selectedItems.splice(existingIndex, 1);
+  } else {
+    // Check limits
+    const typeCount = selectedItems.filter(item =>
+      item.type === layerType
+    ).length;
+
+    if (typeCount >= maxSelections) {
+      // Remove oldest of this type
+      const oldestIndex = selectedItems.findIndex(item =>
+        item.type === layerType
+      );
+      selectedItems.splice(oldestIndex, 1);
+    }
+
+    // Add new selection
+    selectedItems.push({
+      id: object.id || generateId(object),
+      type: layerType,
+      properties: object.properties || object,
+      geometry: object.geometry
+    });
+  }
+
+  updateSelectionPanel();
+}
+
+function updateSelectionPanel() {
+  const panel = document.getElementById('selection-panel');
+  const container = document.getElementById('selected-items-container');
+
+  if (selectedItems.length === 0) {
+    panel.style.display = 'none';
+    return;
+  }
+
+  panel.style.display = 'block';
+  container.innerHTML = selectedItems.map((item, index) =>
+    createSelectionCard(item, index)
+  ).join('');
+}
+
+function createSelectionCard(item, index) {
+  let content = '';
+
+  // Type-specific content
+  if (item.type === 'lga') {
+    content = `
+      <strong>${item.properties.LGA_NAME24}</strong><br/>
+      LGA Code: ${item.properties.LGA_CODE24}<br/>
+      <div id="chart-${index}" class="shared-chart"></div>
+    `;
+
+    // Create chart after DOM update
+    setTimeout(() => {
+      createAreaChart(
+        `chart-${index}`,
+        "LGA",
+        item.properties.LGA_CODE24,
+        "rental",
+        item.properties.LGA_NAME24
+      );
+    }, 200);
+  } else if (item.type === 'sal') {
+    content = `
+      <strong>${item.properties.SAL_NAME21}</strong><br/>
+      SAL Code: ${item.properties.SAL_CODE21}<br/>
+      <div id="chart-${index}" class="shared-chart"></div>
+    `;
+
+    setTimeout(() => {
+      createAreaChart(
+        `chart-${index}`,
+        "SUBURB",
+        item.properties.SAL_CODE21,
+        "rental",
+        item.properties.SAL_NAME21
+      );
+    }, 200);
+  }
+
+  return `
+    <div class="selection-card" data-index="${index}">
+      <button class="remove-btn" onclick="removeSelection(${index})">×</button>
+      ${content}
+    </div>
+  `;
+}
+```
+
+**6. DuckDB Integration for Analytics**
+
+```javascript
+// Initialize DuckDB WASM
+async function initializeDuckDB() {
+  console.log("Initializing DuckDB WASM...");
+
+  // Wait for duckdb module
+  let retries = 20;
+  while (retries > 0 && typeof window.duckdb === "undefined") {
+    await new Promise(resolve => setTimeout(resolve, 100));
+    retries--;
+  }
+
+  if (typeof window.duckdb === "undefined") {
+    throw new Error("DuckDB WASM module not loaded");
+  }
+
+  const duckdb = window.duckdb;
+  const logger = new duckdb.ConsoleLogger(duckdb.LogLevel.WARNING);
+  const bundles = duckdb.getJsDelivrBundles();
+  const worker = await duckdb.createWorker(bundles.mvp.mainWorker);
+  const db = new duckdb.AsyncDuckDB(logger, worker);
+  await db.instantiate(bundles.mvp.mainModule);
+  const connection = await db.connect();
+
+  // Load external database file
+  const response = await fetch("./data/rental_sales.duckdb");
+  if (!response.ok) {
+    throw new Error(`Failed to fetch database: ${response.status}`);
+  }
+
+  const dbBuffer = await response.arrayBuffer();
+  await db.registerFileBuffer("rental_sales.duckdb", new Uint8Array(dbBuffer));
+  await connection.query("ATTACH 'rental_sales.duckdb' AS rental_sales;");
+
+  // Verify connection
+  const testResult = await connection.query(
+    "SELECT COUNT(*) as total_records FROM rental_sales.rental_sales;"
+  );
+  const recordCount = testResult.toArray()[0].total_records;
+  console.log(`Connected to database with ${recordCount} records`);
+
+  // Make globally available
+  window.duckdbConnection = connection;
+  window.duckdbDatabase = db;
+
+  // Dispatch ready event
+  window.dispatchEvent(new CustomEvent("duckdbReady", {
+    detail: { connection, database: db, recordCount }
+  }));
+
+  return { connection, database: db };
+}
+
+// Query data with hyphen-delimited code support
+async function queryRentalData(geospatialType, geospatialId, dataType = "rental") {
+  if (!window.duckdbConnection) {
+    throw new Error("DuckDB connection not available");
+  }
+
+  // Handle hyphen-delimited codes in database
+  // Database may contain multiple codes like "CODE1-CODE2-CODE3"
+  // We need to split and check if our code is in the list
+  const query = `
+    SELECT
+      time_bucket,
+      dwelling_type,
+      bedrooms,
+      statistic,
+      value,
+      EXTRACT(YEAR FROM time_bucket) as year,
+      EXTRACT(QUARTER FROM time_bucket) as quarter
+    FROM rental_sales.rental_sales
+    WHERE geospatial_type = '${geospatialType.toLowerCase()}'
+      AND list_contains(string_split(geospatial_codes, '-'), '${geospatialId}')
+      AND data_type = '${dataType}'
+      AND statistic = 'median'
+      AND value IS NOT NULL
+    ORDER BY time_bucket, dwelling_type, bedrooms;
+  `;
+
+  const result = await window.duckdbConnection.query(query);
+  const rows = result.toArray();
+
+  console.log(`Found ${rows.length} records for ${geospatialType} ${geospatialId}`);
+
+  return processQueryResults(rows);
+}
+```
+
+**7. Chart Integration with Plotly**
+
+```javascript
+// Create area chart from query results
+async function createAreaChart(containerId, geoType, geoId, dataType, displayName) {
+  const data = await queryRentalData(geoType, geoId, dataType);
+
+  if (data.dates.length === 0) {
+    document.getElementById(containerId).innerHTML =
+      '<p style="padding: 20px; text-align: center; color: #666;">No data available</p>';
+    return;
+  }
+
+  // Prepare traces for Plotly
+  const traces = Object.keys(data.series).map(seriesKey => {
+    return {
+      x: data.dates,
+      y: data.series[seriesKey],
+      name: seriesKey,
+      type: 'scatter',
+      mode: 'lines',
+      fill: 'tonexty',
+      line: { color: getSeriesColor(seriesKey) }
+    };
+  });
+
+  const layout = {
+    title: `${displayName} - ${dataType === 'rental' ? 'Weekly Rent' : 'Sales Price'}`,
+    xaxis: { title: 'Date' },
+    yaxis: { title: dataType === 'rental' ? 'Weekly Rent ($)' : 'Sales Price ($)' },
+    height: 300,
+    margin: { t: 40, r: 20, b: 40, l: 60 }
+  };
+
+  Plotly.newPlot(containerId, traces, layout, { responsive: true });
+}
+
+function getSeriesColor(seriesKey) {
+  if (seriesKey === "All Properties") return "#1976D2";
+
+  // House series: green tones
+  if (seriesKey.startsWith("House-")) {
+    if (seriesKey.includes("-1")) return "#A5D6A7";
+    if (seriesKey.includes("-2")) return "#81C784";
+    if (seriesKey.includes("-3")) return "#4CAF50";
+    if (seriesKey.includes("-4")) return "#388E3C";
+    if (seriesKey.includes("-5")) return "#2E7D32";
+    return "#4CAF50";
+  }
+
+  // Unit series: orange tones
+  if (seriesKey.startsWith("Unit-")) {
+    if (seriesKey.includes("-1")) return "#FFCC80";
+    if (seriesKey.includes("-2")) return "#FFB74D";
+    if (seriesKey.includes("-3")) return "#FF9800";
+    if (seriesKey.includes("-4")) return "#F57C00";
+    if (seriesKey.includes("-5")) return "#E65100";
+    return "#FF9800";
+  }
+
+  return "#666666";
+}
+```
+
+##### Key Geospatial Patterns
+
+**1. External Configuration**: Use JSON files for layer definitions, enabling non-developer updates
+
+**2. Color Reference System**: `"color:colorName"` allows centralized color management
+
+**3. Dynamic Data Loading**: Lazy-load GeoJSON files and process on demand
+
+**4. Multi-Selection Management**: Type-based limits prevent cluttered selections
+
+**5. DuckDB Integration**:
+   - Load external `.duckdb` files for analytics
+   - Use `list_contains(string_split())` for hyphen-delimited code matching
+   - Dispatch custom events when database ready
+
+**6. Plotly Charts**: Integrate charts directly into selection cards
+
+**7. MapLibre Base Maps**: Use `mapStyle` property for various base map styles:
+   - CARTO Dark Matter: `https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json`
+   - CARTO Positron: `https://basemaps.cartocdn.com/gl/positron-gl-style/style.json`
+   - OpenStreetMap: Various providers available
+
+##### File Structure
+
+```
+sites/webapp/
+├── index.html
+├── scripts.js
+├── layers_config.json          # Layer definitions
+├── geospatial_mappings.js      # Code mappings
+├── Makefile
+├── data/
+│   ├── 5.geojson               # Isochrone data
+│   ├── 15.geojson
+│   ├── postcodes.geojson       # Boundary polygons
+│   ├── lga_boundaries.geojson
+│   ├── sal_suburbs.geojson
+│   ├── stops_train.geojson     # Point data
+│   ├── stops_tram.geojson
+│   └── rental_sales.duckdb     # Analytics database
+└── sql/
+    ├── lga_template.sql        # Query templates
+    ├── postcode_template.sql
+    └── sa2_template.sql
+```
+
+##### Performance Considerations
+
+**Layer Management:**
+- Use `visible` property for toggling layers (don't recreate)
+- Load large GeoJSON files asynchronously
+- Process features once and cache results
+
+**DuckDB Queries:**
+- Use indexed columns for fast lookups
+- Batch queries when possible
+- Cache query results in JavaScript
+
+**Memory Management:**
+- Dispose of old layers before creating new ones
+- Limit selection count to prevent memory issues
+- Use lightweight GeoJSON (avoid excessive precision)
+
+##### Testing Considerations
+
+- Wait for `duckdbReady` event before testing queries
+- Test with various selection combinations
+- Verify layer toggle behavior
+- Test chart rendering with different data types
+- Validate hyphen-delimited code matching
+
+##### Complete Integration Example
+
+See `sites/webapp/` in the isochrones project for a production implementation featuring:
+- 12 GeoJSON layers (isochrones, boundaries, transport networks, real estate)
+- DuckDB with 297K rental/sales records
+- Interactive charts with rental vs sales toggle
+- Multi-selection with type-based limits
+- Hyphen-delimited geospatial code handling
+- MapLibre GL base map integration
+
+---
 
 ### Cytoscape
 
