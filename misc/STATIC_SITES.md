@@ -1455,6 +1455,550 @@ See `sites/webapp/` in the isochrones project for a production implementation fe
 
 ---
 
+#### Pattern 2B: Parquet Layer Loading with Progressive Tracking
+
+For projects with large geospatial datasets (100MB+ GeoJSON), migrating to Apache Parquet format provides significant benefits: 80%+ file size reduction, columnar storage efficiency, and browser-based SQL query capabilities through DuckDB's spatial extension.
+
+##### Architecture Overview
+
+**Data Flow:**
+```
+Parquet Files → DuckDB WASM + Spatial Extension → ST_AsGeoJSON → GeoJsonLayer → Deck.GL
+```
+
+**Key Components:**
+1. **DuckDB WASM**: In-browser SQL database with spatial extension
+2. **Apache Parquet**: Columnar storage format (81% smaller than GeoJSON)
+3. **Progressive Loading Tracker**: Step-based progress with substep support
+4. **Parallel Layer Loading**: Concurrent loading with exponential backoff retry
+5. **Custom Event Coordination**: `duckdbReady` event for async initialization
+
+##### Parquet Layer Configuration
+
+Create a JSON configuration file for Parquet layers:
+
+**`parquet_layers_config.json`:**
+```json
+{
+  "layers": [
+    {
+      "id": "isochrones-5min-parquet",
+      "displayName": "5-minute Walking",
+      "parquetPath": "./data/5.parquet",
+      "options": {
+        "filled": true,
+        "stroked": true,
+        "extruded": false,
+        "pickable": false,
+        "getFillColor": [0, 200, 100, 20],
+        "getLineColor": [0, 150, 75, 200],
+        "getLineWidth": 1,
+        "lineWidthMinPixels": 1,
+        "autoHighlight": false,
+        "highlightColor": [255, 150, 0, 120],
+        "visible": true,
+        "transitions": {
+          "getFillColor": 200
+        }
+      }
+    },
+    {
+      "id": "real-estate-candidates-parquet",
+      "displayName": "Property Candidates",
+      "parquetPath": "./data/all_candidates.parquet",
+      "options": {
+        "pickable": true,
+        "opacity": 0.8,
+        "stroked": true,
+        "filled": true,
+        "getPointRadius": 20,
+        "pointRadiusMinPixels": 10,
+        "pointRadiusMaxPixels": 30,
+        "lineWidthMinPixels": 2,
+        "lineWidthMaxPixels": 6,
+        "getFillColor": "ptv_walkability_colour",
+        "getLineColor": [255, 255, 255, 255],
+        "getLineWidth": 2,
+        "autoHighlight": true,
+        "highlightColor": [255, 150, 0, 120],
+        "visible": true
+      }
+    }
+  ]
+}
+```
+
+##### Progressive Loading Tracker Pattern
+
+Implement a step-based tracker with substep support for detailed progress:
+
+```javascript
+const loadingSteps = {
+  steps: [
+    { id: 'duckdb-wasm', name: 'Loading DuckDB library', status: 'pending' },
+    { id: 'duckdb-init', name: 'Initializing database', status: 'pending' },
+    { id: 'spatial-ext', name: 'Loading spatial extension', status: 'pending' },
+    { id: 'rental-db', name: 'Loading rental database', status: 'pending' },
+    { id: 'db-verify', name: 'Verifying connection', status: 'pending' },
+    { id: 'layers', name: 'Loading map layers', status: 'pending', substeps: { total: 12, completed: 0 } }
+  ],
+
+  getProgress() {
+    const completed = this.steps.filter(s => s.status === 'success').length;
+    return { completed, total: this.steps.length };
+  },
+
+  updateStep(id, status, errorMessage = null) {
+    const step = this.steps.find(s => s.id === id);
+    if (step) {
+      step.status = status;
+      if (errorMessage) {
+        step.errorMessage = errorMessage;
+      }
+      this.updateUI();
+    }
+  },
+
+  updateSubsteps(id, completed, total = null) {
+    const step = this.steps.find(s => s.id === id);
+    if (step && step.substeps) {
+      step.substeps.completed = completed;
+      if (total !== null) {
+        step.substeps.total = total;
+      }
+      this.updateUI();
+    }
+  },
+
+  updateUI() {
+    const { completed, total } = this.getProgress();
+    const currentStep = this.steps.find(s => s.status === 'loading');
+    const errorStep = this.steps.find(s => s.status === 'error');
+    const allComplete = completed === total;
+
+    let message, status;
+
+    if (errorStep) {
+      // Red indicator with error message
+      message = `(${completed}/${total}) Error: ${errorStep.errorMessage || errorStep.name}`;
+      status = 'error';
+    } else if (allComplete) {
+      // Green indicator when complete
+      const dbVerifyStep = this.steps.find(s => s.id === 'db-verify');
+      message = dbVerifyStep.successMessage || `Connected (${completed}/${total})`;
+      status = 'success';
+    } else if (currentStep) {
+      // Orange indicator during loading with substep progress
+      message = `(${completed}/${total}) ${currentStep.name}`;
+      if (currentStep.substeps && currentStep.substeps.total > 0) {
+        message += ` (${currentStep.substeps.completed}/${currentStep.substeps.total})`;
+      }
+      status = 'loading';
+    } else {
+      message = `(${completed}/${total}) Loading...`;
+      status = 'loading';
+    }
+
+    updateDuckDBStatus(status, message);
+  }
+};
+
+// UI update function
+function updateDuckDBStatus(status, message) {
+  const statusIcon = document.getElementById('duckdb-status-icon');
+  const statusText = document.getElementById('duckdb-status-text');
+
+  // Update icon color: orange (loading), green (success), red (error)
+  const colors = {
+    loading: '#ffa500',
+    success: '#4caf50',
+    error: '#f44336'
+  };
+
+  if (statusIcon) {
+    statusIcon.style.background = colors[status] || '#ffa500';
+  }
+
+  if (statusText) {
+    statusText.textContent = message;
+  }
+}
+```
+
+##### DuckDB Initialization with Spatial Extension
+
+Initialize DuckDB WASM with spatial extension for Parquet geometry conversion:
+
+```javascript
+async function initializeDuckDB() {
+  loadingSteps.updateStep('duckdb-wasm', 'loading');
+
+  try {
+    // Wait for DuckDB WASM module
+    let retries = 20;
+    while (retries > 0 && typeof window.duckdb === "undefined") {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      retries--;
+    }
+
+    if (typeof window.duckdb === "undefined") {
+      throw new Error("DuckDB WASM module failed to load");
+    }
+
+    loadingSteps.updateStep('duckdb-wasm', 'success');
+    loadingSteps.updateStep('duckdb-init', 'loading');
+
+    // Initialize DuckDB instance
+    const duckdb = window.duckdb;
+    const logger = new duckdb.ConsoleLogger(duckdb.LogLevel.WARNING);
+    const bundles = duckdb.getJsDelivrBundles();
+    const worker = await duckdb.createWorker(bundles.mvp.mainWorker);
+    const db = new duckdb.AsyncDuckDB(logger, worker);
+    await db.instantiate(bundles.mvp.mainModule);
+    const connection = await db.connect();
+
+    loadingSteps.updateStep('duckdb-init', 'success');
+    loadingSteps.updateStep('spatial-ext', 'loading');
+
+    // Install and load spatial extension for ST_AsGeoJSON
+    await connection.query("INSTALL spatial");
+    await connection.query("LOAD spatial");
+
+    loadingSteps.updateStep('spatial-ext', 'success');
+
+    // Make globally available
+    window.duckdbConnection = connection;
+    window.duckdbDatabase = db;
+
+    // Dispatch ready event for coordination
+    window.dispatchEvent(new CustomEvent("duckdbReady", {
+      detail: { connection, database: db }
+    }));
+
+    console.log("DuckDB WASM with spatial extension initialized");
+    return { connection, database: db };
+
+  } catch (error) {
+    const stepId = loadingSteps.steps.find(s => s.status === 'loading')?.id || 'duckdb-wasm';
+    loadingSteps.updateStep(stepId, 'error', error.message);
+    throw error;
+  }
+}
+```
+
+##### Parallel Parquet Layer Loading with Retry Logic
+
+Load multiple Parquet layers concurrently with exponential backoff retry:
+
+```javascript
+// Retry with exponential backoff
+async function retryWithBackoff(fn, retries = 3, delay = 1000) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await fn();
+    } catch (error) {
+      if (i === retries - 1) throw error;
+      console.warn(`Retry ${i + 1}/${retries} after ${delay}ms:`, error.message);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      delay *= 2; // Exponential backoff: 1s, 2s, 4s
+    }
+  }
+}
+
+// Create Parquet layer using DuckDB spatial extension
+async function createParquetLayer(layerConfig) {
+  const conn = window.duckdbConnection;
+
+  if (!conn) {
+    throw new Error("DuckDB connection not initialized");
+  }
+
+  // Load Parquet file into DuckDB
+  const tableName = `layer_${layerConfig.id.replace(/-/g, '_')}`;
+
+  await retryWithBackoff(async () => {
+    await conn.query(`
+      CREATE OR REPLACE TABLE ${tableName} AS
+      SELECT * FROM read_parquet('${layerConfig.parquetPath}')
+    `);
+  });
+
+  // Convert geometries to GeoJSON using ST_AsGeoJSON
+  const result = await conn.query(`
+    SELECT ST_AsGeoJSON(geometry) as geojson_geometry, *
+    FROM ${tableName}
+  `);
+
+  const rows = result.toArray();
+
+  // Convert to GeoJSON FeatureCollection
+  const features = rows.map(row => {
+    const geojson = JSON.parse(row.geojson_geometry);
+
+    return {
+      type: "Feature",
+      geometry: geojson,
+      properties: Object.fromEntries(
+        Object.entries(row).filter(([key]) => key !== 'geojson_geometry' && key !== 'geometry')
+      )
+    };
+  });
+
+  // Handle dynamic property-based colors
+  let processedOptions = { ...layerConfig.options };
+
+  if (processedOptions.getFillColor === "ptv_walkability_colour") {
+    processedOptions.getFillColor = (d) => {
+      const hex = d.properties?.ptv_walkability_colour || '#FFFFFF';
+      return hexToRgbA(hex) || [255, 255, 255, 255];
+    };
+  }
+
+  // Create GeoJsonLayer from Parquet data
+  return new deck.GeoJsonLayer({
+    id: layerConfig.id,
+    data: {
+      type: "FeatureCollection",
+      features: features
+    },
+    ...processedOptions
+  });
+}
+
+// Load all layers in parallel with progress tracking
+async function loadAllParquetLayers() {
+  loadingSteps.updateStep('layers', 'loading');
+
+  try {
+    // Fetch layer configuration
+    const configResponse = await fetch('./parquet_layers_config.json');
+    const config = await configResponse.json();
+
+    loadingSteps.updateSubsteps('layers', 0, config.layers.length);
+
+    // Load layers in parallel
+    const layerPromises = config.layers.map(async (layerConfig, index) => {
+      try {
+        const layer = await createParquetLayer(layerConfig);
+        loadingSteps.updateSubsteps('layers', index + 1);
+        console.log(`✓ Loaded layer: ${layerConfig.displayName}`);
+        return layer;
+      } catch (error) {
+        console.error(`✗ Failed to load layer: ${layerConfig.displayName}`, error);
+        loadingSteps.updateSubsteps('layers', index + 1);
+        return null; // Return null for failed layers
+      }
+    });
+
+    const layers = (await Promise.all(layerPromises)).filter(Boolean);
+
+    loadingSteps.updateStep('layers', 'success');
+
+    // Update Deck.GL instance
+    window.deckgl.setProps({ layers });
+
+    console.log(`Loaded ${layers.length}/${config.layers.length} Parquet layers`);
+    return layers;
+
+  } catch (error) {
+    loadingSteps.updateStep('layers', 'error', error.message);
+    throw error;
+  }
+}
+
+// Initialize on DuckDB ready
+window.addEventListener('duckdbReady', () => {
+  loadAllParquetLayers().catch(error => {
+    console.error("Failed to load Parquet layers:", error);
+  });
+});
+```
+
+##### Color Conversion Utilities
+
+```javascript
+// Convert hex color to RGBA array
+function hexToRgbA(hex) {
+  if (!hex || typeof hex !== 'string') return null;
+
+  hex = hex.replace('#', '');
+
+  if (hex.length === 6) {
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    return [r, g, b, 255];
+  }
+
+  return null;
+}
+```
+
+##### Complete Integration Pattern
+
+**HTML Setup:**
+```html
+<!-- DuckDB WASM -->
+<script type="module">
+  import * as duckdb from 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@latest/+esm';
+  window.duckdb = duckdb;
+</script>
+
+<!-- Status indicator -->
+<div id="duckdb-status" style="margin-bottom: 8px; padding: 6px 8px; background: #f5f5f5; border-radius: 3px;">
+  <span id="duckdb-status-icon" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #ffa500;"></span>
+  <span id="duckdb-status-text">Loading DuckDB...</span>
+</div>
+```
+
+**Initialization Flow:**
+```javascript
+// Full initialization sequence
+async function initialize() {
+  try {
+    // Step 1-3: Initialize DuckDB with spatial extension
+    await initializeDuckDB();
+
+    // Step 4: Load external analytics database (optional)
+    if (window.duckdbConnection) {
+      loadingSteps.updateStep('rental-db', 'loading');
+      await loadExternalDatabase();
+      loadingSteps.updateStep('rental-db', 'success');
+    }
+
+    // Step 5: Verify connection
+    loadingSteps.updateStep('db-verify', 'loading');
+    const result = await window.duckdbConnection.query("SELECT 1 as test");
+    const testValue = result.toArray()[0].test;
+
+    if (testValue === 1n || testValue === 1) {
+      const dbVerifyStep = loadingSteps.steps.find(s => s.id === 'db-verify');
+      dbVerifyStep.successMessage = "Connected";
+      loadingSteps.updateStep('db-verify', 'success');
+    }
+
+    // Step 6: Load Parquet layers (triggered by duckdbReady event)
+    // Handled by event listener above
+
+  } catch (error) {
+    console.error("Initialization failed:", error);
+    throw error;
+  }
+}
+
+// Start initialization
+document.addEventListener('DOMContentLoaded', () => {
+  initialize();
+});
+```
+
+##### Key Implementation Patterns
+
+**1. Progressive Loading Tracker:**
+- Shows overall progress: `(3/6) Loading spatial extension`
+- Displays substep progress: `(5/6) Loading map layers (8/12)`
+- Visual status indicators: Orange (loading), Green (success), Red (error)
+- Error messages displayed on failure
+
+**2. Parquet + DuckDB Spatial:**
+- Use `read_parquet()` to load Parquet files into DuckDB tables
+- Use `ST_AsGeoJSON(geometry)` to convert geometries to GeoJSON
+- Convert query results to GeoJSON FeatureCollection format
+- Create Deck.GL GeoJsonLayer from converted data
+
+**3. Parallel Loading with Retry:**
+- Load multiple layers concurrently with `Promise.all()`
+- Exponential backoff retry: 1s, 2s, 4s delays
+- Continue loading remaining layers if individual layers fail
+- Track progress with substep updates
+
+**4. Custom Event Coordination:**
+- Dispatch `duckdbReady` event after DuckDB initialization
+- Use event listener to trigger layer loading
+- Allows decoupled initialization sequence
+
+**5. File Size Optimization:**
+- **Before**: 12 GeoJSON files @ 137MB total
+- **After**: 12 Parquet files @ 26MB total (81% reduction)
+- Faster downloads, less bandwidth, better performance
+
+##### Performance Considerations
+
+**Parquet Loading:**
+- Parquet files load 3-5x faster than equivalent GeoJSON
+- DuckDB spatial extension adds ~1-2 seconds to initialization
+- ST_AsGeoJSON conversion is fast (<100ms per layer)
+- Columnar format enables efficient filtering and querying
+
+**Memory Management:**
+- DuckDB creates temporary tables for each layer
+- Drop tables after conversion to free memory: `DROP TABLE ${tableName}`
+- Consider batching for very large datasets (>100k features)
+
+**Browser Caching:**
+- Parquet files are cached by browser
+- DuckDB spatial extension is cached
+- Subsequent loads are 10x faster
+
+##### Testing Considerations
+
+- Wait for `duckdbReady` event before testing layer interactions
+- Test retry logic with network throttling
+- Verify substep progress updates during layer loading
+- Test error handling with invalid Parquet files
+- Validate color conversion for property-based colors
+- Check memory usage with large Parquet datasets
+
+##### File Structure
+
+```
+sites/webapp/
+├── index.html
+├── scripts.js
+├── parquet_layers_config.json   # Parquet layer definitions
+├── Makefile
+├── data/
+│   ├── 5.parquet                # Isochrone data (was 5.geojson)
+│   ├── 15.parquet               # 81% smaller than GeoJSON
+│   ├── postcodes.parquet        # Boundary polygons
+│   ├── lga_boundaries.parquet
+│   ├── sal_suburbs.parquet
+│   ├── stops_train.parquet      # Point data
+│   ├── stops_tram.parquet
+│   ├── candidates.parquet       # Property data
+│   └── rental_sales.duckdb      # Analytics database
+```
+
+##### Migration from GeoJSON to Parquet
+
+**Python conversion script:**
+```python
+import geopandas as gpd
+
+# Read GeoJSON
+gdf = gpd.read_file("input.geojson")
+
+# Write Parquet with compression
+gdf.to_parquet(
+    "output.parquet",
+    compression="snappy",
+    index=False
+)
+
+print(f"Size reduction: {os.path.getsize('input.geojson') / os.path.getsize('output.parquet'):.1f}x")
+```
+
+**Complete production example:** See `sites/webapp/` in the isochrones project for a full implementation featuring:
+- 12 Parquet layers with 81% file size reduction vs GeoJSON
+- Progressive loading tracker with 6 steps and 12 substeps
+- Parallel layer loading with exponential backoff retry
+- DuckDB spatial extension for ST_AsGeoJSON conversion
+- Custom event coordination for async initialization
+- Visual status indicators (orange/green/red)
+- Error handling with detailed error messages
+
+---
+
 ### Cytoscape
 
 Cytoscape.js is a graph theory library for modeling and visualizing relational data, ideal for network graphs, knowledge graphs, and social networks.
