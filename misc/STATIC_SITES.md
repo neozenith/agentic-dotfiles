@@ -86,7 +86,7 @@ serve:
 	uv run -m http.server --directory $(THIS_DIR) $(PORT_NUMBER)
 
 build:
-    uv run scripts/my_datapipeline_script.py
+  uv run scripts/my_datapipeline_script.py
 
 docs:
 	# Markdown
