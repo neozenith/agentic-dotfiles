@@ -1,4 +1,4 @@
-# Guideance Docs
+# Guidance Docs
 
 ## Overview
 
