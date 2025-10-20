@@ -1,5 +1,8 @@
 # Python Coding Conventions
 
+---
+<details>
+<summary><b>Table of Contents</b></summary>
 <!--TOC-->
 
 - [Python Coding Conventions](#python-coding-conventions)
@@ -22,6 +25,9 @@
     - [Quality Assurance](#quality-assurance)
 
 <!--TOC-->
+</details>
+
+---
 
 
 ## Script Guidelines

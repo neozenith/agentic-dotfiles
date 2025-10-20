@@ -1,5 +1,8 @@
 # Principles
 
+---
+<details>
+<summary><b>Table of Contents</b></summary>
 <!--TOC-->
 
 - [Principles](#principles)
@@ -16,6 +19,9 @@
   - [Running Python Scripts](#running-python-scripts)
 
 <!--TOC-->
+</details>
+
+---
 
 ## High Quality
 
