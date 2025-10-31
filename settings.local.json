@@ -53,57 +53,6 @@
     "defaultMode": "acceptEdits"
   },
   "hooks": {
-    "Notification": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "uv run $(git rev-parse --show-toplevel)/.claude/hooks/hogger.py"
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "uv run $(git rev-parse --show-toplevel)/.claude/hooks/hogger.py"
-          }
-        ]
-      }
-    ],
-    "PreToolUse": [
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "uv run $(git rev-parse --show-toplevel)/.claude/hooks/hogger.py"
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "uv run $(git rev-parse --show-toplevel)/.claude/hooks/hogger.py"
-          }
-        ]
-      }
-    ],
-    "SubagentStop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "uv run $(git rev-parse --show-toplevel)/.claude/hooks/hogger.py"
-          }
-        ]
-      }
-    ]
+
   }
 }
