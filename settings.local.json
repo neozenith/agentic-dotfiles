@@ -38,7 +38,8 @@
       "Bash(make test:*)",
       "Bash(uvx isort:*)",
       "mcp__serena",
-      "Bash(make:*)"
+      "Bash(make:*)",
+      "Bash(tree:*)"
     ],
     "deny": [
       "Read(.env)",
@@ -52,7 +53,5 @@
     ],
     "defaultMode": "acceptEdits"
   },
-  "hooks": {
-
-  }
+  "hooks": {}
 }
