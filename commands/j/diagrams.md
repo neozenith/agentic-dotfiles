@@ -19,6 +19,10 @@ Setup and maintain automatic project diagrams using Mermaid.JS
     diagrams: $(patsubst %.mmd,%.png,$(wildcard *.mmd))
   ```
     - Check the commands in the Makefile target are indented with tabs and not spaces.
-- Analyse any existing `docs/diagrams/*.mmd` files and analyse the codebase to create an updated version of the .mmd file.
+- For each `docs/diagrams/*.mmd` files
+    - analyse the codebase to create an updated version of the .mmd file so it reflects an accurate and up to date lens view of the code base this diagrams is portraying.
 - Run `make -C docs/diagrams diagrams` to refresh the updated versions of the diagrams generated as PNGs.
-- If the README.md has a section with these diagrams already in it, ensure all diagrams are documented in that same section of the README.md
+- If the README.md has a section with these diagrams already in it, 
+    - ensure all diagrams are documented in that same section of the README.md. 
+    - Each of the PNG images should use a markdown image tag to actually render the image in the README.
+    - Under each image there should be a markdown link referencing the source file.
