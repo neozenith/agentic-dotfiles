@@ -4,25 +4,88 @@ description: "Update Mermaid.JS diagrams"
 
 # Context
 
-Setup and maintain automatic project diagrams using Mermaid.JS
+Setup and maintain automatic project diagrams using Mermaid.JS.
+This is a **generalizable command** that works for ANY project by analyzing YOUR codebase.
 
 # Workflow
 
-- If folder `docs/diagrams/` does not exist then create it.
-- If `docs/diagrams/Makefile` does not exist then create it with this exact content:
-  ```Makefile
-    # When a MermaidJS source file (*.mmd) is updated, generate a corresponding PNG file.
-    %.png: %.mmd
-        npx -p @mermaid-js/mermaid-cli mmdc --input $< --output $@ --theme default --backgroundColor white --scale 4
+## Step 1: Setup Infrastructure
 
-    # A top level target to mark that all diagrams have a correpsonding png that should exist if it doesn't already.
-    diagrams: $(patsubst %.mmd,%.png,$(wildcard *.mmd))
+Run the setup script to ensure docs/diagrams/ exists with proper Makefile:
+
+```bash
+uv run .claude/scripts/setup_diagrams.py
+```
+
+This creates:
+- `docs/diagrams/` directory
+- `docs/diagrams/Makefile` (with proper tabs)
+- `docs/diagrams/.gitattributes`
+- `docs/diagrams/README.md`
+
+## Step 2: Update Each Diagram (Parallel Execution)
+
+For EACH `.mmd` file in `docs/diagrams/`, launch a Task subagent to update it.
+
+**Use the Task tool with these parameters:**
+- `subagent_type`: "general-purpose"
+- `description`: "Update [diagram-name] diagram"
+- `prompt`: Detailed instructions for that specific diagram
+
+**Important:** Launch ALL agents in PARALLEL (single message with multiple Task tool calls).
+
+### Example Agent Prompts (Adapt to Actual Diagrams):
+
+For a diagram like `data-pipeline-architecture.mmd`:
+```
+Update the diagram at docs/diagrams/data-pipeline-architecture.mmd to reflect the current data processing pipeline.
+
+1. Read the existing diagram to understand its structure and purpose
+2. Analyze the codebase:
+   - Find all Python scripts in scripts/ directory
+   - Parse the Makefile to understand which scripts are actively used
+   - Identify data processing layers and dependencies
+3. Update the .mmd file:
+   - Remove references to scripts that no longer exist
+   - Add new scripts if major additions were made
+   - Update script descriptions if their purpose changed
+   - Preserve the existing Mermaid flowchart structure and styling
+4. Report what you changed
+
+Only update this diagram, don't modify other files.
+```
+
+For a diagram like `makefile-dependencies.mmd`:
+```
+Update the diagram at docs/diagrams/makefile-dependencies.mmd to reflect current Makefile targets.
+
+1. Read the existing diagram
+2. Parse the Makefile to extract:
+   - All .PHONY targets
+   - Target dependencies
+   - Main workflow targets
+3. Update the .mmd file to show the current dependency graph
+4. Report what changed
+
+Only update this diagram.
+```
+
+## Step 3: Generate PNG Images
+
+After all agents complete, regenerate PNGs:
+
+```bash
+make -C docs/diagrams diagrams
+```
+
+## Step 4: Sync README
+
+If the project README.md has an "Architecture Diagrams" or similar section:
+- Ensure all diagrams are listed
+- Each diagram should show:
+  ```markdown
+  ![Diagram Name](docs/diagrams/diagram-name.png)
+  [Source](docs/diagrams/diagram-name.mmd)
   ```
-    - Check the commands in the Makefile target are indented with tabs and not spaces.
-- For each `docs/diagrams/*.mmd` files
-    - analyse the codebase to create an updated version of the .mmd file so it reflects an accurate and up to date lens view of the code base this diagrams is portraying.
-- Run `make -C docs/diagrams diagrams` to refresh the updated versions of the diagrams generated as PNGs.
-- If the README.md has a section with these diagrams already in it, 
-    - ensure all diagrams are documented in that same section of the README.md. 
-    - Each of the PNG images should use a markdown image tag to actually render the image in the README.
-    - Under each image there should be a markdown link referencing the source file.
+
+If no such section exists, consider whether to add one based on the project context.
