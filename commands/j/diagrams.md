@@ -1,11 +1,13 @@
 ---
-description: "Update Mermaid.JS diagrams"
+description: "Update Mermaid.JS diagrams with complexity analysis"
 ---
 
 # Context
 
-Setup and maintain automatic project diagrams using Mermaid.JS.
+Setup and maintain automatic project diagrams using Mermaid.JS with **visual clarity enforcement**.
 This is a **generalizable command** that works for ANY project by analyzing YOUR codebase.
+
+**Research basis**: Cognitive load research (Huang et al., 2020) shows 50 nodes is the difficulty threshold for graph comprehension. This workflow enforces these limits through automated complexity analysis.
 
 # Workflow
 
@@ -23,9 +25,172 @@ This creates:
 - `docs/diagrams/.gitattributes`
 - `docs/diagrams/README.md`
 
-## Step 2: Update Each Diagram (Parallel Execution)
+## Step 2: Identify Diagram Lenses
 
-For EACH `.mmd` file in `docs/diagrams/`, launch a Task subagent to update it.
+Before creating diagrams, identify the key **lenses** (perspectives/views) needed for the project:
+
+| Lens | Purpose | Typical Content |
+|------|---------|-----------------|
+| `architecture` | System structure | Components, services, modules |
+| `data-flow` | Information movement | Data paths, transformations |
+| `deployment` | Infrastructure | Servers, containers, cloud services |
+| `security` | Trust boundaries | Auth flows, encryption, access control |
+| `sequence` | Interactions | API calls, user flows, processes |
+| `state` | State machines | Statuses, transitions, workflows |
+
+### File Organization Pattern
+
+Use **lens prefix + density suffix** for clear organization:
+
+```
+docs/diagrams/
+├── architecture-overview.mmd    # Low-density bird's eye view
+├── architecture-detail.mmd      # High-density full system
+├── architecture-api.mmd         # High-density subsystem focus
+├── architecture-agents.mmd      # High-density subsystem focus
+├── data-flow-overview.mmd       # Low-density data paths
+├── data-flow-detail.mmd         # High-density transformations
+├── deployment-overview.mmd      # Low-density infrastructure
+├── security-overview.mmd        # Low-density trust boundaries
+└── sequence-auth.mmd            # Specific interaction flow
+```
+
+**Naming Convention**: `{lens}-{scope}.mmd`
+- `{lens}`: architecture, data-flow, deployment, security, sequence, state
+- `{scope}`: overview (low-density), detail (high-density), or specific subsystem name
+
+## Step 3: Analyze Existing Diagram Complexity
+
+**BEFORE updating any diagrams**, run the complexity analyzer:
+
+```bash
+# Default analysis (high-density preset - research-backed limits)
+uv run .claude/scripts/mermaid_complexity.py docs/diagrams/
+
+# With detailed calculation breakdown
+uv run .claude/scripts/mermaid_complexity.py docs/diagrams/ --show-working
+
+# Analyze overview diagrams with stricter thresholds
+uv run .claude/scripts/mermaid_complexity.py docs/diagrams/*-overview.mmd --preset low
+
+# Analyze detail diagrams with permissive thresholds
+uv run .claude/scripts/mermaid_complexity.py docs/diagrams/*-detail.mmd --preset high
+```
+
+### Output Includes:
+- Visual Complexity Score (VCS) for each diagram
+- Node and edge counts with threshold comparisons
+- Rating: ideal/acceptable/complex/critical
+- Subdivision recommendations with step-by-step calculation (`--show-working`)
+- Recursive analysis warning if recommended splits would still exceed thresholds
+
+### Density Presets
+
+Choose a preset based on diagram purpose:
+
+| Preset | Nodes (acceptable/complex) | VCS (acceptable/complex) | Use Case |
+|--------|---------------------------|-------------------------|----------|
+| `low-density` (low/l) | ≤12 / ≤20 | ≤25 / ≤40 | Overview diagrams, executive summaries |
+| `medium-density` (med/m) | ≤20 / ≤35 | ≤40 / ≤70 | README diagrams, component docs |
+| `high-density` (high/h) | ≤35 / ≤50 | ≤60 / ≤100 | Detailed architecture (default) |
+
+### Configuration Options
+
+**CLI arguments** (highest precedence):
+```bash
+uv run .claude/scripts/mermaid_complexity.py docs/diagrams/ --preset med --node-target=18
+```
+
+**Environment variables** (prefix `MERMAID_COMPLEXITY_`):
+```bash
+MERMAID_COMPLEXITY_PRESET=low uv run .claude/scripts/mermaid_complexity.py docs/diagrams/
+```
+
+**.env file** (in project root):
+```
+MERMAID_COMPLEXITY_PRESET=medium-density
+MERMAID_COMPLEXITY_NODE_TARGET=20
+```
+
+## Step 4: Handle Complex Diagrams (Subdivision)
+
+For any diagram rated **complex** or **critical**, apply the hierarchical subdivision pattern:
+
+### 4a. Review Working Out
+
+First, understand why subdivision is recommended:
+
+```bash
+uv run .claude/scripts/mermaid_complexity.py docs/diagrams/complex_diagram.mmd --show-working
+```
+
+This shows:
+1. **Threshold checks**: Which limits are exceeded
+2. **Node-based splits**: `ceil(nodes / node_target)`
+3. **VCS-based splits**: `ceil(vcs / vcs_target)`
+4. **Subgraph adjustment**: Using existing subgraphs as natural boundaries
+5. **Recursive analysis**: Estimated complexity per split with warnings if still too complex
+
+### 4b. Create Dual-Density Versions
+
+For each lens, maintain both density levels:
+
+**Low-density overview** (`{lens}-overview.mmd`):
+- Top-level components as single nodes
+- Only major relationships
+- Target: ≤12 nodes, VCS ≤25
+- Perfect for: README, presentations, onboarding
+
+**High-density detail** (`{lens}-detail.mmd`):
+- All significant components
+- Complete relationships
+- Target: ≤35 nodes, VCS ≤60
+- Perfect for: technical deep-dives, debugging
+
+### 4c. Example Dual-Density Pattern
+
+Original: `backend_architecture.mmd` (50 nodes, VCS=159 - CRITICAL)
+
+Subdivide into:
+```
+docs/diagrams/
+├── architecture-overview.mmd      # Low-density: 4 boxes (API, Agents, Storage, External)
+├── architecture-detail.mmd        # High-density: Full system (~35 nodes)
+├── architecture-api.mmd           # High-density subsystem: FastAPI routes
+├── architecture-agents.mmd        # High-density subsystem: Agent system
+└── architecture-storage.mmd       # High-density subsystem: Database layer
+```
+
+### 4d. Subdivision Agent Prompt Template
+
+For each subdivision, launch a Task agent with:
+
+```
+Create a focused diagram at docs/diagrams/{lens}-{scope}.mmd
+
+Purpose: {describe the view this diagram provides}
+Density: {low-density for overview, high-density for detail}
+Source: Extract from {original_diagram} focusing on {subgraph_name}
+
+1. Read the original diagram at docs/diagrams/{original}.mmd
+2. Identify all nodes and edges within scope
+3. Create a new focused diagram that:
+   - Contains ONLY nodes appropriate for this density level
+   - Shows external connections as simplified boundary nodes (e.g., "→ Storage Layer")
+   - Preserves the styling (classDef, linkStyle) from original
+   - Uses consistent node IDs for cross-referencing
+4. Verify complexity is within thresholds for the density preset
+
+Report:
+- Node count and VCS
+- Density preset used for validation
+- Which nodes were extracted
+- What boundary connections were simplified
+```
+
+## Step 5: Update Each Diagram (Parallel Execution)
+
+For EACH `.mmd` file in `docs/diagrams/` (after subdivision), launch a Task subagent to update it.
 
 **Use the Task tool with these parameters:**
 - `subagent_type`: "general-purpose"
@@ -36,56 +201,184 @@ For EACH `.mmd` file in `docs/diagrams/`, launch a Task subagent to update it.
 
 ### Example Agent Prompts (Adapt to Actual Diagrams):
 
-For a diagram like `data-pipeline-architecture.mmd`:
+For an overview diagram like `architecture-overview.mmd`:
 ```
-Update the diagram at docs/diagrams/data-pipeline-architecture.mmd to reflect the current data processing pipeline.
+Update the diagram at docs/diagrams/architecture-overview.mmd to reflect current system architecture.
 
-1. Read the existing diagram to understand its structure and purpose
-2. Analyze the codebase:
-   - Find all Python scripts in scripts/ directory
-   - Parse the Makefile to understand which scripts are actively used
-   - Identify data processing layers and dependencies
-3. Update the .mmd file:
-   - Remove references to scripts that no longer exist
-   - Add new scripts if major additions were made
-   - Update script descriptions if their purpose changed
-   - Preserve the existing Mermaid flowchart structure and styling
-4. Report what you changed
+This is a LOW-DENSITY overview diagram. Requirements:
+- Maximum 12 nodes (show only top-level components)
+- Group subsystems into single boxes
+- Show only primary relationships between major components
+- This should fit on a single slide/README section
+
+1. Read the existing diagram to understand its structure
+2. Analyze the codebase for major architectural components
+3. Update the .mmd file with current high-level structure
+4. Verify complexity: run analyzer with --preset low
+5. Report what you changed
 
 Only update this diagram, don't modify other files.
 ```
 
-For a diagram like `makefile-dependencies.mmd`:
+For a detail diagram like `architecture-detail.mmd`:
 ```
-Update the diagram at docs/diagrams/makefile-dependencies.mmd to reflect current Makefile targets.
+Update the diagram at docs/diagrams/architecture-detail.mmd to reflect current system architecture.
 
-1. Read the existing diagram
-2. Parse the Makefile to extract:
-   - All .PHONY targets
-   - Target dependencies
-   - Main workflow targets
-3. Update the .mmd file to show the current dependency graph
-4. Report what changed
+This is a HIGH-DENSITY detail diagram. Requirements:
+- Up to 35 nodes showing significant components
+- Include important relationships and data flows
+- Use subgraphs to organize related components
+- This is for technical deep-dives
 
-Only update this diagram.
+1. Read the existing diagram to understand its structure
+2. Analyze the codebase comprehensively
+3. Update the .mmd file with all significant components
+4. Verify complexity: run analyzer with --preset high
+5. Report what you changed
+
+Only update this diagram, don't modify other files.
 ```
 
-## Step 3: Generate PNG Images
+## Step 6: Validate Complexity Post-Update
 
-After all agents complete, regenerate PNGs:
+After all updates complete, validate each density level separately:
+
+```bash
+# Validate overview diagrams (low-density)
+uv run .claude/scripts/mermaid_complexity.py docs/diagrams/*-overview.mmd --preset low
+
+# Validate detail diagrams (high-density)
+uv run .claude/scripts/mermaid_complexity.py docs/diagrams/*-detail.mmd --preset high
+
+# Validate all diagrams with default (high-density)
+uv run .claude/scripts/mermaid_complexity.py docs/diagrams/
+```
+
+**Overview diagrams should be "ideal" with low-density preset.**
+**Detail diagrams should be "ideal" or "acceptable" with high-density preset.**
+
+If any remain "complex" or "critical", repeat Step 4 for those diagrams.
+
+## Step 7: Generate PNG Images
+
+After all agents complete and complexity is validated:
 
 ```bash
 make -C docs/diagrams diagrams
 ```
 
-## Step 4: Sync README
+## Step 8: Sync README
 
-If the project README.md has an "Architecture Diagrams" or similar section:
-- Ensure all diagrams are listed
-- Each diagram should show:
-  ```markdown
-  ![Diagram Name](docs/diagrams/diagram-name.png)
-  [Source](docs/diagrams/diagram-name.mmd)
-  ```
+Update the project README.md with organized diagram sections:
 
-If no such section exists, consider whether to add one based on the project context.
+```markdown
+## Architecture Diagrams
+
+### Quick Overview
+![Architecture Overview](docs/diagrams/architecture-overview.png)
+*High-level system components* | [Source](docs/diagrams/architecture-overview.mmd)
+
+### Detailed Views
+| Diagram | Description |
+|---------|-------------|
+| [Full Architecture](docs/diagrams/architecture-detail.png) | Complete system with all components |
+| [API Layer](docs/diagrams/architecture-api.png) | FastAPI routes and middleware |
+| [Agent System](docs/diagrams/architecture-agents.png) | AI agent orchestration |
+
+### Other Views
+- [Data Flow](docs/diagrams/data-flow-overview.png) - How data moves through the system
+- [Deployment](docs/diagrams/deployment-overview.png) - Infrastructure and hosting
+```
+
+# Optional: SerenaMCP Integration
+
+If SerenaMCP is available, use it for enhanced diagram generation:
+
+## Symbol Discovery
+```
+Use SerenaMCP to discover all classes, functions, and modules in the codebase.
+This provides accurate node identification for architecture diagrams.
+
+Tools to use:
+- serena.find_symbols - Find all classes/functions matching patterns
+- serena.get_symbol_info - Get details about specific symbols
+- serena.find_references - Discover relationships between components
+```
+
+## Diagram Metadata Persistence
+```
+After generating diagrams, store metadata in SerenaMCP for cross-session continuity:
+- Which lenses exist and their complexity scores
+- Subdivision decisions and rationale
+- Last update timestamps
+- Validation status
+
+This enables incremental updates rather than full regeneration.
+```
+
+## Agent Prompt with SerenaMCP
+
+When SerenaMCP is available, enhance the agent prompt:
+
+```
+Update the diagram at docs/diagrams/{diagram}.mmd
+
+FIRST: Use SerenaMCP to discover codebase structure:
+1. serena.find_symbols("*") - Get all major symbols
+2. serena.get_symbol_info("{component}") - Get details for key components
+3. serena.find_references("{symbol}") - Discover relationships
+
+THEN: Create/update the diagram based on discovered symbols:
+- Map classes to nodes
+- Map imports/calls to edges
+- Map modules/packages to subgraphs
+
+This ensures the diagram accurately reflects actual code structure.
+```
+
+# Quick Reference
+
+## Complexity Formula
+```
+Visual Complexity Score (VCS) = (nodes + edges×0.5 + subgraphs×3) × (1 + depth×0.1)
+```
+
+## Density Targets
+| Density | Nodes | VCS | Typical Use |
+|---------|-------|-----|-------------|
+| Low | ≤12 | ≤25 | Overview diagrams |
+| Medium | ≤20 | ≤40 | README diagrams |
+| High | ≤35 | ≤60 | Detail diagrams |
+
+## File Naming Convention
+```
+{lens}-{scope}.mmd
+
+Lenses: architecture, data-flow, deployment, security, sequence, state
+Scopes: overview (low-density), detail (high-density), {subsystem-name}
+```
+
+## CLI Quick Reference
+```bash
+# Analyze with different density presets
+uv run .claude/scripts/mermaid_complexity.py docs/diagrams/ -p low
+uv run .claude/scripts/mermaid_complexity.py docs/diagrams/ -p med
+uv run .claude/scripts/mermaid_complexity.py docs/diagrams/ -p high
+
+# Show detailed calculation working
+uv run .claude/scripts/mermaid_complexity.py docs/diagrams/ --show-working
+
+# JSON output for programmatic use
+uv run .claude/scripts/mermaid_complexity.py docs/diagrams/ --json
+
+# Summary only (skip individual reports)
+uv run .claude/scripts/mermaid_complexity.py docs/diagrams/ --summary-only
+
+# Validate by pattern
+uv run .claude/scripts/mermaid_complexity.py docs/diagrams/*-overview.mmd -p low
+uv run .claude/scripts/mermaid_complexity.py docs/diagrams/*-detail.mmd -p high
+```
+
+## Exit Codes
+- `0`: All diagrams are ideal or acceptable for their density level
+- `1`: One or more diagrams are complex or critical (needs attention)
