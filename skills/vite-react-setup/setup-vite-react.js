@@ -2,16 +2,20 @@
 
 /**
  * Automated setup script for Vite + React + TypeScript + Tailwind v4 + shadcn/ui + Vitest
- * Usage: node setup-vite-react.js [project-name]
+ * Usage:
+ *   node setup-vite-react.js              # Setup in current directory
+ *   node setup-vite-react.js frontend/    # Setup in subdirectory
  */
 
 const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-const projectName = process.argv[2] || 'my-app';
+const targetDir = process.argv[2] || '.';
+const isCurrentDir = targetDir === '.';
+const displayName = isCurrentDir ? 'current directory' : targetDir;
 
-console.log(`🚀 Setting up ${projectName}...`);
+console.log(`🚀 Setting up Vite React app in ${displayName}...`);
 
 const run = (command, options = {}) => {
   console.log(`\n▶️  ${command}`);
@@ -30,10 +34,27 @@ const writeFile = (filePath, content) => {
 
 // Step 1: Create Vite project
 console.log('\n📦 Step 1: Creating Vite project...');
-run(`npm create vite@latest ${projectName} -- --template react-ts`);
+if (isCurrentDir) {
+  // Create a temp directory, scaffold there, then move files
+  const tempDir = 'temp-vite-setup';
+  run(`npm create vite@latest ${tempDir} -- --template react-ts`);
 
-// Change to project directory
-process.chdir(projectName);
+  // Move all files from temp directory to current directory
+  const files = fs.readdirSync(tempDir);
+  files.forEach(file => {
+    const srcPath = path.join(tempDir, file);
+    const destPath = file;
+    fs.renameSync(srcPath, destPath);
+  });
+
+  // Remove temp directory
+  fs.rmdirSync(tempDir);
+  console.log('✅ Moved files to current directory');
+} else {
+  run(`npm create vite@latest ${targetDir} -- --template react-ts`);
+  // Change to project directory
+  process.chdir(targetDir);
+}
 
 // Step 2: Install base dependencies
 console.log('\n📦 Step 2: Installing base dependencies...');
@@ -116,7 +137,9 @@ run('npm run build');
 
 console.log('\n✅ Setup complete!');
 console.log('\n📋 Next steps:');
-console.log(`   cd ${projectName}`);
+if (!isCurrentDir) {
+  console.log(`   cd ${targetDir}`);
+}
 console.log('   npm run dev          # Start development server');
 console.log('   npm run build        # Build for production');
 console.log('   npm run test         # Run tests');
