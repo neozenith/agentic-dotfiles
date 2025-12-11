@@ -1,0 +1,28 @@
+{
+  "name": "vite-react-setup",
+  "version": "1.0.0",
+  "description": "Automated setup for Vite + React + TypeScript + Tailwind CSS v4 + shadcn/ui + Vitest projects",
+  "type": "user",
+  "triggers": [
+    "setup vite react",
+    "create vite project",
+    "initialize react typescript",
+    "new vite react app"
+  ],
+  "instructions": "When the user wants to set up a new Vite + React + TypeScript project with Tailwind CSS v4, shadcn/ui, and Vitest, use this skill. Ask for the project name and run the setup script.",
+  "usage": {
+    "command": "node .claude/skills/vite-react-setup/setup-vite-react.js [project-name]",
+    "examples": [
+      "node .claude/skills/vite-react-setup/setup-vite-react.js my-new-app",
+      "node .claude/skills/vite-react-setup/setup-vite-react.js karaoke-bar"
+    ]
+  },
+  "outputs": [
+    "Fully configured Vite + React + TypeScript project",
+    "Tailwind CSS v4 with @tailwindcss/vite plugin",
+    "shadcn/ui initialized with components.json",
+    "Vitest configured for testing",
+    "Path aliases configured (@/*)",
+    "Production build verified"
+  ]
+}
