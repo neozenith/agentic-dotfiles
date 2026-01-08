@@ -58,5 +58,6 @@
     "code-review@claude-code-plugins": true,
     "frontend-design@claude-code-plugins": true,
     "feature-dev@claude-code-plugins": true
-  }
+  },
+  "outputStyle": "Explanatory"
 }
