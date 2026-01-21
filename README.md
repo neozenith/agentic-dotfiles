@@ -134,3 +134,56 @@ check: init docs fix
 	# As long as the whole project is formatted, linted, type checked, and tested then we can update the symbol index for SerenaMCP
 	uvx --from git+https://github.com/oraios/serena serena project index
 ```
+
+# LMStudio + Claude Code Router
+
+- Start LMStudio with model `qwen/qwen2.5-coder-14b`
+- Setup and start claude code router:
+
+```sh
+npm install -g @musistudio/claude-code-router
+# Start router proxy
+ccr start 
+```
+
+- Setup `~/.claude-code-router/config.json` like this:
+
+```json
+{
+  "LOG": true,
+  "HOST": "127.0.0.1",
+  "PORT": 3456,
+  "APIKEY": "",
+  "API_TIMEOUT_MS": "600000",
+  "transformers": [],
+  "Providers": [
+    {
+      "name": "lmstudio",
+      "api_base_url": "http://localhost:1234/v1/chat/completions",
+      "models": [
+        "qwen/qwen2.5-coder-14b"
+      ],
+      "api_key": "sk-1234",
+      "transformer": {
+        "use": [
+          ["maxtoken",{ "max_tokens": 32768 }],
+          "openrouter"
+        ]
+      }
+    }
+  ],
+  "Router": {
+    "default": "lmstudio,qwen/qwen2.5-coder-14b",
+    "background": "lmstudio,qwen/qwen2.5-coder-14b",
+    "think": "lmstudio,qwen/qwen2.5-coder-14b",
+    "longContext": "lmstudio,qwen/qwen2.5-coder-14b",
+    "longContextThreshold": 32768,
+    "webSearch": "lmstudio,qwen/qwen2.5-coder-14b",
+    "image": ""
+  }
+}
+```
+
+- `ccr restart`
+- `ccr code` to start claude code using the wrapper that sets up the environment variables to redirect claude code to the model proxy.
+
