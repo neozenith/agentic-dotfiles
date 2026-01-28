@@ -74,7 +74,8 @@ Each JSONL file contains events with these types:
 Returns:
 - Total events, user/assistant message counts
 - Tool calls count
-- Duration and token usage
+- Duration
+- Token usage breakdown (input, output, cache read, cache creation, total billable)
 - Models used
 
 ### Show Turns (Current Session)
@@ -115,6 +116,78 @@ Time filters support:
 # Filter to specific tool
 .claude/skills/introspect/scripts/query_sessions.sh tools ${CLAUDE_SESSION_ID} --tool Bash
 ```
+
+### Cost Estimation
+
+```bash
+# Estimate cost for a session (defaults to Opus pricing)
+.claude/skills/introspect/scripts/query_sessions.sh cost ${CLAUDE_SESSION_ID}
+
+# Use Sonnet pricing
+.claude/skills/introspect/scripts/query_sessions.sh cost ${CLAUDE_SESSION_ID} --model sonnet
+```
+
+Returns:
+- Token counts (input, output, cache read, cache creation)
+- Cost breakdown by category (input, output, cache read/write)
+- Total estimated cost in USD
+
+Pricing (per 1M tokens):
+- **Claude Opus 4.5**: $15 input, $75 output
+- **Claude Sonnet 3.5**: $3 input, $15 output
+- **Cache reads**: 90% discount (0.1x input price)
+- **Cache writes**: 25% premium (1.25x input price)
+
+### Extract Messages
+
+```bash
+# Get all user messages from a session (useful for distilling prompts)
+.claude/skills/introspect/scripts/query_sessions.sh messages SESSION_ID --role user
+
+# Get all assistant responses
+.claude/skills/introspect/scripts/query_sessions.sh messages SESSION_ID --role assistant
+
+# Get both (default)
+.claude/skills/introspect/scripts/query_sessions.sh messages SESSION_ID
+
+# JSON format for full content (table truncates)
+.claude/skills/introspect/scripts/query_sessions.sh -f json messages SESSION_ID --role user
+
+# Filter to specific subagent
+.claude/skills/introspect/scripts/query_sessions.sh messages SESSION_ID --agent AGENT_ID
+```
+
+Useful for:
+- Reviewing what was asked in a session
+- Distilling multi-turn conversations into single prompts
+- Debugging conversation flow
+- Creating reproducible prompts from exploratory sessions
+
+### List Subagents
+
+```bash
+# List all subagents (Task tool spawns) within a session
+.claude/skills/introspect/scripts/query_sessions.sh agents SESSION_ID
+```
+
+Returns for each subagent:
+- `agent_id` - Unique identifier (e.g., `a4a6e3b`)
+- `slug` - Human-readable name (e.g., `adaptive-snuggling-starlight`)
+- `is_sidechain` - Whether it's a subagent (true) or main session (false)
+- `event_count` - Total events in the agent's stream
+- `tool_calls` - Number of tool invocations
+- Token usage breakdown (input, output, cache read, cache creation)
+- `total_billable_tokens` - Sum of billable tokens
+
+**Understanding Subagents:**
+
+When you use the `Task` tool, Claude Code spawns a subagent that:
+- Shares the same `sessionId` as the parent
+- Has its own unique `agentId`
+- Is marked with `isSidechain: true`
+- Events are linked via `parentUuid` for traceability
+
+This allows analyzing token usage per subagent for cost attribution.
 
 ### List Projects
 
