@@ -84,7 +84,32 @@ This project-local cache enables:
 - Incremental updates (only process changed files)
 - Source file tracking with mtime and line numbers
 
-### Cache Management Commands
+### Automatic Cache Updates
+
+**By default, every query command automatically checks for stale files and updates the cache before executing.** This ensures you always see the latest session data, including events from the current conversation.
+
+You can control this behavior with global flags:
+
+```bash
+# Default: Auto-check staleness and incrementally update
+.claude/skills/introspect/scripts/introspect_sessions.sh summary ${CLAUDE_SESSION_ID}
+
+# Skip auto-update (use existing cache as-is, faster)
+.claude/skills/introspect/scripts/introspect_sessions.sh --cache-frozen summary ${CLAUDE_SESSION_ID}
+
+# Wipe and rebuild cache from scratch before query
+.claude/skills/introspect/scripts/introspect_sessions.sh --cache-rebuild summary ${CLAUDE_SESSION_ID}
+```
+
+| Flag | Behavior |
+|------|----------|
+| *(default)* | Check file mtimes, incrementally update changed files |
+| `--cache-frozen` | Skip all cache updates, use existing data |
+| `--cache-rebuild` | Wipe cache and re-ingest all files from scratch |
+
+### Manual Cache Management Commands
+
+For explicit cache control without running a query:
 
 ```bash
 # Initialize a new cache database
@@ -407,17 +432,34 @@ Response to evaluate:
 
 ## Output Formats
 
-All commands support multiple output formats:
+**Output defaults to JSON** for easy programmatic consumption and `jq` piping. All commands support multiple output formats via `-f/--format`:
 
 ```bash
-# Table format (default)
+# JSON format (default) - ideal for jq and programmatic use
 .claude/skills/introspect/scripts/introspect_sessions.sh summary ${CLAUDE_SESSION_ID}
+.claude/skills/introspect/scripts/introspect_sessions.sh summary ${CLAUDE_SESSION_ID} | jq '.user_messages'
 
-# JSON format
-.claude/skills/introspect/scripts/introspect_sessions.sh -f json summary ${CLAUDE_SESSION_ID}
+# Table format - human-readable output
+.claude/skills/introspect/scripts/introspect_sessions.sh -f table summary ${CLAUDE_SESSION_ID}
 
-# JSONL format (one JSON object per line)
+# JSONL format (one JSON object per line) - streaming/batch processing
 .claude/skills/introspect/scripts/introspect_sessions.sh -f jsonl turns ${CLAUDE_SESSION_ID} -n 10
+```
+
+### Common jq Patterns
+
+```bash
+# Extract just the cost
+introspect_sessions.sh cost ${CLAUDE_SESSION_ID} | jq -r '.total_cost_usd'
+
+# Get user message count
+introspect_sessions.sh summary ${CLAUDE_SESSION_ID} | jq -r '.user_messages'
+
+# Filter tools with high usage
+introspect_sessions.sh tools ${CLAUDE_SESSION_ID} | jq '.[] | select(.call_count > 10)'
+
+# Get token breakdown
+introspect_sessions.sh summary ${CLAUDE_SESSION_ID} | jq '{input: .input_tokens, output: .output_tokens, cache: .cache_read_tokens}'
 ```
 
 ## Common Use Cases

@@ -1639,8 +1639,35 @@ def main(
         cache = CacheManager()
     assert cache is not None  # Type narrowing for mypy
 
+    if projects_path is None:
+        projects_path = PROJECTS_PATH
+
     try:
         result: Any = None
+
+        # Handle automatic cache management for non-cache commands
+        # Cache commands manage the cache explicitly, so skip auto-update for them
+        is_cache_command = args.command == "cache"
+        cache_frozen = getattr(args, "cache_frozen", False)
+        cache_rebuild = getattr(args, "cache_rebuild", False)
+
+        if not is_cache_command:
+            if cache_rebuild:
+                # Wipe and rebuild from scratch
+                log.info("Rebuilding cache from scratch (--cache-rebuild)...")
+                cache.init_schema()
+                cache.clear()
+                cache.update(projects_path)
+            elif not cache_frozen:
+                # Default: incremental update (check staleness)
+                ensure_cache(cache, projects_path)
+                update_result = cache.update(projects_path)
+                if update_result.get("files_updated", 0) > 0:
+                    log.info(
+                        "Cache updated: %d files processed",
+                        update_result.get("files_updated", 0),
+                    )
+            # If cache_frozen, skip all cache updates
 
         # Cache commands
         if args.command == "cache":
@@ -1824,14 +1851,27 @@ if __name__ == "__main__":  # pragma: no cover
     parser.add_argument(
         "-f",
         "--format",
-        choices=["table", "json", "jsonl"],
-        default="table",
-        help="Output format (default: table)",
+        choices=["json", "table", "jsonl"],
+        default="json",
+        help="Output format (default: json)",
     )
     parser.add_argument(
         "-p",
         "--project",
         help="Filter to specific project ID (speeds up queries)",
+    )
+
+    # Cache control options
+    cache_group = parser.add_mutually_exclusive_group()
+    cache_group.add_argument(
+        "--cache-frozen",
+        action="store_true",
+        help="Skip automatic cache staleness check and update",
+    )
+    cache_group.add_argument(
+        "--cache-rebuild",
+        action="store_true",
+        help="Wipe and rebuild cache from scratch before query",
     )
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")

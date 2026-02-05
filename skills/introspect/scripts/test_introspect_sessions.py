@@ -1775,6 +1775,8 @@ class TestMainDispatch:
             "project": None,
             "verbose": False,
             "quiet": False,
+            "cache_frozen": False,
+            "cache_rebuild": False,
         }
         defaults.update(kwargs)
         return Namespace(**defaults)
@@ -1785,7 +1787,7 @@ class TestMainDispatch:
         cache = iss.CacheManager(db_path=db_path)
 
         args = self._make_args(command="cache", cache_command="init")
-        iss.main(args, cache=cache)
+        iss.main(args, cache=cache, projects_path=temp_dir)
 
         captured = capsys.readouterr()
         assert "initialized" in captured.out or db_path.exists()
@@ -1797,7 +1799,7 @@ class TestMainDispatch:
         cache.init_schema()
 
         args = self._make_args(command="cache", cache_command="clear")
-        iss.main(args, cache=cache)
+        iss.main(args, cache=cache, projects_path=temp_dir)
 
         captured = capsys.readouterr()
         assert "cleared" in captured.out
@@ -1836,10 +1838,52 @@ class TestMainDispatch:
         cache.init_schema()
 
         args = self._make_args(command="cache", cache_command="status")
-        iss.main(args, cache=cache)
+        iss.main(args, cache=cache, projects_path=temp_dir)
 
         captured = capsys.readouterr()
         assert "db_path" in captured.out or "status" in captured.out
+
+    def test_main_cache_frozen_skips_update(self, temp_dir: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        """Test that --cache-frozen skips automatic cache update."""
+        db_path = temp_dir / "cache.db"
+        cache = iss.CacheManager(db_path=db_path)
+        cache.init_schema()
+
+        # Create a mock session file
+        projects_dir = temp_dir / "projects"
+        project_dir = projects_dir / "test-project"
+        project_dir.mkdir(parents=True)
+        session_file = project_dir / "session-frozen-test.jsonl"
+        session_file.write_text('{"type": "user", "timestamp": "2026-01-01T00:00:00Z"}\n')
+
+        # With cache_frozen=True, the file should NOT be indexed
+        args = self._make_args(command="projects", cache_frozen=True)
+        iss.main(args, cache=cache, projects_path=projects_dir)
+
+        captured = capsys.readouterr()
+        # Should return empty because cache wasn't updated
+        assert captured.out.strip() == "[]"
+
+    def test_main_cache_rebuild_wipes_and_rebuilds(self, temp_dir: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        """Test that --cache-rebuild wipes and rebuilds cache before query."""
+        db_path = temp_dir / "cache.db"
+        cache = iss.CacheManager(db_path=db_path)
+        cache.init_schema()
+
+        # Create a mock session file
+        projects_dir = temp_dir / "projects"
+        project_dir = projects_dir / "test-project"
+        project_dir.mkdir(parents=True)
+        session_file = project_dir / "session-rebuild-test.jsonl"
+        session_file.write_text('{"type": "user", "timestamp": "2026-01-01T00:00:00Z"}\n')
+
+        # With cache_rebuild=True, the file SHOULD be indexed
+        args = self._make_args(command="projects", cache_rebuild=True)
+        iss.main(args, cache=cache, projects_path=projects_dir)
+
+        captured = capsys.readouterr()
+        # Should find the project
+        assert "test-project" in captured.out
 
     def test_main_projects(self, temp_dir: Path, capsys: pytest.CaptureFixture[str]) -> None:
         """Test main() with projects command."""
@@ -1848,7 +1892,7 @@ class TestMainDispatch:
         cache.init_schema()
 
         args = self._make_args(command="projects")
-        iss.main(args, cache=cache)
+        iss.main(args, cache=cache, projects_path=temp_dir)
 
         captured = capsys.readouterr()
         # Output should be valid JSON (empty list)
@@ -1866,7 +1910,7 @@ class TestMainDispatch:
             limit=20,
             since=None,
         )
-        iss.main(args, cache=cache)
+        iss.main(args, cache=cache, projects_path=temp_dir)
 
         captured = capsys.readouterr()
         assert captured.out.strip() == "[]" or "session" in captured.out
@@ -1887,7 +1931,7 @@ class TestMainDispatch:
             offset=0,
             no_content=False,
         )
-        iss.main(args, cache=cache)
+        iss.main(args, cache=cache, projects_path=temp_dir)
 
         captured = capsys.readouterr()
         assert captured.out.strip() == "[]" or "turn" in captured.out
@@ -1904,7 +1948,7 @@ class TestMainDispatch:
             tool=None,
             detail=False,
         )
-        iss.main(args, cache=cache)
+        iss.main(args, cache=cache, projects_path=temp_dir)
 
         captured = capsys.readouterr()
         assert captured.out.strip() == "[]" or "tool" in captured.out
@@ -1921,7 +1965,7 @@ class TestMainDispatch:
             types=None,
             limit=50,
         )
-        iss.main(args, cache=cache)
+        iss.main(args, cache=cache, projects_path=temp_dir)
 
         captured = capsys.readouterr()
         assert captured.out.strip() == "[]" or "search" in captured.out
@@ -1933,7 +1977,7 @@ class TestMainDispatch:
         cache.init_schema()
 
         args = self._make_args(command="summary", session_id="session-123")
-        iss.main(args, cache=cache)
+        iss.main(args, cache=cache, projects_path=temp_dir)
 
         captured = capsys.readouterr()
         # Empty result or "not found" message
@@ -1946,7 +1990,7 @@ class TestMainDispatch:
         cache.init_schema()
 
         args = self._make_args(command="cost", session_id="session-123", model="opus")
-        iss.main(args, cache=cache)
+        iss.main(args, cache=cache, projects_path=temp_dir)
 
         captured = capsys.readouterr()
         assert captured.out.strip() or "cost" in captured.out.lower()
@@ -1964,7 +2008,7 @@ class TestMainDispatch:
             limit=100,
             agent=None,
         )
-        iss.main(args, cache=cache)
+        iss.main(args, cache=cache, projects_path=temp_dir)
 
         captured = capsys.readouterr()
         assert captured.out.strip() == "[]" or "message" in captured.out
@@ -1976,7 +2020,7 @@ class TestMainDispatch:
         cache.init_schema()
 
         args = self._make_args(command="agents", session_id="session-123")
-        iss.main(args, cache=cache)
+        iss.main(args, cache=cache, projects_path=temp_dir)
 
         captured = capsys.readouterr()
         assert captured.out.strip() == "[]" or "agent" in captured.out
@@ -1988,7 +2032,7 @@ class TestMainDispatch:
         cache.init_schema()
 
         args = self._make_args(command="event", session_id="session-123", uuid="uuid-001")
-        iss.main(args, cache=cache)
+        iss.main(args, cache=cache, projects_path=temp_dir)
 
         captured = capsys.readouterr()
         # Should output "not found" or event data
@@ -2006,7 +2050,7 @@ class TestMainDispatch:
             uuid="uuid-001",
             direction="both",
         )
-        iss.main(args, cache=cache)
+        iss.main(args, cache=cache, projects_path=temp_dir)
 
         captured = capsys.readouterr()
         # Output could be empty or have ancestors/descendants
@@ -2027,7 +2071,7 @@ class TestMainDispatch:
             role=None,
             limit=None,
         )
-        iss.main(args, cache=cache)
+        iss.main(args, cache=cache, projects_path=temp_dir)
 
         captured = capsys.readouterr()
         assert captured.out.strip() == "[]" or "trajectory" in captured.out
@@ -2053,7 +2097,7 @@ class TestMainDispatch:
             limit=1,
             schema=None,
         )
-        iss.main(args, cache=cache)
+        iss.main(args, cache=cache, projects_path=temp_dir)
 
         captured = capsys.readouterr()
         assert captured.out.strip()  # Should have output from claude
@@ -2083,7 +2127,7 @@ class TestMainDispatch:
             limit=1,
             schema=None,
         )
-        iss.main(args, cache=cache)
+        iss.main(args, cache=cache, projects_path=temp_dir)
 
         captured = capsys.readouterr()
         assert captured.out.strip()  # Should have output from claude
@@ -2111,7 +2155,7 @@ class TestMainDispatch:
             limit=1,
             schema=schema_json,
         )
-        iss.main(args, cache=cache)
+        iss.main(args, cache=cache, projects_path=temp_dir)
 
         captured = capsys.readouterr()
         assert captured.out.strip()  # Should have output from claude
@@ -2123,7 +2167,7 @@ class TestMainDispatch:
         cache.init_schema()
 
         args = self._make_args(command="unknown_cmd")
-        iss.main(args, cache=cache)
+        iss.main(args, cache=cache, projects_path=temp_dir)
 
         captured = capsys.readouterr()
         # Unknown command doesn't print anything - result is None
