@@ -60,6 +60,25 @@ CACHE_DB_PATH = CACHE_DIR / "introspect_sessions.db"
 # Logging setup
 log = logging.getLogger(__name__)
 
+SCHEMA_VERSION = "2"
+
+# ML Analysis Configuration (used by reflect --engine)
+ML_DEFAULT_MODELS: dict[str, str] = {
+    "sentiment": "distilbert/distilbert-base-uncased-finetuned-sst-2-english",
+    "zero-shot": "facebook/bart-large-mnli",
+    "summarize": "facebook/bart-large-cnn",
+    "ner": "dslim/bert-base-NER",
+}
+
+ML_TASK_NAMES: dict[str, str] = {
+    "sentiment": "sentiment-analysis",
+    "zero-shot": "zero-shot-classification",
+    "summarize": "summarization",
+    "ner": "ner",
+}
+
+ML_DEFAULT_MAX_CHARS = 2000  # ~512 tokens for BERT-family models
+
 
 # ============================================================================
 # Pricing Configuration
@@ -202,6 +221,70 @@ CREATE TABLE IF NOT EXISTS cache_metadata (
     key TEXT PRIMARY KEY,
     value TEXT
 );
+
+-- Event edges table: parent-child relationships for graph traversal
+CREATE TABLE IF NOT EXISTS event_edges (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    event_uuid TEXT NOT NULL,
+    parent_event_uuid TEXT NOT NULL,
+    source_file_id INTEGER NOT NULL REFERENCES source_files(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_event_edges_forward ON event_edges(project_id, session_id, event_uuid);
+CREATE INDEX IF NOT EXISTS idx_event_edges_reverse ON event_edges(project_id, session_id, parent_event_uuid);
+CREATE INDEX IF NOT EXISTS idx_event_edges_source_file ON event_edges(source_file_id);
+
+-- Reflections table: persisted meta-prompt evaluations
+CREATE TABLE IF NOT EXISTS reflections (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    reflection_prompt TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+
+-- FTS5 for reflections
+CREATE VIRTUAL TABLE IF NOT EXISTS reflections_fts USING fts5(
+    reflection_prompt, content='reflections', content_rowid='id'
+);
+
+-- Triggers to keep reflections_fts in sync
+CREATE TRIGGER IF NOT EXISTS reflections_ai AFTER INSERT ON reflections BEGIN
+    INSERT INTO reflections_fts(rowid, reflection_prompt) VALUES (new.id, new.reflection_prompt);
+END;
+
+CREATE TRIGGER IF NOT EXISTS reflections_ad AFTER DELETE ON reflections BEGIN
+    INSERT INTO reflections_fts(reflections_fts, rowid, reflection_prompt)
+        VALUES('delete', old.id, old.reflection_prompt);
+END;
+
+CREATE TRIGGER IF NOT EXISTS reflections_au AFTER UPDATE ON reflections BEGIN
+    INSERT INTO reflections_fts(reflections_fts, rowid, reflection_prompt)
+        VALUES('delete', old.id, old.reflection_prompt);
+    INSERT INTO reflections_fts(rowid, reflection_prompt)
+        VALUES(new.id, new.reflection_prompt);
+END;
+
+-- Event annotations table: reflection results linked to events
+CREATE TABLE IF NOT EXISTS event_annotations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    event_uuid TEXT NOT NULL,
+    reflection_id INTEGER NOT NULL REFERENCES reflections(id) ON DELETE CASCADE,
+    annotation_result TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_event_annotations_reflection ON event_annotations(reflection_id);
+CREATE INDEX IF NOT EXISTS idx_event_annotations_event ON event_annotations(event_uuid);
+CREATE INDEX IF NOT EXISTS idx_event_annotations_session ON event_annotations(project_id, session_id);
+
+-- Composite indexes on existing tables for common query patterns
+CREATE INDEX IF NOT EXISTS idx_events_project_session ON events(project_id, session_id);
+CREATE INDEX IF NOT EXISTS idx_events_session_type ON events(session_id, event_type);
+CREATE INDEX IF NOT EXISTS idx_events_session_uuid ON events(session_id, uuid);
+CREATE INDEX IF NOT EXISTS idx_source_files_project_session ON source_files(project_id, session_id);
 """
 
 
@@ -240,7 +323,7 @@ class CacheManager:
         self.conn.executescript(SCHEMA_SQL)
         self.conn.execute(
             "INSERT OR REPLACE INTO cache_metadata (key, value) VALUES (?, ?)",
-            ("schema_version", "1"),
+            ("schema_version", SCHEMA_VERSION),
         )
         self.conn.execute(
             "INSERT OR REPLACE INTO cache_metadata (key, value) VALUES (?, ?)",
@@ -249,11 +332,34 @@ class CacheManager:
         self.conn.commit()
         log.info(f"Cache initialized at {self.db_path}")
 
+    def needs_rebuild(self) -> bool:
+        """Check if the schema version requires a rebuild."""
+        try:
+            row = self.conn.execute(
+                "SELECT value FROM cache_metadata WHERE key = 'schema_version'"
+            ).fetchone()
+            if row is None:
+                return True
+            return bool(row[0] != SCHEMA_VERSION)
+        except sqlite3.OperationalError:
+            # cache_metadata table doesn't exist yet
+            return True
+
     def clear(self) -> None:
         """Clear all cached data. Safe to call even if tables don't exist."""
         log.info("Clearing cache...")
         # Use DELETE FROM with IF EXISTS check via try/except for each table
-        tables_to_clear = ["events", "sessions", "projects", "source_files", "events_fts"]
+        tables_to_clear = [
+            "event_annotations",  # FK → reflections
+            "reflections",
+            "event_edges",  # FK → source_files
+            "events",
+            "sessions",
+            "projects",
+            "source_files",
+            "events_fts",
+            "reflections_fts",
+        ]
         for table in tables_to_clear:
             try:
                 self.conn.execute(f"DELETE FROM {table}")
@@ -281,6 +387,19 @@ class CacheManager:
         session_count = cursor.execute("SELECT COUNT(*) FROM sessions").fetchone()[0]
         event_count = cursor.execute("SELECT COUNT(*) FROM events").fetchone()[0]
 
+        # Get counts for new tables (with backward compat)
+        edge_count = 0
+        reflection_count = 0
+        annotation_count = 0
+        try:
+            edge_count = cursor.execute("SELECT COUNT(*) FROM event_edges").fetchone()[0]
+            reflection_count = cursor.execute("SELECT COUNT(*) FROM reflections").fetchone()[0]
+            annotation_count = cursor.execute("SELECT COUNT(*) FROM event_annotations").fetchone()[
+                0
+            ]
+        except sqlite3.OperationalError:
+            pass  # Tables may not exist in older schema
+
         # Get metadata
         created_at = cursor.execute(
             "SELECT value FROM cache_metadata WHERE key = 'created_at'"
@@ -300,6 +419,9 @@ class CacheManager:
             "projects": project_count,
             "sessions": session_count,
             "events": event_count,
+            "event_edges": edge_count,
+            "reflections": reflection_count,
+            "event_annotations": annotation_count,
             "created_at": created_at[0] if created_at else None,
             "last_update_at": last_update[0] if last_update else None,
         }
@@ -411,6 +533,7 @@ class CacheManager:
             "SELECT id FROM source_files WHERE filepath = ?", (filepath,)
         ).fetchone()
         if existing:
+            cursor.execute("DELETE FROM event_edges WHERE source_file_id = ?", (existing[0],))
             cursor.execute("DELETE FROM events WHERE source_file_id = ?", (existing[0],))
             cursor.execute("DELETE FROM source_files WHERE id = ?", (existing[0],))
 
@@ -501,6 +624,22 @@ class CacheManager:
                     event["raw_json"],
                 ),
             )
+
+        # Insert event edges for parent-child relationships
+        for event in events_data:
+            if event["uuid"] and event["parent_uuid"]:
+                cursor.execute(
+                    """INSERT INTO event_edges
+                       (project_id, session_id, event_uuid, parent_event_uuid, source_file_id)
+                       VALUES (?, ?, ?, ?, ?)""",
+                    (
+                        project_id,
+                        detected_session_id,
+                        event["uuid"],
+                        event["parent_uuid"],
+                        source_file_id,
+                    ),
+                )
 
         return len(events_data)
 
@@ -777,6 +916,11 @@ def ensure_cache(cache: CacheManager, projects_path: Path | None = None) -> None
     if not cache.db_path.exists():
         log.info("Cache not found, initializing...")
         cache.init_schema()
+        cache.update(projects_path)
+    elif cache.needs_rebuild():
+        log.info("Schema version mismatch, rebuilding cache...")
+        cache.init_schema()
+        cache.clear()
         cache.update(projects_path)
 
 
@@ -1333,65 +1477,75 @@ def cmd_traverse(
     direction: Literal["ancestors", "descendants", "both"] = "both",
     project_id: str | None = None,
 ) -> list[dict[str, Any]]:
-    """Traverse the event tree from a specific UUID."""
+    """Traverse the event tree from a specific UUID using recursive CTEs on event_edges."""
     ensure_cache(cache)
     cursor = cache.conn.cursor()
 
-    # Get all events for the session to build the tree
-    query = """
+    result_uuids: set[str] = {uuid}
+
+    # Walk ancestors via recursive CTE
+    if direction in ("ancestors", "both"):
+        ancestor_sql = """
+            WITH RECURSIVE ancestor_walk(current_uuid) AS (
+                VALUES(?)
+                UNION
+                SELECT ee.parent_event_uuid
+                FROM event_edges ee
+                INNER JOIN ancestor_walk aw ON ee.event_uuid = aw.current_uuid
+                WHERE ee.session_id = ?
+            )
+            SELECT current_uuid FROM ancestor_walk
+        """
+        ancestor_params: list[Any] = [uuid, session_id]
+        rows = cursor.execute(ancestor_sql, ancestor_params).fetchall()
+        result_uuids.update(row[0] for row in rows)
+
+    # Walk descendants via recursive CTE
+    if direction in ("descendants", "both"):
+        descendant_sql = """
+            WITH RECURSIVE descendant_walk(current_uuid) AS (
+                VALUES(?)
+                UNION
+                SELECT ee.event_uuid
+                FROM event_edges ee
+                INNER JOIN descendant_walk dw ON ee.parent_event_uuid = dw.current_uuid
+                WHERE ee.session_id = ?
+            )
+            SELECT current_uuid FROM descendant_walk
+        """
+        descendant_params: list[Any] = [uuid, session_id]
+        rows = cursor.execute(descendant_sql, descendant_params).fetchall()
+        result_uuids.update(row[0] for row in rows)
+
+    if not result_uuids:
+        return []
+
+    # Fetch full event rows for all collected UUIDs
+    placeholders = ",".join("?" * len(result_uuids))
+    fetch_query = f"""
         SELECT e.*, sf.filepath
         FROM events e
         JOIN source_files sf ON e.source_file_id = sf.id
-        WHERE e.session_id = ?
+        WHERE e.uuid IN ({placeholders})
+          AND e.session_id = ?
     """
-    params: list[Any] = [session_id]
-
+    fetch_params: list[Any] = list(result_uuids) + [session_id]
     if project_id:
-        query += " AND e.project_id = ?"
-        params.append(project_id)
+        fetch_query += " AND e.project_id = ?"
+        fetch_params.append(project_id)
+    fetch_query += " ORDER BY e.timestamp"
 
-    all_events = cursor.execute(query, params).fetchall()
-    events_dict = {row["uuid"]: dict(row) for row in all_events if row["uuid"]}
+    event_rows = cursor.execute(fetch_query, fetch_params).fetchall()
 
-    result_uuids: set[str] = set()
-
-    # Find ancestors
-    if direction in ("ancestors", "both"):
-        current: str | None = uuid
-        while current and current in events_dict:
-            result_uuids.add(current)
-            current = events_dict[current].get("parent_uuid")
-
-    # Find descendants (BFS)
-    if direction in ("descendants", "both"):
-        children_map: dict[str, list[str]] = {}
-        for row in all_events:
-            if row["parent_uuid"] and row["uuid"]:
-                if row["parent_uuid"] not in children_map:
-                    children_map[row["parent_uuid"]] = []
-                children_map[row["parent_uuid"]].append(row["uuid"])
-
-        queue = [uuid]
-        while queue:
-            current = queue.pop(0)
-            if current not in result_uuids:
-                result_uuids.add(current)
-                queue.extend(children_map.get(current, []))
-
-    # Build result list
-    results = []
-    for event_uuid in result_uuids:
-        if event_uuid in events_dict:
-            row = events_dict[event_uuid]
-            if row.get("raw_json"):
-                try:
-                    row["message_json"] = json.loads(row["raw_json"])
-                except json.JSONDecodeError:
-                    row["message_json"] = None
-            results.append(row)
-
-    # Sort by timestamp
-    results.sort(key=lambda x: x.get("timestamp") or "")
+    results: list[dict[str, Any]] = []
+    for row in event_rows:
+        event = dict(row)
+        if event.get("raw_json"):
+            try:
+                event["message_json"] = json.loads(event["raw_json"])
+            except json.JSONDecodeError:
+                event["message_json"] = None
+        results.append(event)
 
     return results
 
@@ -1473,7 +1627,10 @@ def cmd_reflect(
     limit: int | None = None,
     output_schema: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
-    """Run meta-prompt evaluation over session events using claude -p."""
+    """Run meta-prompt evaluation over session events using claude -p.
+
+    Persists reflections and annotations to the database for future querying.
+    """
     events = cmd_trajectory(
         cache,
         session_id=session_id,
@@ -1484,6 +1641,20 @@ def cmd_reflect(
         role=role,
         limit=limit,
     )
+
+    # Determine effective project_id for persistence
+    effective_project_id = project_id
+    if not effective_project_id and events:
+        effective_project_id = events[0].get("project_id", "unknown")
+
+    # Persist the reflection prompt
+    now = datetime.now(UTC).isoformat()
+    cursor = cache.conn.cursor()
+    cursor.execute(
+        "INSERT INTO reflections (project_id, session_id, reflection_prompt, created_at) VALUES (?, ?, ?, ?)",
+        (effective_project_id or "unknown", session_id, meta_prompt, now),
+    )
+    reflection_id = cursor.lastrowid
 
     results: list[dict[str, Any]] = []
 
@@ -1527,6 +1698,22 @@ def cmd_reflect(
         except Exception as e:
             analysis = {"error": str(e)}
 
+        # Persist the annotation
+        annotation_now = datetime.now(UTC).isoformat()
+        cursor.execute(
+            """INSERT INTO event_annotations
+               (project_id, session_id, event_uuid, reflection_id, annotation_result, created_at)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (
+                effective_project_id or "unknown",
+                session_id,
+                event.get("uuid") or "",
+                reflection_id,
+                json.dumps(analysis),
+                annotation_now,
+            ),
+        )
+
         results.append(
             {
                 "uuid": event.get("uuid"),
@@ -1536,6 +1723,474 @@ def cmd_reflect(
             }
         )
 
+    cache.conn.commit()
+    return results
+
+
+# ============================================================================
+# ML Analysis Functions (used by reflect --engine)
+# ============================================================================
+
+
+def truncate_content(text: str, max_chars: int = ML_DEFAULT_MAX_CHARS) -> str:
+    """Truncate text at a word boundary to respect model token limits.
+
+    Args:
+        text: The input text to truncate.
+        max_chars: Maximum character length.
+
+    Returns:
+        Truncated text, cut at the last space before max_chars if needed.
+    """
+    if len(text) <= max_chars:
+        return text
+
+    truncated = text[:max_chars]
+    last_space = truncated.rfind(" ")
+    if last_space > max_chars // 2:
+        return truncated[:last_space] + "..."
+    return truncated + "..."
+
+
+def batch_items(items: list[Any], batch_size: int) -> list[list[Any]]:
+    """Split a list into batches of the given size.
+
+    Args:
+        items: List to split.
+        batch_size: Maximum items per batch.
+
+    Returns:
+        List of batches (sublists).
+    """
+    return [items[i : i + batch_size] for i in range(0, len(items), batch_size)]
+
+
+def load_pipeline(task: str, model: str, device: str = "cpu") -> Any:
+    """Load a HuggingFace transformers pipeline.
+
+    This is the ONE exception to the top-level import rule — transformers/torch
+    are heavy dependencies (~3s import time) that are only needed for --engine.
+    They are injected at runtime by introspect_sessions.sh.
+
+    Args:
+        task: HuggingFace task string (e.g. 'sentiment-analysis').
+        model: Model identifier (e.g. 'distilbert/distilbert-base-uncased-finetuned-sst-2-english').
+        device: Device to run on (default: 'cpu').
+
+    Returns:
+        A transformers Pipeline object.
+    """
+    from transformers import pipeline  # noqa: E402 — deferred import for heavy ML deps
+
+    log.info("Loading pipeline: task=%s model=%s device=%s", task, model, device)
+    return pipeline(task, model=model, device=device)
+
+
+def analyze_sentiment(
+    messages: list[dict[str, Any]],
+    model: str | None = None,
+    batch_size: int = 8,
+    max_chars: int = ML_DEFAULT_MAX_CHARS,
+) -> list[dict[str, Any]]:
+    """Run sentiment analysis on messages.
+
+    Args:
+        messages: List of message dicts with 'content' key.
+        model: HuggingFace model identifier.
+        batch_size: Processing batch size.
+        max_chars: Max characters per message for model input.
+
+    Returns:
+        Messages enriched with 'analysis' key containing sentiment results.
+    """
+    if not messages:
+        return []
+
+    effective_model = model or ML_DEFAULT_MODELS["sentiment"]
+    pipe = load_pipeline(ML_TASK_NAMES["sentiment"], effective_model)
+
+    results: list[dict[str, Any]] = []
+    for batch in batch_items(messages, batch_size):
+        texts = [truncate_content(m.get("content", ""), max_chars) for m in batch]
+        non_empty_indices = [i for i, t in enumerate(texts) if t.strip()]
+        non_empty_texts = [texts[i] for i in non_empty_indices]
+
+        predictions: list[dict[str, Any]] = []
+        if non_empty_texts:
+            predictions = pipe(non_empty_texts)
+
+        pred_idx = 0
+        for i, msg in enumerate(batch):
+            enriched = dict(msg)
+            if i in non_empty_indices:
+                pred = predictions[pred_idx]
+                enriched["analysis"] = {
+                    "task": "sentiment",
+                    "model": effective_model,
+                    "label": pred["label"],
+                    "score": round(pred["score"], 4),
+                }
+                pred_idx += 1
+            else:
+                enriched["analysis"] = {
+                    "task": "sentiment",
+                    "model": effective_model,
+                    "label": "UNKNOWN",
+                    "score": 0.0,
+                }
+            results.append(enriched)
+
+    return results
+
+
+def analyze_zero_shot(
+    messages: list[dict[str, Any]],
+    labels: list[str],
+    model: str | None = None,
+    batch_size: int = 8,
+    max_chars: int = ML_DEFAULT_MAX_CHARS,
+) -> list[dict[str, Any]]:
+    """Run zero-shot classification with custom labels.
+
+    Args:
+        messages: List of message dicts with 'content' key.
+        labels: List of classification labels (min 2).
+        model: HuggingFace model identifier.
+        batch_size: Processing batch size.
+        max_chars: Max characters per message for model input.
+
+    Returns:
+        Messages enriched with 'analysis' key containing classification results.
+    """
+    if not messages:
+        return []
+
+    effective_model = model or ML_DEFAULT_MODELS["zero-shot"]
+    pipe = load_pipeline(ML_TASK_NAMES["zero-shot"], effective_model)
+
+    results: list[dict[str, Any]] = []
+    for batch in batch_items(messages, batch_size):
+        texts = [truncate_content(m.get("content", ""), max_chars) for m in batch]
+
+        for msg, text in zip(batch, texts, strict=True):
+            enriched = dict(msg)
+            if text.strip():
+                pred = pipe(text, candidate_labels=labels)
+                enriched["analysis"] = {
+                    "task": "zero-shot",
+                    "model": effective_model,
+                    "labels": dict(
+                        zip(pred["labels"], [round(s, 4) for s in pred["scores"]], strict=True)
+                    ),
+                    "top_label": pred["labels"][0],
+                    "top_score": round(pred["scores"][0], 4),
+                }
+            else:
+                enriched["analysis"] = {
+                    "task": "zero-shot",
+                    "model": effective_model,
+                    "labels": {},
+                    "top_label": "UNKNOWN",
+                    "top_score": 0.0,
+                }
+            results.append(enriched)
+
+    return results
+
+
+def analyze_ner(
+    messages: list[dict[str, Any]],
+    model: str | None = None,
+    batch_size: int = 8,
+    max_chars: int = ML_DEFAULT_MAX_CHARS,
+) -> list[dict[str, Any]]:
+    """Run Named Entity Recognition on messages.
+
+    Args:
+        messages: List of message dicts with 'content' key.
+        model: HuggingFace model identifier.
+        batch_size: Processing batch size.
+        max_chars: Max characters per message for model input.
+
+    Returns:
+        Messages enriched with 'analysis' key containing NER entities.
+    """
+    if not messages:
+        return []
+
+    effective_model = model or ML_DEFAULT_MODELS["ner"]
+    pipe = load_pipeline(ML_TASK_NAMES["ner"], effective_model)
+
+    results: list[dict[str, Any]] = []
+    for batch in batch_items(messages, batch_size):
+        texts = [truncate_content(m.get("content", ""), max_chars) for m in batch]
+
+        for msg, text in zip(batch, texts, strict=True):
+            enriched = dict(msg)
+            if text.strip():
+                raw_entities = pipe(text)
+                entities = [
+                    {
+                        "entity": e["entity"],
+                        "word": e["word"],
+                        "score": round(float(e["score"]), 4),
+                        "start": int(e["start"]),
+                        "end": int(e["end"]),
+                    }
+                    for e in raw_entities
+                ]
+                enriched["analysis"] = {
+                    "task": "ner",
+                    "model": effective_model,
+                    "entities": entities,
+                    "entity_count": len(entities),
+                }
+            else:
+                enriched["analysis"] = {
+                    "task": "ner",
+                    "model": effective_model,
+                    "entities": [],
+                    "entity_count": 0,
+                }
+            results.append(enriched)
+
+    return results
+
+
+def analyze_summarize(
+    messages: list[dict[str, Any]],
+    model: str | None = None,
+    batch_size: int = 8,
+    max_chars: int = ML_DEFAULT_MAX_CHARS,
+    concatenate: bool = False,
+) -> list[dict[str, Any]]:
+    """Run text summarization on messages.
+
+    Args:
+        messages: List of message dicts with 'content' key.
+        model: HuggingFace model identifier.
+        batch_size: Processing batch size.
+        max_chars: Max characters per message for model input.
+        concatenate: If True, concatenate all messages into one summary.
+
+    Returns:
+        Messages enriched with 'analysis' key containing summaries.
+    """
+    if not messages:
+        return []
+
+    effective_model = model or ML_DEFAULT_MODELS["summarize"]
+    pipe = load_pipeline(ML_TASK_NAMES["summarize"], effective_model)
+
+    if concatenate:
+        combined_text = "\n\n".join(
+            m.get("content", "") for m in messages if m.get("content", "").strip()
+        )
+        combined_text = truncate_content(combined_text, max_chars)
+
+        if combined_text.strip():
+            pred = pipe(combined_text, max_length=150, min_length=30, do_sample=False)
+            summary_text = pred[0]["summary_text"]
+        else:
+            summary_text = ""
+
+        return [
+            {
+                "role": "summary",
+                "content": combined_text[:200] + "..."
+                if len(combined_text) > 200
+                else combined_text,
+                "message_count": len(messages),
+                "analysis": {
+                    "task": "summarize",
+                    "model": effective_model,
+                    "summary": summary_text,
+                    "concatenated": True,
+                },
+            }
+        ]
+
+    results: list[dict[str, Any]] = []
+    for batch in batch_items(messages, batch_size):
+        texts = [truncate_content(m.get("content", ""), max_chars) for m in batch]
+
+        for msg, text in zip(batch, texts, strict=True):
+            enriched = dict(msg)
+            if text.strip() and len(text.split()) > 10:
+                pred = pipe(text, max_length=150, min_length=10, do_sample=False)
+                enriched["analysis"] = {
+                    "task": "summarize",
+                    "model": effective_model,
+                    "summary": pred[0]["summary_text"],
+                }
+            else:
+                enriched["analysis"] = {
+                    "task": "summarize",
+                    "model": effective_model,
+                    "summary": text,
+                    "note": "too_short_to_summarize",
+                }
+            results.append(enriched)
+
+    return results
+
+
+def cmd_reflect_ml(
+    cache: CacheManager,
+    session_id: str,
+    engine: str,
+    project_id: str | None = None,
+    role: str | None = None,
+    limit: int | None = None,
+    model: str | None = None,
+    batch_size: int = 8,
+    max_chars: int = ML_DEFAULT_MAX_CHARS,
+    labels: list[str] | None = None,
+    concatenate: bool = False,
+) -> list[dict[str, Any]]:
+    """Run local ML model analysis as a reflect engine.
+
+    Fetches messages from cache, runs through HF pipeline,
+    persists to event_annotations, returns results.
+
+    Args:
+        cache: CacheManager instance.
+        session_id: Session UUID.
+        engine: ML engine name (sentiment, zero-shot, ner, summarize).
+        project_id: Optional project filter.
+        role: Optional role filter (user/assistant).
+        limit: Max messages to process.
+        model: Override default HuggingFace model.
+        batch_size: Batch size for ML processing.
+        max_chars: Max chars per message for model input.
+        labels: Labels for zero-shot classification.
+        concatenate: If True, concatenate for summarize engine.
+
+    Returns:
+        List of annotation dicts with uuid, event_type, timestamp, analysis.
+    """
+    # Fetch messages with uuid/event_type info via trajectory (richer than cmd_messages)
+    events = cmd_trajectory(
+        cache,
+        session_id=session_id,
+        project_id=project_id,
+        role=role,
+        limit=limit,
+    )
+
+    if not events:
+        log.warning("No events found for session %s", session_id)
+        return []
+
+    # Build message dicts with content for the analyze_* functions
+    messages: list[dict[str, Any]] = []
+    event_map: list[dict[str, Any]] = []  # parallel list to track source events
+    for event in events:
+        content = event.get("message_content", "")
+        if content and content.strip():
+            messages.append({"content": content, "role": event.get("event_type", "")})
+            event_map.append(event)
+
+    if not messages:
+        log.warning("No messages with content found for session %s", session_id)
+        return []
+
+    effective_model = model or ML_DEFAULT_MODELS.get(engine, "unknown")
+
+    # Run the appropriate analysis
+    if engine == "sentiment":
+        analyzed = analyze_sentiment(
+            messages, model=model, batch_size=batch_size, max_chars=max_chars
+        )
+    elif engine == "zero-shot":
+        analyzed = analyze_zero_shot(
+            messages, labels=labels or [], model=model, batch_size=batch_size, max_chars=max_chars
+        )
+    elif engine == "ner":
+        analyzed = analyze_ner(messages, model=model, batch_size=batch_size, max_chars=max_chars)
+    elif engine == "summarize":
+        analyzed = analyze_summarize(
+            messages,
+            model=model,
+            batch_size=batch_size,
+            max_chars=max_chars,
+            concatenate=concatenate,
+        )
+    else:
+        log.error("Unknown ML engine: %s", engine)
+        return []
+
+    # Determine effective project_id for persistence
+    effective_project_id = project_id
+    if not effective_project_id and event_map:
+        effective_project_id = event_map[0].get("project_id", "unknown")
+
+    # Persist reflection record
+    now = datetime.now(UTC).isoformat()
+    cursor = cache.conn.cursor()
+    cursor.execute(
+        "INSERT INTO reflections (project_id, session_id, reflection_prompt, created_at) VALUES (?, ?, ?, ?)",
+        (effective_project_id or "unknown", session_id, f"ml:{engine}:{effective_model}", now),
+    )
+    reflection_id = cursor.lastrowid
+
+    # Persist annotations and build results
+    results: list[dict[str, Any]] = []
+
+    if concatenate and engine == "summarize" and analyzed:
+        # Concatenated summarize returns a single result — annotate the first event
+        analysis = analyzed[0].get("analysis", {})
+        event = event_map[0] if event_map else {}
+        annotation_now = datetime.now(UTC).isoformat()
+        cursor.execute(
+            """INSERT INTO event_annotations
+               (project_id, session_id, event_uuid, reflection_id, annotation_result, created_at)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (
+                effective_project_id or "unknown",
+                session_id,
+                event.get("uuid") or "",
+                reflection_id,
+                json.dumps(analysis),
+                annotation_now,
+            ),
+        )
+        results.append(
+            {
+                "uuid": event.get("uuid"),
+                "event_type": "summary",
+                "timestamp": event.get("timestamp"),
+                "message_count": analyzed[0].get("message_count", len(messages)),
+                "analysis": analysis,
+            }
+        )
+    else:
+        for analyzed_msg, event in zip(analyzed, event_map, strict=False):
+            analysis = analyzed_msg.get("analysis", {})
+            annotation_now = datetime.now(UTC).isoformat()
+            cursor.execute(
+                """INSERT INTO event_annotations
+                   (project_id, session_id, event_uuid, reflection_id, annotation_result, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (
+                    effective_project_id or "unknown",
+                    session_id,
+                    event.get("uuid") or "",
+                    reflection_id,
+                    json.dumps(analysis),
+                    annotation_now,
+                ),
+            )
+            results.append(
+                {
+                    "uuid": event.get("uuid"),
+                    "event_type": event.get("event_type"),
+                    "timestamp": event.get("timestamp"),
+                    "analysis": analysis,
+                }
+            )
+
+    cache.conn.commit()
     return results
 
 
@@ -1787,28 +2442,56 @@ def main(
             )
 
         elif args.command == "reflect":
-            if args.prompt_file:
-                with open(args.prompt_file, encoding="utf-8") as f:
-                    meta_prompt = f.read()
+            engine = getattr(args, "engine", None)
+            if engine:
+                # ML engine path — local HuggingFace models
+                labels = None
+                if engine == "zero-shot":
+                    if not getattr(args, "labels", None):
+                        log.error("--labels required for zero-shot engine")
+                        return
+                    labels = [lbl.strip() for lbl in args.labels.split(",")]
+
+                result = cmd_reflect_ml(
+                    cache,
+                    args.session_id,
+                    engine=engine,
+                    project_id=args.project,
+                    role=args.role,
+                    limit=args.limit,
+                    model=getattr(args, "ml_model", None),
+                    batch_size=getattr(args, "batch_size", 8),
+                    max_chars=getattr(args, "max_chars", ML_DEFAULT_MAX_CHARS),
+                    labels=labels,
+                    concatenate=getattr(args, "concatenate", False),
+                )
+            elif getattr(args, "prompt", None) or getattr(args, "prompt_file", None):
+                # Existing claude -p path
+                if args.prompt_file:
+                    with open(args.prompt_file, encoding="utf-8") as f:
+                        meta_prompt = f.read()
+                else:
+                    meta_prompt = args.prompt
+
+                output_schema = None
+                if args.schema:
+                    output_schema = json.loads(args.schema)
+
+                result = cmd_reflect(
+                    cache,
+                    args.session_id,
+                    meta_prompt,
+                    project_id=args.project,
+                    event_types=args.types,
+                    role=args.role,
+                    start_uuid=args.start,
+                    end_uuid=args.end,
+                    limit=args.limit,
+                    output_schema=output_schema,
+                )
             else:
-                meta_prompt = args.prompt
-
-            output_schema = None
-            if args.schema:
-                output_schema = json.loads(args.schema)
-
-            result = cmd_reflect(
-                cache,
-                args.session_id,
-                meta_prompt,
-                project_id=args.project,
-                event_types=args.types,
-                role=args.role,
-                start_uuid=args.start,
-                end_uuid=args.end,
-                limit=args.limit,
-                output_schema=output_schema,
-            )
+                log.error("Either --engine or --prompt/--prompt-file is required for reflect")
+                return
 
         else:
             log.error(f"Unknown command: {args.command}")
@@ -1959,7 +2642,9 @@ if __name__ == "__main__":  # pragma: no cover
     trajectory_parser.add_argument("-n", "--limit", type=int)
 
     # reflect command
-    reflect_parser = subparsers.add_parser("reflect", help="Meta-prompt evaluation")
+    reflect_parser = subparsers.add_parser(
+        "reflect", help="Meta-prompt evaluation or local ML analysis"
+    )
     reflect_parser.add_argument("session_id", help="Session UUID")
     reflect_parser.add_argument("--prompt", help="Meta-prompt (use {{content}} placeholder)")
     reflect_parser.add_argument("--prompt-file", help="Read prompt from file")
@@ -1969,6 +2654,37 @@ if __name__ == "__main__":  # pragma: no cover
     reflect_parser.add_argument("--role", choices=["user", "assistant"])
     reflect_parser.add_argument("-n", "--limit", type=int)
     reflect_parser.add_argument("--schema", help="Expected JSON output schema")
+    # ML engine options
+    reflect_parser.add_argument(
+        "--engine",
+        choices=["sentiment", "zero-shot", "summarize", "ner"],
+        help="Use local ML model instead of claude -p (cheaper, faster)",
+    )
+    reflect_parser.add_argument(
+        "--ml-model",
+        help="Override default HuggingFace model for --engine",
+    )
+    reflect_parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=8,
+        help="Batch size for ML processing (default: 8)",
+    )
+    reflect_parser.add_argument(
+        "--max-chars",
+        type=int,
+        default=ML_DEFAULT_MAX_CHARS,
+        help=f"Max chars per message for ML models (default: {ML_DEFAULT_MAX_CHARS})",
+    )
+    reflect_parser.add_argument(
+        "--labels",
+        help="Comma-separated labels for zero-shot engine",
+    )
+    reflect_parser.add_argument(
+        "--concatenate",
+        action="store_true",
+        help="Concatenate all messages for summarize engine",
+    )
 
     args = parser.parse_args()
 

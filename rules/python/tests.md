@@ -91,6 +91,44 @@ def populated_cache(tmp_path):
     cache.close()
 ```
 
+## Never Skip Tests for Code You Wrote
+
+**If you wrote the code, you test the code.** Conditional skips (`pytest.mark.skipif`) with import guards are NOT acceptable for testing code you just ported or created.
+
+### Forbidden Pattern
+
+```python
+# ❌ FORBIDDEN - this is a lie, not a test
+try:
+    import torch
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
+
+@pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch not installed")
+class TestMLFeature:
+    def test_sentiment_analysis(self): ...  # NEVER RUNS
+```
+
+### Correct Pattern
+
+Declare ALL dependencies in PEP-723 metadata. The test file is the entry point via `uv run test_file.py`, so deps are resolved automatically:
+
+```python
+# ✅ CORRECT - deps in PEP-723, tests always run
+# /// script
+# requires-python = ">=3.12"
+# dependencies = [
+#   "pytest>=8.0",
+#   "transformers>=4.40.0,<5.0.0",
+#   "torch>=2.2.0",
+# ]
+# ///
+
+class TestMLFeature:
+    def test_sentiment_analysis(self): ...  # ALWAYS RUNS
+```
+
 ### Capturing Output
 
 Use pytest's built-in `capsys` fixture instead of patching print:

@@ -430,6 +430,52 @@ Response to evaluate:
 {{content}}"
 ```
 
+### ML Text Analysis (Local Models)
+
+The `reflect` command also supports local HuggingFace models via `--engine`, providing a cheap, fast alternative to `--prompt` (which calls `claude -p`). ML dependencies are injected at runtime only when `--engine` is used.
+
+```bash
+# Sentiment analysis on user messages
+.claude/skills/introspect/scripts/introspect_sessions.sh reflect $SESSION \
+    --engine sentiment --role user
+
+# Named Entity Recognition
+.claude/skills/introspect/scripts/introspect_sessions.sh reflect $SESSION \
+    --engine ner --role user -n 50
+
+# Zero-shot classification with custom labels
+.claude/skills/introspect/scripts/introspect_sessions.sh reflect $SESSION \
+    --engine zero-shot --labels "frustrated,satisfied,confused,neutral"
+
+# Summarize all messages into one
+.claude/skills/introspect/scripts/introspect_sessions.sh reflect $SESSION \
+    --engine summarize --concatenate
+
+# Override default model
+.claude/skills/introspect/scripts/introspect_sessions.sh reflect $SESSION \
+    --engine sentiment --ml-model "cardiffnlp/twitter-roberta-base-sentiment"
+```
+
+#### Available Engines
+
+| Engine | HF Task | Default Model | Notes |
+|--------|---------|---------------|-------|
+| `sentiment` | sentiment-analysis | distilbert-base-uncased-finetuned-sst-2-english | Binary +/- |
+| `zero-shot` | zero-shot-classification | facebook/bart-large-mnli | Requires `--labels` |
+| `ner` | ner | dslim/bert-base-NER | Named Entity Recognition |
+| `summarize` | summarization | facebook/bart-large-cnn | Supports `--concatenate` |
+
+#### ML Engine Options
+
+- `--engine {sentiment,zero-shot,ner,summarize}` — Use local ML model
+- `--ml-model MODEL` — Override default HuggingFace model
+- `--batch-size N` — Batch size for ML processing (default: 8)
+- `--max-chars N` — Max chars per message for ML models (default: 2000)
+- `--labels "a,b,c"` — Comma-separated labels for zero-shot engine
+- `--concatenate` — Concatenate all messages for summarize engine
+
+Results are persisted to the SQLite cache (`reflections` + `event_annotations` tables) and can be queried later.
+
 ## Output Formats
 
 **Output defaults to JSON** for easy programmatic consumption and `jq` piping. All commands support multiple output formats via `-f/--format`:

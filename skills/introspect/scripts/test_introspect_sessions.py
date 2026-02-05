@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
 # /// script
 # requires-python = ">=3.12"
-# dependencies = ["pytest>=8.0", "pytest-cov>=4.0"]
+# dependencies = [
+#   "pytest>=8.0",
+#   "pytest-cov>=4.0",
+#   "transformers>=4.40.0,<5.0.0",
+#   "torch>=2.2.0",
+#   "sentencepiece>=0.2.0",
+# ]
 # ///
 """
 Comprehensive tests for introspect_sessions.py
@@ -16,6 +22,7 @@ import json
 import subprocess
 import sys
 import tempfile
+import time
 from argparse import Namespace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -263,11 +270,24 @@ class TestCacheManager:
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
         tables = {row[0] for row in cursor.fetchall()}
 
-        expected_tables = {"source_files", "events", "sessions", "projects", "cache_metadata"}
+        expected_tables = {
+            "source_files",
+            "events",
+            "sessions",
+            "projects",
+            "cache_metadata",
+            "event_edges",
+            "reflections",
+            "event_annotations",
+        }
         assert expected_tables.issubset(tables)
 
-        # Check FTS table
+        # Check FTS tables
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='events_fts'")
+        assert cursor.fetchone() is not None
+        cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='reflections_fts'"
+        )
         assert cursor.fetchone() is not None
 
     def test_init_schema_idempotent(self, temp_cache: iss.CacheManager) -> None:
@@ -276,7 +296,7 @@ class TestCacheManager:
         temp_cache.init_schema()  # Should not raise
 
     def test_clear_empties_tables(self, temp_cache: iss.CacheManager) -> None:
-        """Test that clear() removes all data from tables."""
+        """Test that clear() removes all data from tables including new tables."""
         temp_cache.conn.execute(
             """
             INSERT INTO source_files
@@ -285,14 +305,26 @@ class TestCacheManager:
             """,
             ("/test.jsonl", 1234567890.0, 1000, 10, "2026-01-15T10:00:00Z", "test", "main_session"),
         )
+        temp_cache.conn.execute(
+            "INSERT INTO reflections (project_id, session_id, reflection_prompt, created_at) VALUES (?, ?, ?, ?)",
+            ("test", "sess-1", "test prompt", "2026-01-15T10:00:00Z"),
+        )
         temp_cache.conn.commit()
 
         cursor = temp_cache.conn.cursor()
         cursor.execute("SELECT COUNT(*) FROM source_files")
         assert cursor.fetchone()[0] == 1
+        cursor.execute("SELECT COUNT(*) FROM reflections")
+        assert cursor.fetchone()[0] == 1
 
         temp_cache.clear()
         cursor.execute("SELECT COUNT(*) FROM source_files")
+        assert cursor.fetchone()[0] == 0
+        cursor.execute("SELECT COUNT(*) FROM reflections")
+        assert cursor.fetchone()[0] == 0
+        cursor.execute("SELECT COUNT(*) FROM event_edges")
+        assert cursor.fetchone()[0] == 0
+        cursor.execute("SELECT COUNT(*) FROM event_annotations")
         assert cursor.fetchone()[0] == 0
 
     def test_clear_is_idempotent(self, temp_cache: iss.CacheManager) -> None:
@@ -1843,7 +1875,9 @@ class TestMainDispatch:
         captured = capsys.readouterr()
         assert "db_path" in captured.out or "status" in captured.out
 
-    def test_main_cache_frozen_skips_update(self, temp_dir: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_main_cache_frozen_skips_update(
+        self, temp_dir: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """Test that --cache-frozen skips automatic cache update."""
         db_path = temp_dir / "cache.db"
         cache = iss.CacheManager(db_path=db_path)
@@ -1864,7 +1898,9 @@ class TestMainDispatch:
         # Should return empty because cache wasn't updated
         assert captured.out.strip() == "[]"
 
-    def test_main_cache_rebuild_wipes_and_rebuilds(self, temp_dir: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_main_cache_rebuild_wipes_and_rebuilds(
+        self, temp_dir: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """Test that --cache-rebuild wipes and rebuilds cache before query."""
         db_path = temp_dir / "cache.db"
         cache = iss.CacheManager(db_path=db_path)
@@ -2172,6 +2208,583 @@ class TestMainDispatch:
         captured = capsys.readouterr()
         # Unknown command doesn't print anything - result is None
         assert captured.out.strip() == ""
+
+
+# ============================================================================
+# New Tests: EventEdges, CTE Traverse, Reflect Persistence, Schema Migration
+# ============================================================================
+
+
+class TestEventEdges:
+    """Tests for the event_edges table population during ingest."""
+
+    def test_edges_populated_during_ingest(self, populated_cache: iss.CacheManager) -> None:
+        """Test that event_edges are populated during file ingest."""
+        cursor = populated_cache.conn.cursor()
+        edge_count = cursor.execute("SELECT COUNT(*) FROM event_edges").fetchone()[0]
+        # uuid-001 has no parent, so 5 edges for uuid-002..uuid-006
+        assert edge_count == 5
+
+    def test_edge_forward_lookup(self, populated_cache: iss.CacheManager) -> None:
+        """Test looking up an edge by event_uuid (forward direction)."""
+        cursor = populated_cache.conn.cursor()
+        row = cursor.execute(
+            "SELECT parent_event_uuid FROM event_edges WHERE event_uuid = ? AND session_id = ?",
+            ("uuid-003", "session-abc"),
+        ).fetchone()
+        assert row is not None
+        assert row[0] == "uuid-002"
+
+    def test_edge_reverse_lookup(self, populated_cache: iss.CacheManager) -> None:
+        """Test looking up children by parent_event_uuid (reverse direction)."""
+        cursor = populated_cache.conn.cursor()
+        rows = cursor.execute(
+            "SELECT event_uuid FROM event_edges WHERE parent_event_uuid = ? AND session_id = ?",
+            ("uuid-001", "session-abc"),
+        ).fetchall()
+        child_uuids = {row[0] for row in rows}
+        assert "uuid-002" in child_uuids
+
+    def test_no_edge_for_root_event(self, populated_cache: iss.CacheManager) -> None:
+        """Test that root events (no parent) have no edge row."""
+        cursor = populated_cache.conn.cursor()
+        row = cursor.execute(
+            "SELECT COUNT(*) FROM event_edges WHERE event_uuid = ?",
+            ("uuid-001",),
+        ).fetchone()
+        assert row[0] == 0
+
+    def test_edges_cleaned_on_reingest(
+        self, temp_dir: Path, rich_sample_events: list[dict[str, Any]]
+    ) -> None:
+        """Test that event_edges are cleaned up when a file is re-ingested."""
+        # Create initial JSONL file
+        projects_dir = temp_dir / "projects" / "-Test-Project"
+        projects_dir.mkdir(parents=True)
+        jsonl_path = projects_dir / "session-abc.jsonl"
+        with open(jsonl_path, "w") as f:
+            for event in rich_sample_events:
+                f.write(json.dumps(event) + "\n")
+
+        db_path = temp_dir / "test_cache.db"
+        cache = iss.CacheManager(db_path=db_path)
+        cache.init_schema()
+        cache.update(temp_dir / "projects")
+
+        cursor = cache.conn.cursor()
+        edge_count_before = cursor.execute("SELECT COUNT(*) FROM event_edges").fetchone()[0]
+        assert edge_count_before == 5
+
+        # Touch the file to force re-ingest
+        time.sleep(0.1)
+        with open(jsonl_path, "w") as f:
+            for event in rich_sample_events[:3]:  # Only 3 events (2 edges)
+                f.write(json.dumps(event) + "\n")
+
+        cache.update(temp_dir / "projects")
+        edge_count_after = cursor.execute("SELECT COUNT(*) FROM event_edges").fetchone()[0]
+        assert edge_count_after == 2  # uuid-002→uuid-001 and uuid-003→uuid-002
+
+
+class TestTraverseWithCTE:
+    """Tests for the CTE-based cmd_traverse implementation."""
+
+    def test_ancestor_cte_traversal(self, populated_cache: iss.CacheManager) -> None:
+        """Test ancestor traversal via recursive CTE."""
+        result = iss.cmd_traverse(
+            populated_cache,
+            session_id="session-abc",
+            uuid="uuid-004",
+            direction="ancestors",
+        )
+        uuids = {r["uuid"] for r in result}
+        # uuid-004 → uuid-003 → uuid-002 → uuid-001
+        assert uuids == {"uuid-001", "uuid-002", "uuid-003", "uuid-004"}
+
+    def test_descendant_cte_traversal(self, populated_cache: iss.CacheManager) -> None:
+        """Test descendant traversal via recursive CTE."""
+        result = iss.cmd_traverse(
+            populated_cache,
+            session_id="session-abc",
+            uuid="uuid-003",
+            direction="descendants",
+        )
+        uuids = {r["uuid"] for r in result}
+        # uuid-003 → uuid-004 → uuid-005 → uuid-006
+        assert "uuid-003" in uuids
+        assert "uuid-004" in uuids
+        assert "uuid-005" in uuids
+        assert "uuid-006" in uuids
+
+    def test_both_cte_traversal(self, populated_cache: iss.CacheManager) -> None:
+        """Test both-direction traversal via recursive CTEs."""
+        result = iss.cmd_traverse(
+            populated_cache,
+            session_id="session-abc",
+            uuid="uuid-003",
+            direction="both",
+        )
+        uuids = {r["uuid"] for r in result}
+        # Should include all ancestors and descendants
+        assert "uuid-001" in uuids  # ancestor
+        assert "uuid-003" in uuids  # self
+        assert "uuid-006" in uuids  # descendant
+
+    def test_cte_traversal_timestamp_ordering(self, populated_cache: iss.CacheManager) -> None:
+        """Test that CTE traversal results are ordered by timestamp."""
+        result = iss.cmd_traverse(
+            populated_cache,
+            session_id="session-abc",
+            uuid="uuid-003",
+            direction="both",
+        )
+        timestamps = [r.get("timestamp") for r in result]
+        assert timestamps == sorted(timestamps)
+
+    def test_cte_traversal_nonexistent_uuid(self, populated_cache: iss.CacheManager) -> None:
+        """Test traversal with a nonexistent UUID returns empty or just the UUID."""
+        result = iss.cmd_traverse(
+            populated_cache,
+            session_id="session-abc",
+            uuid="uuid-nonexistent",
+            direction="both",
+        )
+        # No events should match since the UUID doesn't exist in the events table
+        assert len(result) == 0
+
+
+class TestReflectPersistence:
+    """Tests for reflection and annotation persistence in cmd_reflect."""
+
+    def test_reflection_row_created(self, populated_cache: iss.CacheManager) -> None:
+        """Test that a reflection row is created when cmd_reflect runs."""
+        # Run reflect with a prompt (will fail to find 'claude' but that's OK)
+        iss.cmd_reflect(
+            populated_cache,
+            session_id="session-abc",
+            meta_prompt="Rate: {{content}}",
+            limit=1,
+        )
+        cursor = populated_cache.conn.cursor()
+        row = cursor.execute("SELECT * FROM reflections").fetchone()
+        assert row is not None
+        assert row["reflection_prompt"] == "Rate: {{content}}"
+        assert row["session_id"] == "session-abc"
+
+    def test_annotation_rows_created(self, populated_cache: iss.CacheManager) -> None:
+        """Test that annotation rows are created for each processed event."""
+        iss.cmd_reflect(
+            populated_cache,
+            session_id="session-abc",
+            meta_prompt="Rate: {{content}}",
+            limit=2,
+        )
+        cursor = populated_cache.conn.cursor()
+        annotations = cursor.execute("SELECT * FROM event_annotations").fetchall()
+        # At least 1 annotation (events with content only)
+        assert len(annotations) >= 1
+        for ann in annotations:
+            assert ann["reflection_id"] is not None
+            assert ann["annotation_result"] is not None
+
+    def test_reflection_fk_integrity(self, populated_cache: iss.CacheManager) -> None:
+        """Test that annotation reflection_id references a valid reflection."""
+        iss.cmd_reflect(
+            populated_cache,
+            session_id="session-abc",
+            meta_prompt="Test: {{content}}",
+            limit=1,
+        )
+        cursor = populated_cache.conn.cursor()
+        # Verify FK integrity via join
+        result = cursor.execute("""
+            SELECT ea.id, r.reflection_prompt
+            FROM event_annotations ea
+            JOIN reflections r ON ea.reflection_id = r.id
+        """).fetchall()
+        assert len(result) >= 1
+
+    def test_reflection_fts_searchable(self, populated_cache: iss.CacheManager) -> None:
+        """Test that reflection prompts are searchable via FTS."""
+        iss.cmd_reflect(
+            populated_cache,
+            session_id="session-abc",
+            meta_prompt="Rate the quality of this interaction: {{content}}",
+            limit=1,
+        )
+        cursor = populated_cache.conn.cursor()
+        fts_results = cursor.execute(
+            "SELECT * FROM reflections_fts WHERE reflections_fts MATCH ?",
+            ("quality",),
+        ).fetchall()
+        assert len(fts_results) >= 1
+
+
+class TestSchemaMigration:
+    """Tests for schema versioning and auto-migration."""
+
+    def test_needs_rebuild_for_old_version(self, temp_dir: Path) -> None:
+        """Test that needs_rebuild returns True for old schema version."""
+        db_path = temp_dir / "test_cache.db"
+        cache = iss.CacheManager(db_path=db_path)
+        cache.init_schema()
+        # Simulate old version
+        cache.conn.execute(
+            "INSERT OR REPLACE INTO cache_metadata (key, value) VALUES (?, ?)",
+            ("schema_version", "1"),
+        )
+        cache.conn.commit()
+        assert cache.needs_rebuild() is True
+
+    def test_needs_rebuild_for_current_version(self, temp_dir: Path) -> None:
+        """Test that needs_rebuild returns False for current schema version."""
+        db_path = temp_dir / "test_cache.db"
+        cache = iss.CacheManager(db_path=db_path)
+        cache.init_schema()
+        assert cache.needs_rebuild() is False
+
+    def test_needs_rebuild_for_missing_version(self, temp_dir: Path) -> None:
+        """Test that needs_rebuild returns True when schema_version is missing."""
+        db_path = temp_dir / "test_cache.db"
+        cache = iss.CacheManager(db_path=db_path)
+        # Create a bare DB with cache_metadata but no version
+        cache.conn.execute(
+            "CREATE TABLE IF NOT EXISTS cache_metadata (key TEXT PRIMARY KEY, value TEXT)"
+        )
+        cache.conn.commit()
+        assert cache.needs_rebuild() is True
+
+    def test_ensure_cache_triggers_rebuild_on_version_mismatch(self, temp_dir: Path) -> None:
+        """Test that ensure_cache auto-rebuilds when schema version mismatches."""
+        projects_dir = temp_dir / "projects"
+        projects_dir.mkdir()
+
+        db_path = temp_dir / "test_cache.db"
+        cache = iss.CacheManager(db_path=db_path)
+        cache.init_schema()
+
+        # Simulate old version
+        cache.conn.execute(
+            "INSERT OR REPLACE INTO cache_metadata (key, value) VALUES (?, ?)",
+            ("schema_version", "1"),
+        )
+        cache.conn.commit()
+
+        # ensure_cache should detect mismatch and rebuild
+        iss.ensure_cache(cache, projects_dir)
+
+        # After rebuild, version should be current
+        assert cache.needs_rebuild() is False
+        row = cache.conn.execute(
+            "SELECT value FROM cache_metadata WHERE key = 'schema_version'"
+        ).fetchone()
+        assert row[0] == iss.SCHEMA_VERSION
+
+
+class TestCompositeIndexes:
+    """Tests for composite indexes on existing tables."""
+
+    def test_all_new_indexes_exist(self, temp_cache: iss.CacheManager) -> None:
+        """Test that all new composite indexes exist in sqlite_master."""
+        cursor = temp_cache.conn.cursor()
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='index'")
+        indexes = {row[0] for row in cursor.fetchall()}
+
+        expected_new_indexes = {
+            # Event edges indexes
+            "idx_event_edges_forward",
+            "idx_event_edges_reverse",
+            "idx_event_edges_source_file",
+            # Event annotation indexes
+            "idx_event_annotations_reflection",
+            "idx_event_annotations_event",
+            "idx_event_annotations_session",
+            # Composite indexes on existing tables
+            "idx_events_project_session",
+            "idx_events_session_type",
+            "idx_events_session_uuid",
+            "idx_source_files_project_session",
+        }
+        assert expected_new_indexes.issubset(indexes), (
+            f"Missing indexes: {expected_new_indexes - indexes}"
+        )
+
+
+class TestMainDispatchNewTables:
+    """Tests for main() dispatch with new tables and flags."""
+
+    def _make_args(self, **kwargs: Any) -> Namespace:
+        defaults = {
+            "command": None,
+            "cache_command": None,
+            "format": "json",
+            "project": None,
+            "verbose": False,
+            "quiet": False,
+            "cache_frozen": False,
+            "cache_rebuild": False,
+        }
+        defaults.update(kwargs)
+        return Namespace(**defaults)
+
+    def test_cache_frozen_and_rebuild_with_new_tables(
+        self, temp_dir: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that --cache-rebuild properly creates new tables."""
+        projects_dir = temp_dir / "projects"
+        projects_dir.mkdir()
+        db_path = temp_dir / "cache.db"
+        cache = iss.CacheManager(db_path=db_path)
+        cache.init_schema()
+
+        args = self._make_args(command="cache", cache_command="status")
+        iss.main(args, cache=cache, projects_path=projects_dir)
+
+        captured = capsys.readouterr()
+        output = json.loads(captured.out)
+        assert "event_edges" in output
+        assert "reflections" in output
+        assert "event_annotations" in output
+
+
+# ============================================================================
+# ML Utility Function Tests (always pass, no ML deps needed)
+# ============================================================================
+
+
+class TestTruncateContent:
+    """Tests for truncate_content utility."""
+
+    def test_short_text_unchanged(self) -> None:
+        """Text shorter than max_chars is returned unchanged."""
+        assert iss.truncate_content("hello world", 100) == "hello world"
+
+    def test_truncates_at_word_boundary(self) -> None:
+        """Text is truncated at the last space before max_chars."""
+        text = "the quick brown fox jumps over the lazy dog"
+        result = iss.truncate_content(text, 20)
+        assert result.endswith("...")
+        assert len(result) <= 25  # 20 chars + "..."
+        # Should break at a word boundary
+        assert "the quick brown fox" in result or "the quick brown" in result
+
+    def test_truncates_with_ellipsis(self) -> None:
+        """Truncated text ends with ellipsis."""
+        text = "a " * 100
+        result = iss.truncate_content(text, 10)
+        assert result.endswith("...")
+
+    def test_empty_string(self) -> None:
+        """Empty string is returned unchanged."""
+        assert iss.truncate_content("", 100) == ""
+
+    def test_exact_length(self) -> None:
+        """Text at exactly max_chars is returned unchanged."""
+        text = "x" * 50
+        assert iss.truncate_content(text, 50) == text
+
+    def test_no_space_fallback(self) -> None:
+        """When no space found in reasonable range, truncates at max_chars."""
+        text = "a" * 100  # No spaces at all
+        result = iss.truncate_content(text, 50)
+        assert result == "a" * 50 + "..."
+
+
+class TestBatchItems:
+    """Tests for batch_items utility."""
+
+    def test_even_split(self) -> None:
+        """Items split evenly into batches."""
+        result = iss.batch_items([1, 2, 3, 4], 2)
+        assert result == [[1, 2], [3, 4]]
+
+    def test_uneven_split(self) -> None:
+        """Last batch can be smaller than batch_size."""
+        result = iss.batch_items([1, 2, 3, 4, 5], 2)
+        assert result == [[1, 2], [3, 4], [5]]
+
+    def test_empty_list(self) -> None:
+        """Empty list returns empty list."""
+        assert iss.batch_items([], 5) == []
+
+    def test_single_batch(self) -> None:
+        """All items fit in one batch."""
+        result = iss.batch_items([1, 2, 3], 10)
+        assert result == [[1, 2, 3]]
+
+    def test_batch_size_one(self) -> None:
+        """Batch size of 1 returns individual items."""
+        result = iss.batch_items([1, 2, 3], 1)
+        assert result == [[1], [2], [3]]
+
+
+class TestMLConstants:
+    """Tests for ML configuration constants."""
+
+    def test_all_engines_have_models(self) -> None:
+        """Every engine key has a default model."""
+        for engine in ["sentiment", "zero-shot", "summarize", "ner"]:
+            assert engine in iss.ML_DEFAULT_MODELS, f"Missing model for {engine}"
+
+    def test_all_engines_have_task_names(self) -> None:
+        """Every engine key has a HuggingFace task name."""
+        for engine in ["sentiment", "zero-shot", "summarize", "ner"]:
+            assert engine in iss.ML_TASK_NAMES, f"Missing task name for {engine}"
+
+    def test_models_and_tasks_have_same_keys(self) -> None:
+        """ML_DEFAULT_MODELS and ML_TASK_NAMES have identical key sets."""
+        assert set(iss.ML_DEFAULT_MODELS.keys()) == set(iss.ML_TASK_NAMES.keys())
+
+    def test_default_max_chars_positive(self) -> None:
+        """ML_DEFAULT_MAX_CHARS is a reasonable positive value."""
+        assert iss.ML_DEFAULT_MAX_CHARS > 0
+        assert iss.ML_DEFAULT_MAX_CHARS >= 500  # Must handle at least short texts
+
+
+class TestCmdReflectMLDispatch:
+    """Tests for cmd_reflect_ml dispatch logic (no ML deps needed)."""
+
+    def test_no_events_returns_empty(self, populated_cache: iss.CacheManager) -> None:
+        """cmd_reflect_ml returns empty for nonexistent session."""
+        result = iss.cmd_reflect_ml(
+            populated_cache,
+            session_id="nonexistent-session",
+            engine="sentiment",
+        )
+        assert result == []
+
+    def test_unknown_engine_returns_empty(self, populated_cache: iss.CacheManager) -> None:
+        """cmd_reflect_ml returns empty for unknown engine (before loading pipeline)."""
+        # This will try to fetch events but fail at the analyze step
+        # Since we can't actually run ML without torch, we test the dispatch logic
+        result = iss.cmd_reflect_ml(
+            populated_cache,
+            session_id="session-abc",
+            engine="nonexistent",
+        )
+        assert result == []
+
+
+# ============================================================================
+# ML Integration Tests
+# ============================================================================
+
+
+class TestReflectMLSentiment:
+    """Integration tests for reflect --engine sentiment."""
+
+    def test_sentiment_returns_results(self, populated_cache: iss.CacheManager) -> None:
+        """Sentiment analysis returns results for session messages."""
+        result = iss.cmd_reflect_ml(
+            populated_cache,
+            session_id="session-abc",
+            engine="sentiment",
+            role="user",
+            limit=2,
+        )
+        assert len(result) >= 1
+        for r in result:
+            assert "analysis" in r
+            assert r["analysis"]["task"] == "sentiment"
+            assert r["analysis"]["label"] in ("POSITIVE", "NEGATIVE")
+            assert 0 <= r["analysis"]["score"] <= 1
+
+    def test_sentiment_persists_annotations(self, populated_cache: iss.CacheManager) -> None:
+        """Sentiment results are persisted to event_annotations table."""
+        iss.cmd_reflect_ml(
+            populated_cache,
+            session_id="session-abc",
+            engine="sentiment",
+            limit=2,
+        )
+        cursor = populated_cache.conn.cursor()
+        annotations = cursor.execute("SELECT * FROM event_annotations").fetchall()
+        assert len(annotations) >= 1
+        for ann in annotations:
+            assert ann["reflection_id"] is not None
+            result_data = json.loads(ann["annotation_result"])
+            assert result_data["task"] == "sentiment"
+
+    def test_sentiment_creates_reflection_record(self, populated_cache: iss.CacheManager) -> None:
+        """A reflection record is created with ml:sentiment: prefix."""
+        iss.cmd_reflect_ml(
+            populated_cache,
+            session_id="session-abc",
+            engine="sentiment",
+            limit=1,
+        )
+        cursor = populated_cache.conn.cursor()
+        row = cursor.execute("SELECT * FROM reflections").fetchone()
+        assert row is not None
+        assert row["reflection_prompt"].startswith("ml:sentiment:")
+
+
+class TestReflectMLNer:
+    """Integration tests for reflect --engine ner."""
+
+    def test_ner_returns_results(self, populated_cache: iss.CacheManager) -> None:
+        """NER analysis returns results with entities."""
+        result = iss.cmd_reflect_ml(
+            populated_cache,
+            session_id="session-abc",
+            engine="ner",
+            limit=2,
+        )
+        assert len(result) >= 1
+        for r in result:
+            assert "analysis" in r
+            assert r["analysis"]["task"] == "ner"
+            assert "entities" in r["analysis"]
+            assert "entity_count" in r["analysis"]
+
+
+class TestReflectMLZeroShot:
+    """Integration tests for reflect --engine zero-shot."""
+
+    def test_zero_shot_with_labels(self, populated_cache: iss.CacheManager) -> None:
+        """Zero-shot classification works with custom labels."""
+        result = iss.cmd_reflect_ml(
+            populated_cache,
+            session_id="session-abc",
+            engine="zero-shot",
+            labels=["question", "instruction", "feedback"],
+            limit=2,
+        )
+        assert len(result) >= 1
+        for r in result:
+            assert "analysis" in r
+            assert r["analysis"]["task"] == "zero-shot"
+            assert r["analysis"]["top_label"] in ("question", "instruction", "feedback")
+
+
+class TestReflectMLSummarize:
+    """Integration tests for reflect --engine summarize."""
+
+    def test_summarize_per_message(self, populated_cache: iss.CacheManager) -> None:
+        """Summarize returns per-message results."""
+        result = iss.cmd_reflect_ml(
+            populated_cache,
+            session_id="session-abc",
+            engine="summarize",
+            limit=2,
+        )
+        assert len(result) >= 1
+        for r in result:
+            assert "analysis" in r
+            assert r["analysis"]["task"] == "summarize"
+
+    def test_summarize_concatenated(self, populated_cache: iss.CacheManager) -> None:
+        """Concatenated summarize returns a single summary result."""
+        result = iss.cmd_reflect_ml(
+            populated_cache,
+            session_id="session-abc",
+            engine="summarize",
+            concatenate=True,
+            limit=5,
+        )
+        assert len(result) == 1
+        assert result[0]["event_type"] == "summary"
+        assert result[0]["analysis"]["concatenated"] is True
 
 
 class TestMainParseArgs:

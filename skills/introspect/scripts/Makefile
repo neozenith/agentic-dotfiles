@@ -1,34 +1,37 @@
 # Makefile for introspect_sessions scripts
 # Run from repo root: make -C .claude/skills/introspect/scripts <target>
 
+# Source files
+SRC = introspect_sessions.py test_introspect_sessions.py
+
 .PHONY: all test format lint typecheck check clean help
 
 # Default target
 all: format lint typecheck test
 
-# Run tests with pytest
+# Run tests via PEP-723 entry point (deps declared in test file)
 test:
-	uv run pytest test_introspect_sessions.py -v
+	uv run test_introspect_sessions.py
 
 # Run tests with coverage
 test-cov:
-	uv run --with pytest-cov pytest test_introspect_sessions.py -v --cov=introspect_sessions --cov-report=term-missing
+	uv run --with pytest-cov test_introspect_sessions.py --cov=introspect_sessions --cov-report=term-missing
 
 # Format code with ruff
 format:
-	uv run ruff format introspect_sessions.py test_introspect_sessions.py
+	uv run ruff format $(SRC)
 
 # Check formatting without modifying (for CI)
 format-check:
-	uv run ruff format --check introspect_sessions.py test_introspect_sessions.py
+	uv run ruff format --check $(SRC)
 
 # Lint with ruff (line-length 120 for SQL strings and long docstrings)
 lint: format
-	uv run ruff check --line-length 120 introspect_sessions.py test_introspect_sessions.py
+	uv run ruff check --line-length 120 $(SRC)
 
 # Lint and auto-fix
 lint-fix: format
-	uv run ruff check --fix --line-length 120 introspect_sessions.py test_introspect_sessions.py
+	uv run ruff check --fix --line-length 120 $(SRC)
 
 # Type check with mypy
 typecheck: fix
