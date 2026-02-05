@@ -422,7 +422,6 @@ Document the `--help` section with as much guidance need to help self-discover t
 - Make use of colour to make the boxes visually distinct toi help with visual communication.
 - Make sure the text colour is a good contrast with any background colours.
 - Make use of Emoji in the names of boxes for extra expressiveness.
-- Leverage the Iconify MCP where available.
 
 ### Quality Assurance
 

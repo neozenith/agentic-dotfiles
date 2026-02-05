@@ -4,3 +4,5 @@ logs/
 __pycache__/
 .DS_Store
 .claude/
+cache/
+.coverage
