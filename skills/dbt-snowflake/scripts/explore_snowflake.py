@@ -26,10 +26,10 @@ Usage:
     uv run explore_snowflake.py file <path>               # Run SQL from file
 
 Examples:
-    uv run explore_snowflake.py tables DATAVERSE_LANDING_PROD.S3_IGT_LOYALTY_EXTRACTS
-    uv run explore_snowflake.py columns DATAVERSE_LANDING_PROD.S3_IGT_LOYALTY_EXTRACTS.DIMPATRON
-    uv run explore_snowflake.py profile DATAVERSE_LANDING_PROD.S3_IGT_LOYALTY_EXTRACTS.FACTPLAYERSESSION
-    uv run explore_snowflake.py sample DATAVERSE_LANDING_PROD.S3_IGT_LOYALTY_EXTRACTS.DIMSITE 20
+    uv run explore_snowflake.py tables MY_DATABASE.MY_SCHEMA
+    uv run explore_snowflake.py columns MY_DATABASE.MY_SCHEMA.MY_TABLE
+    uv run explore_snowflake.py profile MY_DATABASE.MY_SCHEMA.MY_TABLE
+    uv run explore_snowflake.py sample MY_DATABASE.MY_SCHEMA.MY_TABLE 20
 """
 import argparse
 import json

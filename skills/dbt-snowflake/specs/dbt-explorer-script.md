@@ -6,7 +6,7 @@ A Python script to load, parse, and explore dbt artifacts (`manifest.json`, `cat
 
 ## User Requirements
 
-> I want a python script that can load in the targets/ artifacts and follows the principles in /Users/joshpeak/work/onyx/Dataverse/.claude/misc/PYTHON_HELPER_SCRIPTS.md
+> I want a python script that can load in the targets/ artifacts and follows common Python script best practices (PEP-723 inline script metadata, argparse CLI, structured logging, dataclasses for schema)
 >
 > The script can:
 > - read targets/manifest.json
@@ -22,8 +22,8 @@ A Python script to load, parse, and explore dbt artifacts (`manifest.json`, `cat
 
 Root keys:
 - `metadata` - dbt version info, project info
-- `nodes` - models, tests, seeds, snapshots (keyed by unique_id like `model.dataverse.my_model`)
-- `sources` - source definitions (keyed by unique_id like `source.dataverse.raw.my_table`)
+- `nodes` - models, tests, seeds, snapshots (keyed by unique_id like `model.my_project.my_model`)
+- `sources` - source definitions (keyed by unique_id like `source.my_project.raw.my_table`)
 - `macros` - macro definitions
 - `docs` - doc blocks
 - `exposures` - exposure definitions
