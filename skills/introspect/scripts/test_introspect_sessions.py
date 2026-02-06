@@ -809,11 +809,52 @@ class TestSummaryCommand:
         assert result["session_id"] == "session-abc"
 
 
+class TestModelFamilyFromId:
+    """Tests for the model_family_from_id helper function."""
+
+    def test_opus_models(self) -> None:
+        """Test Opus model family extraction."""
+        assert iss.model_family_from_id("claude-opus-4-6") == "opus"
+        assert iss.model_family_from_id("claude-opus-4-5-20251101") == "opus"
+        assert iss.model_family_from_id("claude-opus-4-1") == "opus"
+
+    def test_sonnet_models(self) -> None:
+        """Test Sonnet model family extraction."""
+        assert iss.model_family_from_id("claude-sonnet-4-5-20250929") == "sonnet"
+        assert iss.model_family_from_id("claude-sonnet-4-5-20250514") == "sonnet"
+        assert iss.model_family_from_id("claude-sonnet-4") == "sonnet"
+
+    def test_haiku_models(self) -> None:
+        """Test Haiku model family extraction."""
+        assert iss.model_family_from_id("claude-haiku-4-5-20251001") == "haiku"
+        assert iss.model_family_from_id("claude-3-5-haiku-20241022") == "haiku"
+        assert iss.model_family_from_id("claude-3-haiku-20240307") == "haiku"
+
+    def test_unknown_model(self) -> None:
+        """Test unknown model returns 'unknown'."""
+        assert iss.model_family_from_id("some-other-model") == "unknown"
+
+    def test_none_model(self) -> None:
+        """Test None model returns 'unknown'."""
+        assert iss.model_family_from_id(None) == "unknown"
+
+
 class TestCostCommand:
     """Tests for the cmd_cost function."""
 
+    def test_cmd_cost_auto_detect(self, populated_cache: iss.CacheManager) -> None:
+        """Test cost estimation with auto-detected model family."""
+        result = iss.cmd_cost(populated_cache, session_id="session-abc")
+
+        assert result["session_id"] == "session-abc"
+        # Auto-detection should find sonnet from the test fixture model IDs
+        assert result["model"] == "sonnet"
+        assert "input_tokens" in result
+        assert "output_tokens" in result
+        assert "total_cost_usd" in result
+
     def test_cmd_cost_opus(self, populated_cache: iss.CacheManager) -> None:
-        """Test cost estimation with Opus pricing."""
+        """Test cost estimation with explicit Opus pricing override."""
         result = iss.cmd_cost(populated_cache, session_id="session-abc", model="opus")
 
         assert result["session_id"] == "session-abc"
@@ -831,6 +872,16 @@ class TestCostCommand:
         """Test cost estimation with Haiku pricing."""
         result = iss.cmd_cost(populated_cache, session_id="session-abc", model="haiku")
         assert result["model"] == "haiku"
+
+    def test_cmd_cost_different_pricing(self, populated_cache: iss.CacheManager) -> None:
+        """Test that different model families produce different costs."""
+        opus_result = iss.cmd_cost(populated_cache, session_id="session-abc", model="opus")
+        sonnet_result = iss.cmd_cost(populated_cache, session_id="session-abc", model="sonnet")
+        haiku_result = iss.cmd_cost(populated_cache, session_id="session-abc", model="haiku")
+
+        # Opus should be most expensive, haiku cheapest
+        assert opus_result["total_cost_usd"] > sonnet_result["total_cost_usd"]
+        assert sonnet_result["total_cost_usd"] > haiku_result["total_cost_usd"]
 
     def test_cmd_cost_not_found(self, populated_cache: iss.CacheManager) -> None:
         """Test cost for non-existent session."""
@@ -2025,7 +2076,7 @@ class TestMainDispatch:
         cache = iss.CacheManager(db_path=db_path)
         cache.init_schema()
 
-        args = self._make_args(command="cost", session_id="session-123", model="opus")
+        args = self._make_args(command="cost", session_id="session-123", model=None)
         iss.main(args, cache=cache, projects_path=temp_dir)
 
         captured = capsys.readouterr()

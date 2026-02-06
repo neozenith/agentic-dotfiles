@@ -106,6 +106,17 @@ PRICING = {
 }
 
 
+def model_family_from_id(model_id: str | None) -> str:
+    """Extract model family (opus/sonnet/haiku) from a full model ID string."""
+    if model_id is None:
+        return "unknown"
+    model_lower = model_id.lower()
+    for family in ("opus", "sonnet", "haiku"):
+        if family in model_lower:
+            return family
+    return "unknown"
+
+
 # ============================================================================
 # SQLite Cache Schema
 # ============================================================================
@@ -792,13 +803,36 @@ class CacheManager:
             GROUP BY project_id, session_id
         """)
 
-        # Calculate costs (using Opus pricing as default)
+        # Calculate costs per-event using model family pricing
         cursor.execute("""
             UPDATE sessions SET total_cost_usd = (
-                (total_input_tokens / 1000000.0) * 15.0 +
-                (total_output_tokens / 1000000.0) * 75.0 +
-                (total_cache_read_tokens / 1000000.0) * 1.5 +
-                (total_cache_creation_tokens / 1000000.0) * 18.75
+                SELECT COALESCE(SUM(
+                    CASE
+                        WHEN e.model_id LIKE '%opus%' THEN
+                            (e.input_tokens / 1000000.0) * 15.0 +
+                            (e.output_tokens / 1000000.0) * 75.0 +
+                            (e.cache_read_tokens / 1000000.0) * 1.5 +
+                            (e.cache_creation_tokens / 1000000.0) * 18.75
+                        WHEN e.model_id LIKE '%sonnet%' THEN
+                            (e.input_tokens / 1000000.0) * 3.0 +
+                            (e.output_tokens / 1000000.0) * 15.0 +
+                            (e.cache_read_tokens / 1000000.0) * 0.3 +
+                            (e.cache_creation_tokens / 1000000.0) * 3.75
+                        WHEN e.model_id LIKE '%haiku%' THEN
+                            (e.input_tokens / 1000000.0) * 1.0 +
+                            (e.output_tokens / 1000000.0) * 5.0 +
+                            (e.cache_read_tokens / 1000000.0) * 0.1 +
+                            (e.cache_creation_tokens / 1000000.0) * 1.25
+                        ELSE
+                            (e.input_tokens / 1000000.0) * 15.0 +
+                            (e.output_tokens / 1000000.0) * 75.0 +
+                            (e.cache_read_tokens / 1000000.0) * 1.5 +
+                            (e.cache_creation_tokens / 1000000.0) * 18.75
+                    END
+                ), 0)
+                FROM events e
+                WHERE e.session_id = sessions.session_id
+                  AND e.project_id = sessions.project_id
             )
         """)
 
@@ -1287,12 +1321,23 @@ def cmd_cost(
     cache: CacheManager,
     session_id: str,
     project_id: str | None = None,
-    model: str = "opus",
+    model: str | None = None,
 ) -> dict[str, Any]:
-    """Estimate cost for a session based on token usage."""
+    """Estimate cost for a session based on token usage.
+
+    When model is None, auto-detects the dominant model family from the session's
+    models_used list. Falls back to 'opus' if no models are detected.
+    """
     summary = cmd_summary(cache, session_id, project_id)
     if "error" in summary:
         return summary
+
+    # Auto-detect model family from session if not explicitly provided
+    if model is None:
+        models_used = summary.get("models_used", [])
+        families = [model_family_from_id(m) for m in models_used]
+        known = [f for f in families if f != "unknown"]
+        model = known[0] if known else "opus"
 
     pricing = PRICING.get(model.lower(), PRICING["opus"])
 
@@ -2606,7 +2651,7 @@ if __name__ == "__main__":  # pragma: no cover
     # cost command
     cost_parser = subparsers.add_parser("cost", help="Estimate session cost")
     cost_parser.add_argument("session_id", help="Session UUID")
-    cost_parser.add_argument("--model", choices=["opus", "sonnet", "haiku"], default="opus")
+    cost_parser.add_argument("--model", choices=["opus", "sonnet", "haiku"], default=None)
 
     # messages command
     messages_parser = subparsers.add_parser("messages", help="Extract messages")
