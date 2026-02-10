@@ -236,13 +236,31 @@ Pricing (per 1M tokens):
 
 # Filter to specific subagent
 .claude/skills/introspect/scripts/introspect_sessions.sh messages SESSION_ID --agent AGENT_ID
+
+# Cross-session: all user messages in the last hour (omit session_id)
+.claude/skills/introspect/scripts/introspect_sessions.sh --project=PROJECT_ID messages --role user --since 1h
+
+# Exclude system-injected messages (tool approvals, bash output, compaction)
+.claude/skills/introspect/scripts/introspect_sessions.sh --project=PROJECT_ID messages --role user --since 24h --exclude-system
 ```
+
+Options:
+- `session_id` — Optional. Omit to search all sessions. When provided, `project_id` is auto-resolved from the cache.
+- `--role {user,assistant}` — Filter by message role
+- `--since TIME` — Filter events after this time (ISO or relative: `30m`, `1h`, `7d`)
+- `--exclude-system` — Exclude system-injected messages (tool approvals, bash output, compaction artifacts)
+- `--agent AGENT_ID` — Filter to specific subagent
+- `-n, --limit N` — Max messages to return (default: 100)
+
+**Project auto-resolution:** When you provide a `session_id`, the `project_id` is
+automatically looked up from the cache — no need to pass `--project`.
 
 Useful for:
 - Reviewing what was asked in a session
 - Distilling multi-turn conversations into single prompts
 - Debugging conversation flow
 - Creating reproducible prompts from exploratory sessions
+- **Post-compaction recovery**: extracting user intent from sessions that hit context limits
 
 ### List Subagents
 
@@ -281,6 +299,20 @@ Shows all projects with:
 - Session count
 - First/last activity timestamps
 
+### Resolve Project ID
+
+```bash
+# Get the project_id for a session
+.claude/skills/introspect/scripts/introspect_sessions.sh project-id SESSION_ID
+
+# Composable: capture and reuse in subsequent calls
+PROJECT=$(.claude/skills/introspect/scripts/introspect_sessions.sh project-id SESSION_ID | jq -r '.project_id')
+.claude/skills/introspect/scripts/introspect_sessions.sh --project=$PROJECT messages --role user --since 24h --exclude-system
+```
+
+Returns `{"project_id": "..."}`. Useful for scripts that start with a session ID
+and need the project scope for cross-session queries.
+
 ### List Sessions
 
 ```bash
@@ -295,9 +327,21 @@ Options:
 
 ```bash
 .claude/skills/introspect/scripts/introspect_sessions.sh search "error pattern" [-p PROJECT] [-t TYPES] [-n LIMIT]
+
+# Search with time filter
+.claude/skills/introspect/scripts/introspect_sessions.sh search "benchmark" --since 1h --role user
+
+# Search user messages only, last 7 days
+.claude/skills/introspect/scripts/introspect_sessions.sh search "implement" --role user --since 7d -n 20
 ```
 
-Searches across all sessions for content matching the pattern (case-insensitive).
+Searches across all sessions for content matching the pattern (FTS5 syntax).
+
+Options:
+- `-t, --types TYPE [TYPE...]` — Filter event types
+- `-n, --limit N` — Max results (default: 50)
+- `--since TIME` — Filter events after this time (ISO or relative: `30m`, `1h`, `7d`)
+- `--role {user,assistant}` — Filter by message role
 
 ## UUID-Based Commands
 
@@ -555,6 +599,33 @@ introspect_sessions.sh summary ${CLAUDE_SESSION_ID} | jq '{input: .input_tokens,
 # Get just the response chain (descendants)
 .claude/skills/introspect/scripts/introspect_sessions.sh traverse SESSION_ID TARGET_UUID --direction descendants
 ```
+
+### User Intent Timeline (Post-Compaction Recovery)
+
+After context compaction, earlier user messages are summarized in-memory but the
+**JSONL file is append-only** — no events are ever deleted. This means you can
+always recover the full user intent timeline, even across multiple compaction
+cycles within a single session.
+
+```bash
+# Get all user-typed messages across all sessions in the last 24h
+# --exclude-system filters out tool approvals, bash output, compaction noise
+.claude/skills/introspect/scripts/introspect_sessions.sh \
+    --project=PROJECT_ID messages --role user --since 24h --exclude-system
+
+# Pipe to jq for a compact timeline view
+.claude/skills/introspect/scripts/introspect_sessions.sh \
+    --project=PROJECT_ID messages --role user --since 24h --exclude-system \
+    | jq '[.[] | {timestamp, session: .session_id[:8], content: (.content[:100])}]'
+
+# Single session intent recovery
+.claude/skills/introspect/scripts/introspect_sessions.sh \
+    messages SESSION_ID --role user --exclude-system
+```
+
+**Key fact:** Claude Code's JSONL session logs are append-only. Context
+compaction only affects the in-memory conversation window — the on-disk log
+preserves every event. If you rsync these files, you have a complete audit trail.
 
 ### Analyze Token Usage by Agent
 
