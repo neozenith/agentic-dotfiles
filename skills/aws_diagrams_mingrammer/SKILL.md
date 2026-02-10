@@ -8,7 +8,7 @@ allowed-tools:
   - Bash
   - Glob
   - Grep
-user-invocable: false
+user-invocable: true
 ---
 
 # AWS Architecture Diagrams with mingrammer/diagrams
