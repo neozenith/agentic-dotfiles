@@ -130,14 +130,113 @@ For explicit cache control without running a query:
 
 ### Cache Schema
 
-The cache contains these tables:
-- **source_files** - Tracks all ingested files with mtime, size, line count
-- **events** - All parsed events with parent-child relationships
-- **sessions** - Aggregated session statistics
-- **projects** - Aggregated project statistics
-- **events_fts** - FTS5 virtual table for full-text search
+```mermaid
+erDiagram
+    cache_metadata {
+        TEXT key PK
+        TEXT value
+    }
 
-Events link back to their source file and line number for traceability.
+    source_files {
+        INTEGER id PK
+        TEXT filepath UK
+        REAL mtime
+        INTEGER size_bytes
+        INTEGER line_count
+        TEXT last_ingested_at
+        TEXT project_id
+        TEXT session_id "nullable for orphan agents"
+        TEXT file_type "main_session subagent agent_root"
+    }
+
+    projects {
+        INTEGER id PK
+        TEXT project_id UK
+        TEXT first_activity
+        TEXT last_activity
+        INTEGER session_count
+        INTEGER event_count
+    }
+
+    sessions {
+        INTEGER id PK
+        TEXT session_id
+        TEXT project_id
+        TEXT first_timestamp
+        TEXT last_timestamp
+        INTEGER event_count
+        INTEGER subagent_count
+        INTEGER total_input_tokens
+        INTEGER total_output_tokens
+        INTEGER total_cache_read_tokens
+        INTEGER total_cache_creation_tokens
+        REAL total_cost_usd
+    }
+
+    events {
+        INTEGER id PK
+        TEXT uuid
+        TEXT parent_uuid
+        TEXT event_type
+        TEXT timestamp
+        TEXT session_id
+        TEXT project_id
+        INTEGER is_sidechain
+        TEXT agent_id
+        TEXT message_role
+        TEXT message_content "plain text for FTS"
+        TEXT model_id
+        INTEGER input_tokens
+        INTEGER output_tokens
+        INTEGER cache_read_tokens
+        INTEGER cache_creation_tokens
+        INTEGER source_file_id FK
+        INTEGER line_number
+        TEXT raw_json
+    }
+
+    event_edges {
+        INTEGER id PK
+        TEXT project_id
+        TEXT session_id
+        TEXT event_uuid
+        TEXT parent_event_uuid
+        INTEGER source_file_id FK
+    }
+
+    reflections {
+        INTEGER id PK
+        TEXT project_id
+        TEXT session_id
+        TEXT reflection_prompt
+        TEXT created_at
+    }
+
+    event_annotations {
+        INTEGER id PK
+        TEXT project_id
+        TEXT session_id
+        TEXT event_uuid
+        INTEGER reflection_id FK
+        TEXT annotation_result
+        TEXT created_at
+    }
+
+    source_files ||--o{ events : "contains"
+    source_files ||--o{ event_edges : "tracks"
+    events ||--o{ event_annotations : "annotated by"
+    reflections ||--o{ event_annotations : "produces"
+```
+
+**FTS5 virtual tables** (auto-synced via triggers):
+- `events_fts` — full-text search on `events.message_content`
+- `reflections_fts` — full-text search on `reflections.reflection_prompt`
+
+**Key relationships:**
+- `events.source_file_id` → `source_files.id` (CASCADE delete)
+- `event_edges` links `event_uuid` → `parent_event_uuid` for tree traversal
+- `event_annotations.(project_id, session_id, event_uuid)` → `events` (composite FK)
+- `event_annotations.reflection_id` → `reflections.id` (CASCADE delete)
 
 ## Available Commands
 
