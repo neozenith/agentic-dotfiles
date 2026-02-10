@@ -159,6 +159,64 @@ The index uses two LSP calls per file (O(N) total):
 
 References = tokens that are NOT definitions (a SQL VIEW). Definition scope ranges are stored in an R-Tree for O(log N) containment queries. A materialized edge list enables recursive CTE graph traversal for impact analysis.
 
+### Cache Schema
+
+```mermaid
+erDiagram
+    cache_metadata {
+        TEXT key PK
+        TEXT value
+    }
+
+    source_files {
+        INTEGER id PK
+        TEXT filepath UK "absolute path"
+        TEXT relative_path "git-relative"
+        REAL mtime
+        INTEGER size_bytes
+        TEXT indexed_at
+        TEXT language "python typescript javascript"
+        TEXT lsp_server
+        TEXT file_type "source or test"
+    }
+
+    symbols {
+        INTEGER id PK
+        INTEGER source_file_id FK
+        TEXT name
+        TEXT kind "class function variable etc"
+        INTEGER line "1-indexed"
+        INTEGER col "1-indexed"
+        INTEGER end_line
+        INTEGER end_col
+        TEXT detail "nullable"
+        BOOLEAN is_definition "0 = reference 1 = definition"
+        INTEGER scope_start_line "definitions only"
+        INTEGER scope_end_line "definitions only"
+    }
+
+    definition_ranges {
+        INTEGER id PK "matches symbols.id"
+        INTEGER min_line "scope_start_line"
+        INTEGER max_line "scope_end_line"
+        INTEGER min_file_id "source_file_id"
+        INTEGER max_file_id "source_file_id"
+    }
+
+    symbol_containments {
+        INTEGER inner_symbol_id FK "contained symbol"
+        INTEGER outer_symbol_id FK "enclosing definition"
+    }
+
+    source_files ||--o{ symbols : "contains"
+    symbols ||--o| definition_ranges : "R-Tree scope index"
+    symbols ||--o{ symbol_containments : "contained in"
+```
+
+**SQL Views** (no separate tables):
+- `definitions` — `SELECT * FROM symbols WHERE is_definition = 1`
+- `references` — `SELECT * FROM symbols WHERE is_definition = 0`
+
 ## Global Options
 
 These flags are shared across all subcommands. Place them **after** the subcommand name.
