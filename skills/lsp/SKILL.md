@@ -34,8 +34,20 @@ Query language servers for code intelligence from the command line.
 # Combined overview (symbols + diagnostics)
 .claude/skills/lsp/scripts/lsp_explorer.sh explore src/main.py
 
-# Change impact analysis
+# Change impact analysis (live LSP)
 .claude/skills/lsp/scripts/lsp_explorer.sh impact src/main.py 10 5 --depth 2
+
+# Build symbol index (SQLite cache)
+.claude/skills/lsp/scripts/lsp_explorer.sh index --root .
+
+# Find definitions by name (no LSP needed)
+.claude/skills/lsp/scripts/lsp_explorer.sh lookup MyClass --pretty
+
+# Find dead code
+.claude/skills/lsp/scripts/lsp_explorer.sh dead --file-type source --exclude-private --pretty
+
+# Trace impact from cached index
+.claude/skills/lsp/scripts/lsp_explorer.sh trace src/main.py 10 5 --depth 3 --pretty
 ```
 
 ## Output Format
@@ -98,25 +110,25 @@ Pre-compute all definitions and references across a project into a SQLite cache,
 .claude/skills/lsp/scripts/lsp_explorer.sh index --root .
 
 # Incremental update (only re-index changed files)
-.claude/skills/lsp/scripts/lsp_explorer.sh --cache-incremental index --root .
+.claude/skills/lsp/scripts/lsp_explorer.sh index --root . --cache-incremental
 
 # Show index statistics
-.claude/skills/lsp/scripts/lsp_explorer.sh index-status
+.claude/skills/lsp/scripts/lsp_explorer.sh index-status --pretty
 
 # Clear the index
 .claude/skills/lsp/scripts/lsp_explorer.sh index-clear
 
 # Find definitions by name (substring match, no LSP needed)
-.claude/skills/lsp/scripts/lsp_explorer.sh lookup MyClass --kind class --file-type source
+.claude/skills/lsp/scripts/lsp_explorer.sh lookup MyClass --kind class --file-type source --pretty
 
 # Find dead code (unreferenced definitions)
-.claude/skills/lsp/scripts/lsp_explorer.sh dead --file-type source --exclude-private
+.claude/skills/lsp/scripts/lsp_explorer.sh dead --file-type source --exclude-private --pretty
 
 # Impact analysis from cached index (recursive)
-.claude/skills/lsp/scripts/lsp_explorer.sh trace src/main.py 10 5 --depth 3
+.claude/skills/lsp/scripts/lsp_explorer.sh trace src/main.py 10 5 --depth 3 --pretty
 
 # List indexed files
-.claude/skills/lsp/scripts/lsp_explorer.sh files --language python --file-type source
+.claude/skills/lsp/scripts/lsp_explorer.sh files --language python --file-type source --pretty
 ```
 
 ### Cache Control Flags
@@ -148,6 +160,8 @@ The index uses two LSP calls per file (O(N) total):
 References = tokens that are NOT definitions (a SQL VIEW). Definition scope ranges are stored in an R-Tree for O(log N) containment queries. A materialized edge list enables recursive CTE graph traversal for impact analysis.
 
 ## Global Options
+
+These flags are shared across all subcommands. Place them **after** the subcommand name.
 
 | Flag | Description |
 |------|-------------|
