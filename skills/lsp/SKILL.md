@@ -34,8 +34,20 @@ Query language servers for code intelligence from the command line.
 # Combined overview (symbols + diagnostics)
 .claude/skills/lsp/scripts/lsp_explorer.sh explore src/main.py
 
-# Change impact analysis
+# Change impact analysis (live LSP)
 .claude/skills/lsp/scripts/lsp_explorer.sh impact src/main.py 10 5 --depth 2
+
+# Build symbol index (SQLite cache)
+.claude/skills/lsp/scripts/lsp_explorer.sh index --root .
+
+# Find definitions by name (no LSP needed)
+.claude/skills/lsp/scripts/lsp_explorer.sh lookup MyClass --pretty
+
+# Find dead code
+.claude/skills/lsp/scripts/lsp_explorer.sh dead --file-type source --exclude-private --pretty
+
+# Trace impact from cached index
+.claude/skills/lsp/scripts/lsp_explorer.sh trace src/main.py 10 5 --depth 3 --pretty
 ```
 
 ## Output Format
@@ -89,7 +101,125 @@ All output is **compact JSON** optimized for token efficiency. Use `--pretty` or
 [{"f":"src/main.py","l":12,"c":1,"s":1,"msg":"Argument missing for parameter \"name\"","src":"pyright"}]
 ```
 
+## Symbol Index (SQLite Cache)
+
+Pre-compute all definitions and references across a project into a SQLite cache, then query instantly without spinning up LSP servers.
+
+```bash
+# Build the full symbol index (default: rebuild)
+.claude/skills/lsp/scripts/lsp_explorer.sh index --root .
+
+# Incremental update (only re-index changed files)
+.claude/skills/lsp/scripts/lsp_explorer.sh index --root . --cache-incremental
+
+# Show index statistics
+.claude/skills/lsp/scripts/lsp_explorer.sh index-status --pretty
+
+# Clear the index
+.claude/skills/lsp/scripts/lsp_explorer.sh index-clear
+
+# Find definitions by name (substring match, no LSP needed)
+.claude/skills/lsp/scripts/lsp_explorer.sh lookup MyClass --kind class --file-type source --pretty
+
+# Find dead code (unreferenced definitions)
+.claude/skills/lsp/scripts/lsp_explorer.sh dead --file-type source --exclude-private --pretty
+
+# Impact analysis from cached index (recursive)
+.claude/skills/lsp/scripts/lsp_explorer.sh trace src/main.py 10 5 --depth 3 --pretty
+
+# List indexed files
+.claude/skills/lsp/scripts/lsp_explorer.sh files --language python --file-type source --pretty
+```
+
+### Cache Control Flags
+
+| Flag | Description |
+|------|-------------|
+| `--cache-rebuild` | Wipe and rebuild entire index (default) |
+| `--cache-incremental` | Only index files with newer mtime |
+| `--cache-frozen` | Skip indexing, use existing cache as-is |
+
+### Index Commands
+
+| Command | Purpose | Requires LSP? |
+|---------|---------|---------------|
+| `index` | Build symbol index | Yes |
+| `index-status` | Show index stats | No |
+| `index-clear` | Wipe all index data | No |
+| `lookup NAME` | Find definitions by name | No |
+| `dead` | Find unreferenced definitions | No |
+| `trace FILE LINE COL` | Impact analysis from cache | No |
+| `files` | List indexed files | No |
+
+### How It Works
+
+The index uses two LSP calls per file (O(N) total):
+1. `documentSymbol` — hierarchical definitions with scope ranges
+2. `semanticTokens/full` — all token positions in a single pass
+
+References = tokens that are NOT definitions (a SQL VIEW). Definition scope ranges are stored in an R-Tree for O(log N) containment queries. A materialized edge list enables recursive CTE graph traversal for impact analysis.
+
+### Cache Schema
+
+```mermaid
+erDiagram
+    cache_metadata {
+        TEXT key PK
+        TEXT value
+    }
+
+    source_files {
+        INTEGER id PK
+        TEXT filepath UK "absolute path"
+        TEXT relative_path "git-relative"
+        REAL mtime
+        INTEGER size_bytes
+        TEXT indexed_at
+        TEXT language "python typescript javascript"
+        TEXT lsp_server
+        TEXT file_type "source or test"
+    }
+
+    symbols {
+        INTEGER id PK
+        INTEGER source_file_id FK
+        TEXT name
+        TEXT kind "class function variable etc"
+        INTEGER line "1-indexed"
+        INTEGER col "1-indexed"
+        INTEGER end_line
+        INTEGER end_col
+        TEXT detail "nullable"
+        BOOLEAN is_definition "0 = reference 1 = definition"
+        INTEGER scope_start_line "definitions only"
+        INTEGER scope_end_line "definitions only"
+    }
+
+    definition_ranges {
+        INTEGER id PK "matches symbols.id"
+        INTEGER min_line "scope_start_line"
+        INTEGER max_line "scope_end_line"
+        INTEGER min_file_id "source_file_id"
+        INTEGER max_file_id "source_file_id"
+    }
+
+    symbol_containments {
+        INTEGER inner_symbol_id FK "contained symbol"
+        INTEGER outer_symbol_id FK "enclosing definition"
+    }
+
+    source_files ||--o{ symbols : "contains"
+    symbols ||--o| definition_ranges : "R-Tree scope index"
+    symbols ||--o{ symbol_containments : "contained in"
+```
+
+**SQL Views** (no separate tables):
+- `definitions` — `SELECT * FROM symbols WHERE is_definition = 1`
+- `references` — `SELECT * FROM symbols WHERE is_definition = 0`
+
 ## Global Options
+
+These flags are shared across all subcommands. Place them **after** the subcommand name.
 
 | Flag | Description |
 |------|-------------|
@@ -109,15 +239,15 @@ All output is **compact JSON** optimized for token efficiency. Use `--pretty` or
 ## Architecture
 
 ```
-CLI (argparse)          <- User/Claude invokes commands
+CLI (argparse)           <- User/Claude invokes commands
+    |          \
+CodeExplorer    IndexCacheManager  <- High-level: explore/impact | index/dead/trace
+    |                |
+LspSession       SQLite (R-Tree)   <- Protocol: textDocument/* | Cached symbols
     |
-CodeExplorer            <- High-level: explore, plan, impact
+JsonRpcClient                      <- Wire: Content-Length framing
     |
-LspSession              <- Protocol: initialize, shutdown, textDocument/*
-    |
-JsonRpcClient           <- Wire: Content-Length framing, request/response matching
-    |
-subprocess (stdin/stdout) <- pyright-langserver or typescript-language-server
+subprocess (stdin/stdout)          <- pyright-langserver or typescript-language-server
 ```
 
 Positions are **1-indexed** at the CLI (matching editors and grep output), converted to 0-indexed internally for LSP protocol compliance.
@@ -127,3 +257,6 @@ Positions are **1-indexed** at the CLI (matching editors and grep output), conve
 1. **Planning code changes** — understand symbols, types, and definitions before modifying code
 2. **Reviewing change impact** — find all references to a symbol, trace what a change would affect
 3. **Exploring new codebases** — get high-level symbol overviews of files and directories
+4. **Dead code detection** — find unreferenced definitions across the entire project (cached)
+5. **Impact analysis** — trace how a change propagates through the call graph (cached)
+6. **Symbol lookup** — instantly find any definition by name without spinning up LSP servers

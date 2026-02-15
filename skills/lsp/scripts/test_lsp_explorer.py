@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import shutil
@@ -580,7 +581,7 @@ class TestCLI:
 
     def test_global_flags(self) -> None:
         parser = lsp_explorer.build_parser()
-        args = parser.parse_args(["-v", "--pretty", "--timeout", "60", "symbols", "test.py"])
+        args = parser.parse_args(["symbols", "test.py", "-v", "--pretty", "--timeout", "60"])
         assert args.verbose is True
         assert args.pretty is True
         assert args.timeout == 60.0
@@ -775,6 +776,915 @@ class TestTypescriptIntegration:
         explorer = lsp_explorer.CodeExplorer(root_path=typescript_fixture.parent)
         result = explorer.hover(typescript_fixture, 5, 7)
         assert result is not None
+
+
+# ============================================================================
+# Unit Tests: File Classification
+# ============================================================================
+
+
+class TestFileClassification:
+    """Test the classify_file_type function with parametrized test patterns."""
+
+    @pytest.mark.parametrize(
+        "path,expected",
+        [
+            # Test directories
+            ("tests/test_main.py", "test"),
+            ("test/test_main.py", "test"),
+            ("src/tests/test_main.py", "test"),
+            ("__tests__/MyComponent.test.ts", "test"),
+            # Pytest patterns
+            ("test_main.py", "test"),
+            ("src/test_main.py", "test"),
+            ("main_test.py", "test"),
+            ("conftest.py", "test"),
+            ("tests/conftest.py", "test"),
+            # JS/TS test patterns
+            ("Button.test.ts", "test"),
+            ("Button.test.tsx", "test"),
+            ("Button.spec.ts", "test"),
+            ("Button.spec.tsx", "test"),
+            ("Button.test.js", "test"),
+            ("Button.spec.jsx", "test"),
+            # Fixtures
+            ("fixtures/data.py", "test"),
+            ("fixture/sample.py", "test"),
+            # Source files
+            ("src/main.py", "source"),
+            ("lib/utils.ts", "source"),
+            ("app/components/Button.tsx", "source"),
+            ("main.py", "source"),
+            ("setup.py", "source"),
+        ],
+    )
+    def test_classify_file_type(self, path: str, expected: str) -> None:
+        assert lsp_explorer.classify_file_type(path) == expected
+
+
+# ============================================================================
+# Unit Tests: Semantic Token Decoding
+# ============================================================================
+
+
+class TestSemanticTokenDecoding:
+    """Test the decode_semantic_tokens function."""
+
+    def _make_legend(self) -> dict[str, Any]:
+        return {
+            "tokenTypes": lsp_explorer.STANDARD_TOKEN_TYPES,
+            "tokenModifiers": lsp_explorer.STANDARD_TOKEN_MODIFIERS,
+        }
+
+    def test_empty_data(self) -> None:
+        result = lsp_explorer.decode_semantic_tokens([], self._make_legend(), "")
+        assert result == []
+
+    def test_single_reference_token(self) -> None:
+        # One token: line 0, col 4, length 3, type=variable (idx 8), modifiers=0 (reference)
+        source = "def foo():\n    bar()\n"
+        data = [1, 4, 3, 8, 0]  # deltaLine=1, deltaCol=4, len=3, type=variable, mods=0
+        result = lsp_explorer.decode_semantic_tokens(data, self._make_legend(), source)
+        assert len(result) == 1
+        assert result[0]["name"] == "bar"
+        assert result[0]["kind"] == "variable"
+        assert result[0]["line"] == 2  # 1-indexed
+        assert result[0]["col"] == 5  # 1-indexed
+        assert result[0]["is_definition"] is False
+
+    def test_definition_token_with_declaration_modifier(self) -> None:
+        # declaration modifier = bit 0 = bitmask 1
+        source = "class MyClass:\n    pass\n"
+        data = [0, 6, 7, 2, 1]  # line=0, col=6, len=7, type=class (idx 2), mods=1 (declaration)
+        result = lsp_explorer.decode_semantic_tokens(data, self._make_legend(), source)
+        assert len(result) == 1
+        assert result[0]["name"] == "MyClass"
+        assert result[0]["kind"] == "class"
+        assert result[0]["is_definition"] is True
+
+    def test_definition_token_with_definition_modifier(self) -> None:
+        # definition modifier = bit 1 = bitmask 2
+        source = "def func():\n    pass\n"
+        data = [0, 4, 4, 12, 2]  # line=0, col=4, len=4, type=function (idx 12), mods=2 (definition)
+        result = lsp_explorer.decode_semantic_tokens(data, self._make_legend(), source)
+        assert len(result) == 1
+        assert result[0]["name"] == "func"
+        assert result[0]["kind"] == "function"
+        assert result[0]["is_definition"] is True
+
+    def test_skips_keyword_tokens(self) -> None:
+        # keyword type = index 15, should be skipped
+        source = "class MyClass:\n    pass\n"
+        data = [0, 0, 5, 15, 0]  # type=keyword (idx 15)
+        result = lsp_explorer.decode_semantic_tokens(data, self._make_legend(), source)
+        assert len(result) == 0
+
+    def test_multiple_tokens_delta_encoding(self) -> None:
+        source = "x = y + z\n"
+        data = [
+            0,
+            0,
+            1,
+            8,
+            1,  # x at (0,0), variable, declaration
+            0,
+            4,
+            1,
+            8,
+            0,  # y at (0,4), variable, reference
+            0,
+            4,
+            1,
+            8,
+            0,  # z at (0,8), variable, reference
+        ]
+        result = lsp_explorer.decode_semantic_tokens(data, self._make_legend(), source)
+        assert len(result) == 3
+        assert result[0]["name"] == "x"
+        assert result[0]["is_definition"] is True
+        assert result[1]["name"] == "y"
+        assert result[1]["is_definition"] is False
+        assert result[2]["name"] == "z"
+        assert result[2]["is_definition"] is False
+
+    def test_multiline_tokens(self) -> None:
+        source = "a = 1\nb = 2\nc = 3\n"
+        data = [
+            0,
+            0,
+            1,
+            8,
+            1,  # a at (0,0)
+            1,
+            0,
+            1,
+            8,
+            1,  # b at (1,0)  — new line resets col
+            1,
+            0,
+            1,
+            8,
+            1,  # c at (2,0)
+        ]
+        result = lsp_explorer.decode_semantic_tokens(data, self._make_legend(), source)
+        assert len(result) == 3
+        assert result[0]["line"] == 1
+        assert result[1]["line"] == 2
+        assert result[2]["line"] == 3
+
+
+# ============================================================================
+# Unit Tests: IndexCacheManager
+# ============================================================================
+
+
+class TestIndexCacheManager:
+    """Test the SQLite-backed symbol index cache."""
+
+    @pytest.fixture
+    def cache_dir(self, temp_dir: Path) -> Path:
+        d = temp_dir / "cache"
+        d.mkdir()
+        return d
+
+    @pytest.fixture
+    def cache(self, cache_dir: Path) -> Any:
+        db_path = cache_dir / "test_index.db"
+        mgr = lsp_explorer.IndexCacheManager(db_path=db_path)
+        mgr.init_schema()
+        yield mgr
+        mgr.close()
+
+    def test_init_schema_creates_tables(self, cache: lsp_explorer.IndexCacheManager) -> None:
+        tables = {
+            row[0]
+            for row in cache.conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()
+        }
+        assert "source_files" in tables
+        assert "symbols" in tables
+        assert "cache_metadata" in tables
+        assert "symbol_containments" in tables
+        assert "definition_ranges" in tables
+
+    def test_init_schema_creates_views(self, cache: lsp_explorer.IndexCacheManager) -> None:
+        views = {
+            row[0]
+            for row in cache.conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='view'"
+            ).fetchall()
+        }
+        assert "definitions" in views
+        assert "references" in views
+
+    def test_needs_rebuild_false_after_init(self, cache: lsp_explorer.IndexCacheManager) -> None:
+        assert cache.needs_rebuild() is False
+
+    def test_needs_rebuild_true_for_fresh_db(self, cache_dir: Path) -> None:
+        db_path = cache_dir / "fresh.db"
+        mgr = lsp_explorer.IndexCacheManager(db_path=db_path)
+        assert mgr.needs_rebuild() is True
+        mgr.close()
+
+    def test_clear_empties_all(self, cache: lsp_explorer.IndexCacheManager) -> None:
+        # Insert some data
+        cache.conn.execute(
+            "INSERT INTO source_files (filepath, relative_path, mtime, size_bytes, indexed_at, "
+            "language, lsp_server, file_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            ("/test.py", "test.py", 1.0, 100, "now", "python", "pyright-langserver", "source"),
+        )
+        cache.conn.commit()
+        assert cache.conn.execute("SELECT COUNT(*) FROM source_files").fetchone()[0] == 1
+
+        cache.clear()
+        assert cache.conn.execute("SELECT COUNT(*) FROM source_files").fetchone()[0] == 0
+
+    def test_get_status(self, cache: lsp_explorer.IndexCacheManager) -> None:
+        status = cache.get_status()
+        assert status["files"] == 0
+        assert status["symbols"] == 0
+        assert status["definitions"] == 0
+        assert status["references"] == 0
+        assert "db_path" in status
+
+    def test_get_status_with_data(self, cache: lsp_explorer.IndexCacheManager) -> None:
+        # Insert a source file
+        cache.conn.execute(
+            "INSERT INTO source_files (filepath, relative_path, mtime, size_bytes, indexed_at, "
+            "language, lsp_server, file_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            ("/test.py", "test.py", 1.0, 100, "now", "python", "pyright-langserver", "source"),
+        )
+        # Insert a definition
+        cache.conn.execute(
+            "INSERT INTO symbols (source_file_id, name, kind, line, col, end_line, end_col, "
+            "is_definition, scope_start_line, scope_end_line) "
+            "VALUES (1, 'foo', 'function', 1, 1, 5, 1, 1, 1, 5)",
+        )
+        # Insert a reference
+        cache.conn.execute(
+            "INSERT INTO symbols (source_file_id, name, kind, line, col, end_line, end_col, "
+            "is_definition) VALUES (1, 'foo', 'function', 10, 1, 10, 4, 0)",
+        )
+        cache.conn.commit()
+
+        status = cache.get_status()
+        assert status["files"] == 1
+        assert status["symbols"] == 2
+        assert status["definitions"] == 1
+        assert status["references"] == 1
+
+    def test_high_watermark_empty(self, cache: lsp_explorer.IndexCacheManager) -> None:
+        assert cache.get_high_watermark() == 0.0
+
+    def test_high_watermark_with_data(self, cache: lsp_explorer.IndexCacheManager) -> None:
+        cache.conn.execute(
+            "INSERT INTO source_files (filepath, relative_path, mtime, size_bytes, indexed_at, "
+            "language, lsp_server, file_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            ("/a.py", "a.py", 100.0, 50, "now", "python", "pyright-langserver", "source"),
+        )
+        cache.conn.execute(
+            "INSERT INTO source_files (filepath, relative_path, mtime, size_bytes, indexed_at, "
+            "language, lsp_server, file_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            ("/b.py", "b.py", 200.0, 50, "now", "python", "pyright-langserver", "source"),
+        )
+        cache.conn.commit()
+        assert cache.get_high_watermark() == 200.0
+
+    def test_remove_stale_files(self, cache: lsp_explorer.IndexCacheManager) -> None:
+        cache.conn.execute(
+            "INSERT INTO source_files (filepath, relative_path, mtime, size_bytes, indexed_at, "
+            "language, lsp_server, file_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            ("/a.py", "a.py", 1.0, 50, "now", "python", "pyright-langserver", "source"),
+        )
+        cache.conn.execute(
+            "INSERT INTO source_files (filepath, relative_path, mtime, size_bytes, indexed_at, "
+            "language, lsp_server, file_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            ("/b.py", "b.py", 1.0, 50, "now", "python", "pyright-langserver", "source"),
+        )
+        cache.conn.commit()
+
+        removed = cache.remove_stale_files({"/a.py"})
+        assert removed == 1
+        remaining = cache.conn.execute("SELECT COUNT(*) FROM source_files").fetchone()[0]
+        assert remaining == 1
+
+    def test_get_files_needing_update(self, cache: lsp_explorer.IndexCacheManager) -> None:
+        # Insert a file with mtime 100
+        cache.conn.execute(
+            "INSERT INTO source_files (filepath, relative_path, mtime, size_bytes, indexed_at, "
+            "language, lsp_server, file_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            ("/a.py", "a.py", 100.0, 50, "now", "python", "pyright-langserver", "source"),
+        )
+        cache.conn.commit()
+
+        files = [
+            {"filepath": "/a.py", "mtime": 100.0},  # same mtime = no update
+            {"filepath": "/a.py", "mtime": 200.0},  # newer = needs update
+            {"filepath": "/c.py", "mtime": 50.0},  # new file = needs update
+        ]
+        # Check each case
+        assert len(cache.get_files_needing_update([files[0]])) == 0
+        assert len(cache.get_files_needing_update([files[1]])) == 1
+        assert len(cache.get_files_needing_update([files[2]])) == 1
+
+    def test_cascade_delete(self, cache: lsp_explorer.IndexCacheManager) -> None:
+        """Deleting a source_file should cascade-delete its symbols."""
+        cache.conn.execute(
+            "INSERT INTO source_files (filepath, relative_path, mtime, size_bytes, indexed_at, "
+            "language, lsp_server, file_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            ("/a.py", "a.py", 1.0, 50, "now", "python", "pyright-langserver", "source"),
+        )
+        cache.conn.execute(
+            "INSERT INTO symbols (source_file_id, name, kind, line, col, end_line, end_col, "
+            "is_definition) VALUES (1, 'foo', 'function', 1, 1, 5, 1, 1)",
+        )
+        cache.conn.commit()
+        assert cache.conn.execute("SELECT COUNT(*) FROM symbols").fetchone()[0] == 1
+
+        cache.conn.execute("DELETE FROM source_files WHERE id = 1")
+        cache.conn.commit()
+        assert cache.conn.execute("SELECT COUNT(*) FROM symbols").fetchone()[0] == 0
+
+
+# ============================================================================
+# Unit Tests: Index Queries (hand-constructed data)
+# ============================================================================
+
+
+class TestIndexQueries:
+    """Test SQL queries against hand-constructed index data."""
+
+    @pytest.fixture
+    def populated_cache(self, temp_dir: Path) -> Any:
+        db_path = temp_dir / "query_test.db"
+        cache = lsp_explorer.IndexCacheManager(db_path=db_path)
+        cache.init_schema()
+
+        # Create two source files
+        cache.conn.execute(
+            "INSERT INTO source_files (id, filepath, relative_path, mtime, size_bytes, indexed_at, "
+            "language, lsp_server, file_type) VALUES (1, '/src/main.py', 'src/main.py', 1.0, 100, "
+            "'now', 'python', 'pyright-langserver', 'source')"
+        )
+        cache.conn.execute(
+            "INSERT INTO source_files (id, filepath, relative_path, mtime, size_bytes, indexed_at, "
+            "language, lsp_server, file_type) VALUES (2, '/tests/test_main.py', 'tests/test_main.py', "
+            "1.0, 80, 'now', 'python', 'pyright-langserver', 'test')"
+        )
+
+        # Definitions in main.py
+        cache.conn.execute(
+            "INSERT INTO symbols (id, source_file_id, name, kind, line, col, end_line, end_col, "
+            "is_definition, scope_start_line, scope_end_line) "
+            "VALUES (1, 1, 'MyClass', 'class', 1, 7, 1, 14, 1, 1, 20)"
+        )
+        cache.conn.execute(
+            "INSERT INTO definition_ranges (id, min_line, max_line, min_file_id, max_file_id) "
+            "VALUES (1, 1, 20, 1, 1)"
+        )
+        cache.conn.execute(
+            "INSERT INTO symbols (id, source_file_id, name, kind, line, col, end_line, end_col, "
+            "is_definition, scope_start_line, scope_end_line) "
+            "VALUES (2, 1, 'process', 'method', 5, 9, 5, 16, 1, 5, 15)"
+        )
+        cache.conn.execute(
+            "INSERT INTO definition_ranges (id, min_line, max_line, min_file_id, max_file_id) "
+            "VALUES (2, 5, 15, 1, 1)"
+        )
+        cache.conn.execute(
+            "INSERT INTO symbols (id, source_file_id, name, kind, line, col, end_line, end_col, "
+            "is_definition, scope_start_line, scope_end_line) "
+            "VALUES (3, 1, 'main', 'function', 22, 5, 22, 9, 1, 22, 30)"
+        )
+        cache.conn.execute(
+            "INSERT INTO definition_ranges (id, min_line, max_line, min_file_id, max_file_id) "
+            "VALUES (3, 22, 30, 1, 1)"
+        )
+        # Unreferenced definition (dead code)
+        cache.conn.execute(
+            "INSERT INTO symbols (id, source_file_id, name, kind, line, col, end_line, end_col, "
+            "is_definition, scope_start_line, scope_end_line) "
+            "VALUES (4, 1, '_helper', 'function', 32, 5, 32, 12, 1, 32, 35)"
+        )
+        cache.conn.execute(
+            "INSERT INTO definition_ranges (id, min_line, max_line, min_file_id, max_file_id) "
+            "VALUES (4, 32, 35, 1, 1)"
+        )
+
+        # References — 'process' used in main.py's main function (line 25)
+        cache.conn.execute(
+            "INSERT INTO symbols (id, source_file_id, name, kind, line, col, end_line, end_col, "
+            "is_definition) VALUES (5, 1, 'process', 'method', 25, 10, 25, 17, 0)"
+        )
+        # Reference to 'MyClass' in test file
+        cache.conn.execute(
+            "INSERT INTO symbols (id, source_file_id, name, kind, line, col, end_line, end_col, "
+            "is_definition) VALUES (6, 2, 'MyClass', 'class', 5, 10, 5, 17, 0)"
+        )
+        # Reference to 'main' in test file
+        cache.conn.execute(
+            "INSERT INTO symbols (id, source_file_id, name, kind, line, col, end_line, end_col, "
+            "is_definition) VALUES (7, 2, 'main', 'function', 10, 5, 10, 9, 0)"
+        )
+
+        cache.conn.commit()
+
+        # Populate containments
+        cache._populate_containments()
+
+        yield cache
+        cache.close()
+
+    def test_definitions_view(self, populated_cache: lsp_explorer.IndexCacheManager) -> None:
+        rows = populated_cache.conn.execute("SELECT * FROM definitions").fetchall()
+        assert len(rows) == 4  # MyClass, process, main, _helper
+
+    def test_references_view(self, populated_cache: lsp_explorer.IndexCacheManager) -> None:
+        rows = populated_cache.conn.execute('SELECT * FROM "references"').fetchall()
+        assert len(rows) == 3  # process ref, MyClass ref, main ref
+
+    def test_dead_code_query(self, populated_cache: lsp_explorer.IndexCacheManager) -> None:
+        """_helper has no references — should appear as dead code."""
+        rows = populated_cache.conn.execute(
+            """\
+            SELECT s.name, s.kind, sf.relative_path, s.line
+            FROM symbols s
+            JOIN source_files sf ON sf.id = s.source_file_id
+            WHERE s.is_definition = 1
+              AND s.kind NOT IN ('module', 'package', 'namespace')
+              AND NOT EXISTS (
+                  SELECT 1 FROM symbols ref
+                  WHERE ref.name = s.name AND ref.id != s.id AND ref.is_definition = 0
+              )
+            ORDER BY sf.relative_path, s.line
+            """
+        ).fetchall()
+        dead_names = [r["name"] for r in rows]
+        assert "_helper" in dead_names
+
+    def test_dead_code_excludes_referenced(
+        self, populated_cache: lsp_explorer.IndexCacheManager
+    ) -> None:
+        """MyClass, process, main all have references — should NOT appear as dead."""
+        rows = populated_cache.conn.execute(
+            """\
+            SELECT s.name FROM symbols s
+            WHERE s.is_definition = 1
+              AND s.kind NOT IN ('module', 'package', 'namespace')
+              AND NOT EXISTS (
+                  SELECT 1 FROM symbols ref
+                  WHERE ref.name = s.name AND ref.id != s.id AND ref.is_definition = 0
+              )
+            """
+        ).fetchall()
+        dead_names = {r["name"] for r in rows}
+        assert "MyClass" not in dead_names
+        assert "process" not in dead_names
+        assert "main" not in dead_names
+
+    def test_containment_edges(self, populated_cache: lsp_explorer.IndexCacheManager) -> None:
+        """'process' method (line 5) should be contained within MyClass (lines 1-20)."""
+        rows = populated_cache.conn.execute(
+            """\
+            SELECT inner_symbol_id, outer_symbol_id FROM symbol_containments
+            WHERE inner_symbol_id = 2
+            """
+        ).fetchall()
+        assert len(rows) == 1
+        assert rows[0]["outer_symbol_id"] == 1  # MyClass contains process
+
+    def test_reference_containment(self, populated_cache: lsp_explorer.IndexCacheManager) -> None:
+        """Reference to 'process' at line 25 should be contained in 'main' (lines 22-30)."""
+        rows = populated_cache.conn.execute(
+            """\
+            SELECT inner_symbol_id, outer_symbol_id FROM symbol_containments
+            WHERE inner_symbol_id = 5
+            """
+        ).fetchall()
+        assert len(rows) == 1
+        assert rows[0]["outer_symbol_id"] == 3  # main() contains the process reference
+
+    def test_impact_cte(self, populated_cache: lsp_explorer.IndexCacheManager) -> None:
+        """Impact trace from 'process' should find 'main' via containment."""
+        rows = populated_cache.conn.execute(
+            """\
+            WITH RECURSIVE impact_chain(sym_id, name, source_file_id, depth) AS (
+                SELECT s.id, s.name, s.source_file_id, 0
+                FROM symbols s WHERE s.id = 2 AND s.is_definition = 1
+                UNION ALL
+                SELECT enclosing.id, enclosing.name, enclosing.source_file_id, ic.depth + 1
+                FROM impact_chain ic
+                JOIN symbols ref ON ref.name = ic.name AND ref.is_definition = 0
+                JOIN symbol_containments sc ON sc.inner_symbol_id = ref.id
+                JOIN symbols enclosing ON enclosing.id = sc.outer_symbol_id
+                WHERE ic.depth < 3
+            )
+            SELECT DISTINCT ic.depth, ic.name, s.kind, sf.relative_path, s.line
+            FROM impact_chain ic
+            JOIN symbols s ON s.id = ic.sym_id
+            JOIN source_files sf ON sf.id = ic.source_file_id
+            ORDER BY ic.depth, sf.relative_path, s.line
+            """
+        ).fetchall()
+        names_by_depth = {r["depth"]: r["name"] for r in rows}
+        assert 0 in names_by_depth
+        assert names_by_depth[0] == "process"
+        # Depth 1: main() contains a reference to 'process'
+        assert 1 in names_by_depth
+        assert names_by_depth[1] == "main"
+
+    def test_ancestors_cte(self, populated_cache: lsp_explorer.IndexCacheManager) -> None:
+        """Walk UP from 'process' → should find 'MyClass'."""
+        rows = populated_cache.conn.execute(
+            """\
+            WITH RECURSIVE ancestors(sym_id, depth) AS (
+                SELECT 2, 0
+                UNION ALL
+                SELECT sc.outer_symbol_id, a.depth + 1
+                FROM ancestors a
+                JOIN symbol_containments sc ON sc.inner_symbol_id = a.sym_id
+                WHERE a.depth < 5
+            )
+            SELECT a.depth, s.name, s.kind
+            FROM ancestors a
+            JOIN symbols s ON s.id = a.sym_id
+            ORDER BY a.depth
+            """
+        ).fetchall()
+        assert len(rows) >= 2
+        assert rows[0]["name"] == "process"
+        assert rows[1]["name"] == "MyClass"
+
+    def test_descendants_cte(self, populated_cache: lsp_explorer.IndexCacheManager) -> None:
+        """Walk DOWN from 'MyClass' → should find 'process'."""
+        rows = populated_cache.conn.execute(
+            """\
+            WITH RECURSIVE descendants(sym_id, depth) AS (
+                SELECT 1, 0
+                UNION ALL
+                SELECT sc.inner_symbol_id, d.depth + 1
+                FROM descendants d
+                JOIN symbol_containments sc ON sc.outer_symbol_id = d.sym_id
+                WHERE d.depth < 5
+            )
+            SELECT d.depth, s.name, s.kind, s.is_definition
+            FROM descendants d
+            JOIN symbols s ON s.id = d.sym_id
+            ORDER BY d.depth, s.line
+            """
+        ).fetchall()
+        names = [r["name"] for r in rows]
+        assert "MyClass" in names  # depth 0
+        assert "process" in names  # depth 1
+
+    def test_direct_children(self, populated_cache: lsp_explorer.IndexCacheManager) -> None:
+        """Direct children of MyClass (id=1)."""
+        rows = populated_cache.conn.execute(
+            """\
+            SELECT s.name, s.kind, s.is_definition, s.line
+            FROM symbol_containments sc
+            JOIN symbols s ON s.id = sc.inner_symbol_id
+            WHERE sc.outer_symbol_id = 1
+            ORDER BY s.line
+            """
+        ).fetchall()
+        child_names = [r["name"] for r in rows]
+        assert "process" in child_names
+
+
+# ============================================================================
+# Unit Tests: File Discovery
+# ============================================================================
+
+
+class TestFileDiscovery:
+    """Test file discovery in the IndexCacheManager."""
+
+    @pytest.fixture
+    def project_dir(self, temp_dir: Path) -> Path:
+        """Create a mini project structure."""
+        d = temp_dir / "project"
+        d.mkdir()
+        (d / "src").mkdir()
+        (d / "tests").mkdir()
+        (d / "src" / "main.py").write_text("def main(): pass\n")
+        (d / "src" / "utils.py").write_text("def util(): pass\n")
+        (d / "tests" / "test_main.py").write_text("def test(): pass\n")
+        (d / "src" / "app.ts").write_text("function app() {}\n")
+        (d / "README.md").write_text("# Project\n")  # Should be filtered out
+        return d
+
+    def test_discover_files_filters_extensions(self, project_dir: Path, temp_dir: Path) -> None:
+        db_path = temp_dir / "test.db"
+        cache = lsp_explorer.IndexCacheManager(db_path=db_path)
+        cache.init_schema()
+
+        files = cache.discover_files(project_dir)
+        extensions = {Path(f["filepath"]).suffix for f in files}
+        assert ".md" not in extensions
+        assert ".py" in extensions
+        assert ".ts" in extensions
+        cache.close()
+
+    def test_discover_files_classifies_types(self, project_dir: Path, temp_dir: Path) -> None:
+        db_path = temp_dir / "test.db"
+        cache = lsp_explorer.IndexCacheManager(db_path=db_path)
+        cache.init_schema()
+
+        files = cache.discover_files(project_dir)
+        file_types = {f["relative_path"]: f["file_type"] for f in files}
+        assert file_types.get("tests/test_main.py") == "test"
+        assert file_types.get("src/main.py") == "source"
+        cache.close()
+
+    def test_discover_files_includes_language(self, project_dir: Path, temp_dir: Path) -> None:
+        db_path = temp_dir / "test.db"
+        cache = lsp_explorer.IndexCacheManager(db_path=db_path)
+        cache.init_schema()
+
+        files = cache.discover_files(project_dir)
+        langs = {f["relative_path"]: f["language"] for f in files}
+        assert langs.get("src/main.py") == "python"
+        assert langs.get("src/app.ts") == "typescript"
+        cache.close()
+
+
+# ============================================================================
+# Unit Tests: New CLI Subcommands
+# ============================================================================
+
+
+class TestNewCLI:
+    """Test CLI argument parsing for new subcommands."""
+
+    def test_index_subcommand(self) -> None:
+        parser = lsp_explorer.build_parser()
+        args = parser.parse_args(["index"])
+        assert args.command == "index"
+
+    def test_index_status_subcommand(self) -> None:
+        parser = lsp_explorer.build_parser()
+        args = parser.parse_args(["index-status"])
+        assert args.command == "index-status"
+
+    def test_index_clear_subcommand(self) -> None:
+        parser = lsp_explorer.build_parser()
+        args = parser.parse_args(["index-clear"])
+        assert args.command == "index-clear"
+
+    def test_lookup_subcommand(self) -> None:
+        parser = lsp_explorer.build_parser()
+        args = parser.parse_args(["lookup", "MyClass"])
+        assert args.command == "lookup"
+        assert args.name == "MyClass"
+
+    def test_lookup_with_filters(self) -> None:
+        parser = lsp_explorer.build_parser()
+        args = parser.parse_args(["lookup", "main", "--kind", "function", "--file-type", "source"])
+        assert args.kind == "function"
+        assert args.file_type == "source"
+
+    def test_dead_subcommand(self) -> None:
+        parser = lsp_explorer.build_parser()
+        args = parser.parse_args(["dead"])
+        assert args.command == "dead"
+
+    def test_dead_with_exclude_private(self) -> None:
+        parser = lsp_explorer.build_parser()
+        args = parser.parse_args(["dead", "--exclude-private"])
+        assert args.exclude_private is True
+
+    def test_trace_subcommand(self) -> None:
+        parser = lsp_explorer.build_parser()
+        args = parser.parse_args(["trace", "src/main.py", "10", "5", "--depth", "5"])
+        assert args.command == "trace"
+        assert args.file == "src/main.py"
+        assert args.line == 10
+        assert args.col == 5
+        assert args.depth == 5
+
+    def test_files_subcommand(self) -> None:
+        parser = lsp_explorer.build_parser()
+        args = parser.parse_args(["files", "--language", "python"])
+        assert args.command == "files"
+        assert args.language == "python"
+
+    def test_cache_frozen_flag(self) -> None:
+        parser = lsp_explorer.build_parser()
+        args = parser.parse_args(["index", "--cache-frozen"])
+        assert args.cache_mode == "frozen"
+
+    def test_cache_incremental_flag(self) -> None:
+        parser = lsp_explorer.build_parser()
+        args = parser.parse_args(["index", "--cache-incremental"])
+        assert args.cache_mode == "incremental"
+
+    def test_cache_rebuild_flag(self) -> None:
+        parser = lsp_explorer.build_parser()
+        args = parser.parse_args(["index", "--cache-rebuild"])
+        assert args.cache_mode == "rebuild"
+
+    def test_default_cache_mode_is_rebuild(self) -> None:
+        parser = lsp_explorer.build_parser()
+        args = parser.parse_args(["index"])
+        assert args.cache_mode == "rebuild"
+
+    def test_flags_work_after_subcommand(self) -> None:
+        """Flags like --root work after the subcommand name (the whole point)."""
+        parser = lsp_explorer.build_parser()
+        args = parser.parse_args(["index", "--root", "/tmp/project"])
+        assert args.root == Path("/tmp/project")
+
+    def test_flags_work_with_verbose_and_pretty(self) -> None:
+        parser = lsp_explorer.build_parser()
+        args = parser.parse_args(["symbols", "test.py", "-v", "--pretty"])
+        assert args.verbose is True
+        assert args.pretty is True
+
+
+# ============================================================================
+# Unit Tests: Walk Symbol Tree
+# ============================================================================
+
+
+class TestWalkSymbolTree:
+    """Test _walk_symbol_tree inserts definitions correctly."""
+
+    @pytest.fixture
+    def cache_with_file(self, temp_dir: Path) -> Any:
+        db_path = temp_dir / "walk_test.db"
+        cache = lsp_explorer.IndexCacheManager(db_path=db_path)
+        cache.init_schema()
+        cache.conn.execute(
+            "INSERT INTO source_files (id, filepath, relative_path, mtime, size_bytes, indexed_at, "
+            "language, lsp_server, file_type) VALUES (1, '/test.py', 'test.py', 1.0, 100, "
+            "'now', 'python', 'pyright-langserver', 'source')"
+        )
+        cache.conn.commit()
+        yield cache
+        cache.close()
+
+    def test_flat_symbols(self, cache_with_file: lsp_explorer.IndexCacheManager) -> None:
+        raw = [
+            {
+                "name": "MyFunc",
+                "kind": 12,
+                "range": {"start": {"line": 0, "character": 0}, "end": {"line": 5, "character": 0}},
+                "selectionRange": {
+                    "start": {"line": 0, "character": 4},
+                    "end": {"line": 0, "character": 10},
+                },
+                "children": [],
+            }
+        ]
+        cursor = cache_with_file.conn.cursor()
+        count = cache_with_file._walk_symbol_tree(cursor, raw, 1)
+        cache_with_file.conn.commit()
+        assert count == 1
+
+        rows = cache_with_file.conn.execute(
+            "SELECT * FROM symbols WHERE is_definition = 1"
+        ).fetchall()
+        assert len(rows) == 1
+        assert rows[0]["name"] == "MyFunc"
+        assert rows[0]["kind"] == "function"
+        assert rows[0]["line"] == 1  # 1-indexed from selectionRange
+        assert rows[0]["scope_start_line"] == 1
+        assert rows[0]["scope_end_line"] == 6
+
+    def test_nested_symbols(self, cache_with_file: lsp_explorer.IndexCacheManager) -> None:
+        raw = [
+            {
+                "name": "MyClass",
+                "kind": 5,
+                "range": {
+                    "start": {"line": 0, "character": 0},
+                    "end": {"line": 20, "character": 0},
+                },
+                "selectionRange": {
+                    "start": {"line": 0, "character": 6},
+                    "end": {"line": 0, "character": 13},
+                },
+                "children": [
+                    {
+                        "name": "__init__",
+                        "kind": 6,
+                        "range": {
+                            "start": {"line": 2, "character": 4},
+                            "end": {"line": 5, "character": 0},
+                        },
+                        "selectionRange": {
+                            "start": {"line": 2, "character": 8},
+                            "end": {"line": 2, "character": 16},
+                        },
+                        "children": [],
+                    },
+                ],
+            }
+        ]
+        cursor = cache_with_file.conn.cursor()
+        count = cache_with_file._walk_symbol_tree(cursor, raw, 1)
+        cache_with_file.conn.commit()
+        assert count == 2  # MyClass + __init__
+
+        # Verify R-Tree entries
+        rtree_count = cache_with_file.conn.execute(
+            "SELECT COUNT(*) FROM definition_ranges"
+        ).fetchone()[0]
+        assert rtree_count == 2
+
+
+# ============================================================================
+# Integration Tests: Index Commands (with fake server)
+# ============================================================================
+
+
+class TestIndexCommands:
+    """Test index CLI commands with real SQLite database."""
+
+    @pytest.fixture
+    def index_cache(self, temp_dir: Path) -> Any:
+        db_path = temp_dir / "cmd_test.db"
+        cache = lsp_explorer.IndexCacheManager(db_path=db_path)
+        cache.init_schema()
+        yield cache
+        cache.close()
+
+    def test_cmd_index_status_no_index(
+        self, temp_dir: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        db_path = temp_dir / "empty.db"
+        args = argparse.Namespace(
+            pretty=False,
+            db_path=str(db_path),
+            verbose=False,
+        )
+        result = lsp_explorer.cmd_index_status(args)
+        assert result == 0
+        output = json.loads(capsys.readouterr().out)
+        assert output["status"] == "no_index"
+
+    def test_cmd_index_status_with_data(
+        self, index_cache: lsp_explorer.IndexCacheManager, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        args = argparse.Namespace(
+            pretty=False,
+            db_path=str(index_cache._db_path),
+            verbose=False,
+        )
+        result = lsp_explorer.cmd_index_status(args)
+        assert result == 0
+        output = json.loads(capsys.readouterr().out)
+        assert "files" in output
+        assert output["files"] == 0
+
+    def test_cmd_index_clear(
+        self, index_cache: lsp_explorer.IndexCacheManager, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        args = argparse.Namespace(
+            pretty=False,
+            db_path=str(index_cache._db_path),
+            verbose=False,
+        )
+        result = lsp_explorer.cmd_index_clear(args)
+        assert result == 0
+        output = json.loads(capsys.readouterr().out)
+        assert output["status"] == "cleared"
+
+
+# ============================================================================
+# Integration Tests: Real LSP Index (pyright)
+# ============================================================================
+
+
+@skip_no_pyright
+class TestPyrightIndexIntegration:
+    """Integration tests for the full indexing pipeline with real pyright."""
+
+    def test_index_python_file(self, python_fixture: Path) -> None:
+        """Test indexing a Python file with real pyright server."""
+        root = python_fixture.parent
+        db_path = root / "test_index.db"
+        cache = lsp_explorer.IndexCacheManager(db_path=db_path)
+        try:
+            cache.init_schema()
+
+            files = cache.discover_files(root)
+            py_files = [f for f in files if f["language"] == "python"]
+            assert len(py_files) >= 1
+
+            stats = cache.index_files(root, py_files)
+            assert stats["files_indexed"] >= 1
+            assert stats["definitions"] > 0
+
+            # Verify definitions are in the database
+            defs = cache.conn.execute("SELECT * FROM definitions").fetchall()
+            def_names = [d["name"] for d in defs]
+            assert "MyClass" in def_names
+            assert "main" in def_names
+        finally:
+            cache.close()
 
 
 # ============================================================================

@@ -130,14 +130,113 @@ For explicit cache control without running a query:
 
 ### Cache Schema
 
-The cache contains these tables:
-- **source_files** - Tracks all ingested files with mtime, size, line count
-- **events** - All parsed events with parent-child relationships
-- **sessions** - Aggregated session statistics
-- **projects** - Aggregated project statistics
-- **events_fts** - FTS5 virtual table for full-text search
+```mermaid
+erDiagram
+    cache_metadata {
+        TEXT key PK
+        TEXT value
+    }
 
-Events link back to their source file and line number for traceability.
+    source_files {
+        INTEGER id PK
+        TEXT filepath UK
+        REAL mtime
+        INTEGER size_bytes
+        INTEGER line_count
+        TEXT last_ingested_at
+        TEXT project_id
+        TEXT session_id "nullable for orphan agents"
+        TEXT file_type "main_session subagent agent_root"
+    }
+
+    projects {
+        INTEGER id PK
+        TEXT project_id UK
+        TEXT first_activity
+        TEXT last_activity
+        INTEGER session_count
+        INTEGER event_count
+    }
+
+    sessions {
+        INTEGER id PK
+        TEXT session_id
+        TEXT project_id
+        TEXT first_timestamp
+        TEXT last_timestamp
+        INTEGER event_count
+        INTEGER subagent_count
+        INTEGER total_input_tokens
+        INTEGER total_output_tokens
+        INTEGER total_cache_read_tokens
+        INTEGER total_cache_creation_tokens
+        REAL total_cost_usd
+    }
+
+    events {
+        INTEGER id PK
+        TEXT uuid
+        TEXT parent_uuid
+        TEXT event_type
+        TEXT timestamp
+        TEXT session_id
+        TEXT project_id
+        INTEGER is_sidechain
+        TEXT agent_id
+        TEXT message_role
+        TEXT message_content "plain text for FTS"
+        TEXT model_id
+        INTEGER input_tokens
+        INTEGER output_tokens
+        INTEGER cache_read_tokens
+        INTEGER cache_creation_tokens
+        INTEGER source_file_id FK
+        INTEGER line_number
+        TEXT raw_json
+    }
+
+    event_edges {
+        INTEGER id PK
+        TEXT project_id
+        TEXT session_id
+        TEXT event_uuid
+        TEXT parent_event_uuid
+        INTEGER source_file_id FK
+    }
+
+    reflections {
+        INTEGER id PK
+        TEXT project_id
+        TEXT session_id
+        TEXT reflection_prompt
+        TEXT created_at
+    }
+
+    event_annotations {
+        INTEGER id PK
+        TEXT project_id
+        TEXT session_id
+        TEXT event_uuid
+        INTEGER reflection_id FK
+        TEXT annotation_result
+        TEXT created_at
+    }
+
+    source_files ||--o{ events : "contains"
+    source_files ||--o{ event_edges : "tracks"
+    events ||--o{ event_annotations : "annotated by"
+    reflections ||--o{ event_annotations : "produces"
+```
+
+**FTS5 virtual tables** (auto-synced via triggers):
+- `events_fts` — full-text search on `events.message_content`
+- `reflections_fts` — full-text search on `reflections.reflection_prompt`
+
+**Key relationships:**
+- `events.source_file_id` → `source_files.id` (CASCADE delete)
+- `event_edges` links `event_uuid` → `parent_event_uuid` for tree traversal
+- `event_annotations.(project_id, session_id, event_uuid)` → `events` (composite FK)
+- `event_annotations.reflection_id` → `reflections.id` (CASCADE delete)
 
 ## Available Commands
 
@@ -236,13 +335,31 @@ Pricing (per 1M tokens):
 
 # Filter to specific subagent
 .claude/skills/introspect/scripts/introspect_sessions.sh messages SESSION_ID --agent AGENT_ID
+
+# Cross-session: all user messages in the last hour (omit session_id)
+.claude/skills/introspect/scripts/introspect_sessions.sh --project=PROJECT_ID messages --role user --since 1h
+
+# Exclude system-injected messages (tool approvals, bash output, compaction)
+.claude/skills/introspect/scripts/introspect_sessions.sh --project=PROJECT_ID messages --role user --since 24h --exclude-system
 ```
+
+Options:
+- `session_id` — Optional. Omit to search all sessions. When provided, `project_id` is auto-resolved from the cache.
+- `--role {user,assistant}` — Filter by message role
+- `--since TIME` — Filter events after this time (ISO or relative: `30m`, `1h`, `7d`)
+- `--exclude-system` — Exclude system-injected messages (tool approvals, bash output, compaction artifacts)
+- `--agent AGENT_ID` — Filter to specific subagent
+- `-n, --limit N` — Max messages to return (default: 100)
+
+**Project auto-resolution:** When you provide a `session_id`, the `project_id` is
+automatically looked up from the cache — no need to pass `--project`.
 
 Useful for:
 - Reviewing what was asked in a session
 - Distilling multi-turn conversations into single prompts
 - Debugging conversation flow
 - Creating reproducible prompts from exploratory sessions
+- **Post-compaction recovery**: extracting user intent from sessions that hit context limits
 
 ### List Subagents
 
@@ -281,6 +398,20 @@ Shows all projects with:
 - Session count
 - First/last activity timestamps
 
+### Resolve Project ID
+
+```bash
+# Get the project_id for a session
+.claude/skills/introspect/scripts/introspect_sessions.sh project-id SESSION_ID
+
+# Composable: capture and reuse in subsequent calls
+PROJECT=$(.claude/skills/introspect/scripts/introspect_sessions.sh project-id SESSION_ID | jq -r '.project_id')
+.claude/skills/introspect/scripts/introspect_sessions.sh --project=$PROJECT messages --role user --since 24h --exclude-system
+```
+
+Returns `{"project_id": "..."}`. Useful for scripts that start with a session ID
+and need the project scope for cross-session queries.
+
 ### List Sessions
 
 ```bash
@@ -295,9 +426,21 @@ Options:
 
 ```bash
 .claude/skills/introspect/scripts/introspect_sessions.sh search "error pattern" [-p PROJECT] [-t TYPES] [-n LIMIT]
+
+# Search with time filter
+.claude/skills/introspect/scripts/introspect_sessions.sh search "benchmark" --since 1h --role user
+
+# Search user messages only, last 7 days
+.claude/skills/introspect/scripts/introspect_sessions.sh search "implement" --role user --since 7d -n 20
 ```
 
-Searches across all sessions for content matching the pattern (case-insensitive).
+Searches across all sessions for content matching the pattern (FTS5 syntax).
+
+Options:
+- `-t, --types TYPE [TYPE...]` — Filter event types
+- `-n, --limit N` — Max results (default: 50)
+- `--since TIME` — Filter events after this time (ISO or relative: `30m`, `1h`, `7d`)
+- `--role {user,assistant}` — Filter by message role
 
 ## UUID-Based Commands
 
@@ -555,6 +698,33 @@ introspect_sessions.sh summary ${CLAUDE_SESSION_ID} | jq '{input: .input_tokens,
 # Get just the response chain (descendants)
 .claude/skills/introspect/scripts/introspect_sessions.sh traverse SESSION_ID TARGET_UUID --direction descendants
 ```
+
+### User Intent Timeline (Post-Compaction Recovery)
+
+After context compaction, earlier user messages are summarized in-memory but the
+**JSONL file is append-only** — no events are ever deleted. This means you can
+always recover the full user intent timeline, even across multiple compaction
+cycles within a single session.
+
+```bash
+# Get all user-typed messages across all sessions in the last 24h
+# --exclude-system filters out tool approvals, bash output, compaction noise
+.claude/skills/introspect/scripts/introspect_sessions.sh \
+    --project=PROJECT_ID messages --role user --since 24h --exclude-system
+
+# Pipe to jq for a compact timeline view
+.claude/skills/introspect/scripts/introspect_sessions.sh \
+    --project=PROJECT_ID messages --role user --since 24h --exclude-system \
+    | jq '[.[] | {timestamp, session: .session_id[:8], content: (.content[:100])}]'
+
+# Single session intent recovery
+.claude/skills/introspect/scripts/introspect_sessions.sh \
+    messages SESSION_ID --role user --exclude-system
+```
+
+**Key fact:** Claude Code's JSONL session logs are append-only. Context
+compaction only affects the in-memory conversation window — the on-disk log
+preserves every event. If you rsync these files, you have a complete audit trail.
 
 ### Analyze Token Usage by Agent
 

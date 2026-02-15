@@ -958,6 +958,32 @@ def ensure_cache(cache: CacheManager, projects_path: Path | None = None) -> None
         cache.update(projects_path)
 
 
+def resolve_project_id(cache: CacheManager, session_id: str) -> str | None:
+    """Look up the project_id for a given session_id from the cache."""
+    cursor = cache.conn.cursor()
+    row = cursor.execute(
+        "SELECT project_id FROM sessions WHERE session_id = ? LIMIT 1",
+        (session_id,),
+    ).fetchone()
+    if row:
+        return row["project_id"]
+    # Fallback: check the events table directly
+    row = cursor.execute(
+        "SELECT project_id FROM events WHERE session_id = ? LIMIT 1",
+        (session_id,),
+    ).fetchone()
+    return row["project_id"] if row else None
+
+
+def cmd_project_id(cache: CacheManager, session_id: str) -> dict[str, str]:
+    """Resolve the project_id for a session_id."""
+    ensure_cache(cache)
+    pid = resolve_project_id(cache, session_id)
+    if not pid:
+        return {"error": f"No project found for session {session_id}"}
+    return {"project_id": pid}
+
+
 def cmd_cache_init(cache: CacheManager) -> dict[str, Any]:
     """Initialize the cache database."""
     cache.init_schema()
@@ -1209,6 +1235,8 @@ def cmd_search(
     project_id: str | None = None,
     event_types: list[str] | None = None,
     limit: int = 50,
+    since: str | None = None,
+    role: str | None = None,
 ) -> list[dict[str, Any]]:
     """Full-text search across sessions using FTS5."""
     ensure_cache(cache)
@@ -1235,6 +1263,16 @@ def cmd_search(
         placeholders = ",".join("?" * len(event_types))
         query += f" AND e.event_type IN ({placeholders})"
         params.extend(event_types)
+
+    if role:
+        query += " AND e.message_role = ?"
+        params.append(role)
+
+    if since:
+        since_dt = parse_time_filter(since)
+        if since_dt:
+            query += " AND e.timestamp >= ?"
+            params.append(since_dt.strftime("%Y-%m-%dT%H:%M:%S"))
 
     query += " ORDER BY e.timestamp DESC LIMIT ?"
     params.append(limit)
@@ -1372,22 +1410,38 @@ def cmd_cost(
 
 def cmd_messages(
     cache: CacheManager,
-    session_id: str,
+    session_id: str | None = None,
     project_id: str | None = None,
     role: str | None = None,
     limit: int = 100,
     agent_id: str | None = None,
+    since: str | None = None,
+    exclude_system: bool = False,
 ) -> list[dict[str, Any]]:
-    """Extract user and/or assistant messages from a session."""
+    """Extract user and/or assistant messages from a session (or all sessions).
+
+    When session_id is None, searches across all sessions in the project.
+    When exclude_system is True, filters out system-injected messages
+    (tool approvals, bash output, compaction artifacts) to show only
+    human-typed messages.
+    """
     ensure_cache(cache)
     cursor = cache.conn.cursor()
 
+    # Resolve project_id from session_id when not explicitly provided
+    if session_id and not project_id:
+        project_id = resolve_project_id(cache, session_id)
+
     query = """
-        SELECT event_type, timestamp, message_content
+        SELECT event_type, timestamp, session_id, message_content
         FROM events
-        WHERE session_id = ?
+        WHERE 1=1
     """
-    params: list[Any] = [session_id]
+    params: list[Any] = []
+
+    if session_id:
+        query += " AND session_id = ?"
+        params.append(session_id)
 
     if project_id:
         query += " AND project_id = ?"
@@ -1404,6 +1458,30 @@ def cmd_messages(
         query += " AND agent_id = ?"
         params.append(agent_id)
 
+    if since:
+        since_dt = parse_time_filter(since)
+        if since_dt:
+            query += " AND timestamp >= ?"
+            params.append(since_dt.strftime("%Y-%m-%dT%H:%M:%S"))
+
+    # Exclude system-injected messages that masquerade as user events
+    # (tool approvals, bash output, compaction artifacts, skill injections)
+    _system_prefixes = (
+        "<bash-",
+        "<local-command",
+        "<task-notification",
+        "[Request interrupted",
+        "Your task is to create a detailed summary",
+        "This session is being continued",
+        "Base directory for this skill",
+        "<command-",
+    )
+    if exclude_system:
+        for prefix in _system_prefixes:
+            query += " AND message_content NOT LIKE ?"
+            params.append(prefix + "%")
+        query += " AND message_content IS NOT NULL AND length(message_content) > 0"
+
     query += " ORDER BY timestamp LIMIT ?"
     params.append(limit)
 
@@ -1412,14 +1490,16 @@ def cmd_messages(
     messages = []
     for row in results:
         content = row["message_content"]
-        if content and content.strip():
-            messages.append(
-                {
-                    "role": row["event_type"],
-                    "timestamp": row["timestamp"],
-                    "content": content[:2000],
-                }
-            )
+        if not content or not content.strip():
+            continue
+        msg = {
+            "role": row["event_type"],
+            "timestamp": row["timestamp"],
+            "content": content[:2000],
+        }
+        if not session_id:
+            msg["session_id"] = row["session_id"]
+        messages.append(msg)
 
     return messages
 
@@ -2386,6 +2466,9 @@ def main(
         elif args.command == "projects":
             result = cmd_projects(cache)
 
+        elif args.command == "project-id":
+            result = cmd_project_id(cache, args.session_id)
+
         elif args.command == "sessions":
             result = cmd_sessions(
                 cache,
@@ -2423,6 +2506,8 @@ def main(
                 project_id=args.project,
                 event_types=args.types,
                 limit=args.limit,
+                since=getattr(args, "since", None),
+                role=getattr(args, "role", None),
             )
 
         elif args.command == "summary":
@@ -2443,11 +2528,13 @@ def main(
         elif args.command == "messages":
             result = cmd_messages(
                 cache,
-                args.session_id,
+                session_id=args.session_id,
                 project_id=args.project,
                 role=args.role,
                 limit=args.limit,
                 agent_id=getattr(args, "agent", None),
+                since=getattr(args, "since", None),
+                exclude_system=getattr(args, "exclude_system", False),
             )
 
         elif args.command == "agents":
@@ -2616,6 +2703,10 @@ if __name__ == "__main__":  # pragma: no cover
     # projects command
     subparsers.add_parser("projects", help="List all projects with session counts")
 
+    # project-id command
+    pid_parser = subparsers.add_parser("project-id", help="Resolve project ID from session ID")
+    pid_parser.add_argument("session_id", help="Session UUID")
+
     # sessions command
     sessions_parser = subparsers.add_parser("sessions", help="List sessions for a project")
     sessions_parser.add_argument("project_id", help="Project ID (kebab-cased path)")
@@ -2643,6 +2734,8 @@ if __name__ == "__main__":  # pragma: no cover
     search_parser.add_argument("pattern", help="Search pattern (FTS5 syntax)")
     search_parser.add_argument("-t", "--types", nargs="+", help="Filter event types")
     search_parser.add_argument("-n", "--limit", type=int, default=50, help="Max results")
+    search_parser.add_argument("--since", help="Filter since timestamp (ISO or relative like '30m', '1h')")
+    search_parser.add_argument("--role", choices=["user", "assistant"], help="Filter by message role")
 
     # summary command
     summary_parser = subparsers.add_parser("summary", help="Get session summary")
@@ -2655,10 +2748,12 @@ if __name__ == "__main__":  # pragma: no cover
 
     # messages command
     messages_parser = subparsers.add_parser("messages", help="Extract messages")
-    messages_parser.add_argument("session_id", help="Session UUID")
+    messages_parser.add_argument("session_id", nargs="?", default=None, help="Session UUID (omit to search all sessions)")
     messages_parser.add_argument("--role", choices=["user", "assistant"])
     messages_parser.add_argument("-n", "--limit", type=int, default=100)
     messages_parser.add_argument("--agent", help="Filter to specific agent ID")
+    messages_parser.add_argument("--since", help="Filter since timestamp (ISO or relative like '30m', '1h')")
+    messages_parser.add_argument("--exclude-system", action="store_true", help="Exclude system-injected messages (tool approvals, bash output, compaction artifacts)")
 
     # agents command
     agents_parser = subparsers.add_parser("agents", help="List subagents")
