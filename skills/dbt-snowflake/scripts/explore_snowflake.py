@@ -86,7 +86,8 @@ def get_connection_params() -> dict[str, Any]:
     if missing:
         raise EnvironmentError(
             f"Missing required environment variables: {', '.join(missing)}\n"
-            "Run: eval \"$(uv run python $(git rev-parse --show-toplevel)/scripts/exportenv.py)\""
+            "Environment variables must be loaded BEFORE starting the Claude Code session.\n"
+            "Exit the session, run your env setup commands, then restart."
         )
 
     params = {
@@ -138,6 +139,13 @@ def execute_query(conn: snowflake.connector.SnowflakeConnection, sql: str) -> li
 # ============================================================================
 # Exploration Commands
 # ============================================================================
+
+
+def cmd_connection_test(conn: snowflake.connector.SnowflakeConnection) -> list[dict[str, Any]]:
+    """Test the Snowflake connection and return session context."""
+    log.info("Testing Snowflake connection")
+    sql = "SELECT CURRENT_USER() AS user, CURRENT_ROLE() AS role, CURRENT_WAREHOUSE() AS warehouse, CURRENT_ACCOUNT() AS account"
+    return execute_query(conn, sql)
 
 
 def cmd_tables(conn: snowflake.connector.SnowflakeConnection, schema: str) -> list[dict[str, Any]]:
@@ -368,7 +376,9 @@ def main(args: argparse.Namespace) -> None:
     """Main entry point."""
     try:
         with get_connection() as conn:
-            if args.command == "tables":
+            if args.command == "connection-test":
+                result = cmd_connection_test(conn)
+            elif args.command == "tables":
                 result = cmd_tables(conn, args.schema)
             elif args.command == "columns":
                 result = cmd_columns(conn, args.table)
@@ -433,6 +443,9 @@ if __name__ == "__main__":
     )
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
+
+    # connection-test command
+    subparsers.add_parser("connection-test", help="Test Snowflake connection and show session context")
 
     # tables command
     tables_parser = subparsers.add_parser("tables", help="List tables in a schema")

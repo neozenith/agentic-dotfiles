@@ -124,49 +124,57 @@ Insights discovered during exploration should be documented for future retrieval
 
 ## Environment Setup
 
-Before running any Snowflake or dbt commands, environment variables must be loaded.
+### CRITICAL: Credential Loading is USER-ONLY
 
-### Loading Environment Variables
+**The agent must NEVER run any of the following:**
 
-If Snowflake or dbt commands fail due to missing credentials, guide the user to set up their environment:
+- `eval "$(uv run python .../exportenv.py)"` or any `eval` that loads env vars
+- `export SNOWFLAKE_*=...` or any `export` of credentials
+- `env | grep SNOW` or any command that prints credentials/env vars
+- `source .env` or any command that reads dotenv files
+- Any command that loads, exports, prints, or manipulates credentials
+
+Running these commands can load the wrong credentials, overwrite the user's
+authenticated session, or leak secrets into the conversation context.
+
+**The user must set up their environment BEFORE starting Claude Code:**
 
 ```bash
-# Load environment variables from .env file (works from any directory in the repo)
+# User runs these in their terminal BEFORE launching claude:
 eval "$(uv run python $(git rev-parse --show-toplevel)/scripts/exportenv.py)"
-
-# Set the current git branch for dbt Cloud (if applicable)
 export DBT_GIT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+env | grep SNOW  # user verifies their own setup
 ```
 
-**Note**: `git rev-parse --show-toplevel` returns the absolute path to the repository root, making this command work from any subdirectory.
+If credentials are not working, tell the user to exit the session, fix their
+environment, and restart Claude Code.
 
-### Verifying Environment Variables
+### Agent-Safe Connection Verification
 
-After loading, verify Snowflake variables are set:
+These are the ONLY commands the agent may run to check connectivity:
 
 ```bash
-env | grep SNOW
+# Preferred: uses the explore_snowflake.sh script's built-in connection test
+.claude/skills/dbt-snowflake/scripts/explore_snowflake.sh connection-test
+
+# Alternative: snowflake-cli (reads existing env vars, does not load them)
+uvx --from snowflake-cli snow connection test --temporary-connection
+
+# dbt connection check
+uv run dbt debug
 ```
 
-Required Snowflake environment variables (per snowflake-cli conventions):
+If any of these fail, do NOT attempt to fix or reload credentials. Tell the user:
+> Snowflake connection failed. Please check your environment variables are
+> loaded correctly and restart the Claude Code session.
+
+### Required Environment Variables
+
+The user's shell session must have these set (per snowflake-cli conventions):
 - `SNOWFLAKE_ACCOUNT` (not `SNOWFLAKE_ACCOUNTNAME`)
 - `SNOWFLAKE_USER` (not `SNOWFLAKE_USERNAME`)
 - `SNOWFLAKE_PRIVATE_KEY_PATH`
 - `SNOWFLAKE_ROLE`
-
-## Snowflake Connectivity Debugging
-
-### Test Connection
-
-```bash
-uvx --from snowflake-cli snow connection test --temporary-connection
-```
-
-### Verify Current Session Context
-
-```bash
-uvx --from snowflake-cli snow sql --temporary-connection -q "SELECT CURRENT_USER(), CURRENT_ROLE(), CURRENT_WAREHOUSE()"
-```
 
 ## Using Snowflake CLI for Ad-Hoc Queries
 
@@ -229,14 +237,9 @@ uv run dbt docs generate               # Generate documentation
 
 If commands fail, follow this diagnostic sequence:
 
-1. **Check environment variables**: `env | grep SNOW`
-2. **Test Snowflake connectivity**: `uvx --from snowflake-cli snow connection test --temporary-connection`
-3. **Verify dbt can connect**: `uv run dbt debug`
-4. **Reload environment if needed**:
-   ```bash
-   eval "$(uv run python $(git rev-parse --show-toplevel)/scripts/exportenv.py)"
-   export DBT_GIT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
-   ```
+1. **Test Snowflake connectivity**: `.claude/skills/dbt-snowflake/scripts/explore_snowflake.sh connection-test`
+2. **Verify dbt can connect**: `uv run dbt debug`
+3. **If either fails**: Tell the user their credentials are not working and ask them to reload their environment outside of Claude Code and restart the session. Do NOT attempt to reload credentials yourself.
 
 ## dbt Artifact Explorer
 
@@ -374,14 +377,19 @@ Each CLI invocation creates a new connection and consumes tokens. The explorer s
 
 ### Prerequisites
 
+Snowflake environment variables must already be loaded in the user's shell
+session BEFORE starting Claude Code. See "Environment Setup" above.
+
+Verify connectivity before running exploration commands:
 ```bash
-eval "$(uv run python $(git rev-parse --show-toplevel)/scripts/exportenv.py)"
+.claude/skills/dbt-snowflake/scripts/explore_snowflake.sh connection-test
 ```
 
 ### Quick Start
 
 ```bash
 .claude/skills/dbt-snowflake/scripts/explore_snowflake.sh --help
+.claude/skills/dbt-snowflake/scripts/explore_snowflake.sh connection-test
 .claude/skills/dbt-snowflake/scripts/explore_snowflake.sh tables <DATABASE>.<SCHEMA>
 .claude/skills/dbt-snowflake/scripts/explore_snowflake.sh columns <DATABASE>.<SCHEMA>.<TABLE>
 ```
