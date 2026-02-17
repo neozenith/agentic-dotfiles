@@ -18,13 +18,13 @@ Configuration (in order of precedence):
 4. Preset defaults (strict, balanced, permissive)
 
 Usage:
-    python .claude/scripts/mermaid_complexity.py path/to/diagram.mmd
-    python .claude/scripts/mermaid_complexity.py docs/diagrams/  # Analyze all .mmd files
-    python .claude/scripts/mermaid_complexity.py docs/diagrams/*.mmd --show-working
+    python .claude/skills/mermaidjs_diagrams/scripts/mermaid_complexity.py path/to/diagram.mmd
+    python .claude/skills/mermaidjs_diagrams/scripts/mermaid_complexity.py docs/diagrams/  # Analyze all .mmd files
+    python .claude/skills/mermaidjs_diagrams/scripts/mermaid_complexity.py docs/diagrams/*.mmd --show-working
 
     # With custom thresholds
-    python .claude/scripts/mermaid_complexity.py docs/diagrams/ --node-target=30 --vcs-target=50
-    MERMAID_NODE_TARGET=30 python .claude/scripts/mermaid_complexity.py docs/diagrams/
+    python .claude/skills/mermaidjs_diagrams/scripts/mermaid_complexity.py docs/diagrams/ --node-target=30 --vcs-target=50
+    MERMAID_NODE_TARGET=30 python .claude/skills/mermaidjs_diagrams/scripts/mermaid_complexity.py docs/diagrams/
 """
 
 from __future__ import annotations

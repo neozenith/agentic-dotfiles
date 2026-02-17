@@ -338,18 +338,38 @@ Diagram("Title", outformat="dot")   # Raw Graphviz source (for debugging)
 
 ## Available Node Types
 
-### AWS (most common)
+Detailed symbol references are in `resources/`. Read the relevant file when you need exact class names.
+
+| Resource File | Contents |
+|---------------|----------|
+| `resources/aws_nodes.md` | All AWS symbols (322 classes): analytics, compute, database, general, integration, management, network, security, storage. Includes alias cheat sheet. |
+| `resources/saas_nodes.md` | SaaS providers: identity (Auth0, Okta), chat (Slack, Teams, etc.), plus 13 other categories. |
+| `resources/flowchart_nodes.md` | Standard flowchart shapes (24): Decision, Action, StartEnd, InputOutput, Database, Document, etc. |
+| `resources/programming_language_nodes.md` | Language logos (23), framework logos (25), runtimes (1). |
+| `resources/custom_nodes.md` | `Custom(label, icon_path)` — local images, remote URL download pattern, icon folder scanner helper. |
+
+### Quick Reference (most common imports)
 
 ```python
+# AWS
 from diagrams.aws.compute import EC2, ECS, EKS, Lambda, Fargate
-from diagrams.aws.database import RDS, Aurora, DynamoDB, Elasticache, Neptune
+from diagrams.aws.database import RDS, Aurora, Dynamodb, Elasticache
 from diagrams.aws.network import ELB, ALB, NLB, CloudFront, Route53, VPC, APIGateway
-from diagrams.aws.storage import S3, EFS, FSx
-from diagrams.aws.integration import SQS, SNS, EventBridge, StepFunctions
-from diagrams.aws.analytics import Kinesis, Athena, Glue, Redshift
-from diagrams.aws.security import IAM, Cognito, WAF, KMS
-from diagrams.aws.management import Cloudwatch, CloudFormation
-from diagrams.aws.ml import Sagemaker, Bedrock
+from diagrams.aws.storage import SimpleStorageServiceS3 as S3, EFS
+from diagrams.aws.integration import SQS, SNS, Eventbridge, StepFunctions
+from diagrams.aws.analytics import Kinesis, KinesisDataFirehose, Athena, Glue, Redshift
+from diagrams.aws.security import IAM, IAMRole, Cognito, WAF, KMS, SecretsManager
+from diagrams.aws.management import Cloudwatch, CloudwatchLogs, Cloudformation, SSM
+
+# SaaS
+from diagrams.saas.identity import Auth0, Okta
+from diagrams.saas.chat import Slack, Teams
+
+# Flowcharts
+from diagrams.programming.flowchart import StartEnd, Action, Decision, InputOutput, Database
+
+# Custom icons (company logos, etc.)
+from diagrams.custom import Custom
 ```
 
 ### Other Providers
@@ -527,6 +547,11 @@ This produces:
 │   ├── my_diagram.py                 # PEP-723 script to generate example images
 │   └── Makefile                      # Build automation with self-describing targets
 └── resources/
+    ├── aws_nodes.md                  # AWS symbols: 9 categories, 322 classes, alias cheat sheet
+    ├── saas_nodes.md                 # SaaS symbols: identity (Auth0/Okta), chat (Slack/Teams), +13 categories
+    ├── flowchart_nodes.md            # Flowchart shapes: 24 standard symbols with shape descriptions
+    ├── programming_language_nodes.md # Language logos (23), framework logos (25), runtimes (1)
+    ├── custom_nodes.md               # Custom icons: local files, remote URLs, folder scanner pattern
     ├── dot_lr_ortho.png              # Example: LR + ortho (recommended)
     ├── dot_lr_spline.png             # Example: LR + spline (soft curves)
     └── dot_tb_ortho.png              # Example: TB + ortho (vertical flow)

@@ -4,8 +4,8 @@ Universal diagram infrastructure setup for Mermaid.js diagrams.
 Works for ANY project - creates standard structure.
 
 Usage:
-    python .claude/scripts/setup_diagrams.py
-    uv run .claude/scripts/setup_diagrams.py
+    python .claude/skills/mermaidjs_diagrams/scripts/setup_diagrams.py
+    uv run .claude/skills/mermaidjs_diagrams/scripts/setup_diagrams.py
 """
 
 import sys
@@ -17,6 +17,10 @@ MAKEFILE_TEMPLATE = """# When a MermaidJS source file (*.mmd) is updated, genera
 
 # A top level target to mark that all diagrams have a correpsonding png that should exist if it doesn't already.
 diagrams: $(patsubst %.mmd,%.png,$(wildcard *.mmd))
+
+all: diagrams
+
+.PHONY: diagrams all
 """
 
 GITATTRIBUTES_CONTENT = """# Treat PNG diagrams as binary files
@@ -30,8 +34,16 @@ This directory contains Mermaid.JS source files and generated PNG diagrams.
 ## Generating Diagrams
 
 Generate all diagrams:
+
 ```bash
 make diagrams
+```
+Or when running from project root:
+
+```bash
+make -C docs/diagrams diagrams
+# OR simply
+make -C docs/diagrams # Defaults to 'all' target which depends on 'diagrams'
 ```
 
 Generate a specific diagram:
@@ -63,8 +75,8 @@ def create_file_from_template(path: Path, content: str, description: str | None 
 
 
 def setup_diagrams_infrastructure():
-    """Create docs/diagrams infrastructure if missing. 
-    
+    """Create docs/diagrams infrastructure if missing.
+
     Returns list of existing .mmd files or empty list for new setup.
     """
     # Create directory
@@ -94,11 +106,11 @@ def setup_diagrams_infrastructure():
         print("\t1. You should check each diagram is an up-to-date depiction of your project.")
         for mmd_file in sorted(mmd_files):
             print(f"\t\t- {mmd_file.name}")
-        
+
     else:
         print("\n📊 No existing .mmd diagrams found")
         print("\t1. Create .mmd files in docs/diagrams/ depicting your project's architecture to get started")
-    
+
     print("2. Run 'make -C docs/diagrams diagrams' to (re)generate PNGs")
     return mmd_files, diagrams_dir
 
