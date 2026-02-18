@@ -1245,7 +1245,7 @@ def cmd_search(
     # Use FTS5 for search
     query = """
         SELECT
-            e.project_id, e.session_id, e.event_type, e.timestamp,
+            e.uuid, e.project_id, e.session_id, e.event_type, e.timestamp,
             SUBSTR(e.message_content, 1, 200) as content_preview,
             sf.filepath, e.line_number
         FROM events e
@@ -1601,23 +1601,30 @@ def cmd_traverse(
     uuid: str,
     direction: Literal["ancestors", "descendants", "both"] = "both",
     project_id: str | None = None,
+    depth_limit: int = 3,
 ) -> list[dict[str, Any]]:
-    """Traverse the event tree from a specific UUID using recursive CTEs on event_edges."""
+    """Traverse the event tree from a specific UUID using recursive CTEs on event_edges.
+
+    Args:
+        depth_limit: Max hops from the starting UUID. 0 means unlimited (traverse to all leaves).
+                     Default is 3, suitable for "looking around" before narrowing focus.
+    """
     ensure_cache(cache)
     cursor = cache.conn.cursor()
 
     result_uuids: set[str] = {uuid}
+    depth_clause = f"AND aw.depth < {depth_limit}" if depth_limit > 0 else ""
 
     # Walk ancestors via recursive CTE
     if direction in ("ancestors", "both"):
-        ancestor_sql = """
-            WITH RECURSIVE ancestor_walk(current_uuid) AS (
-                VALUES(?)
+        ancestor_sql = f"""
+            WITH RECURSIVE ancestor_walk(current_uuid, depth) AS (
+                SELECT ?, 0
                 UNION
-                SELECT ee.parent_event_uuid
+                SELECT ee.parent_event_uuid, aw.depth + 1
                 FROM event_edges ee
                 INNER JOIN ancestor_walk aw ON ee.event_uuid = aw.current_uuid
-                WHERE ee.session_id = ?
+                WHERE ee.session_id = ? {depth_clause}
             )
             SELECT current_uuid FROM ancestor_walk
         """
@@ -1625,16 +1632,18 @@ def cmd_traverse(
         rows = cursor.execute(ancestor_sql, ancestor_params).fetchall()
         result_uuids.update(row[0] for row in rows)
 
+    depth_clause = f"AND dw.depth < {depth_limit}" if depth_limit > 0 else ""
+
     # Walk descendants via recursive CTE
     if direction in ("descendants", "both"):
-        descendant_sql = """
-            WITH RECURSIVE descendant_walk(current_uuid) AS (
-                VALUES(?)
+        descendant_sql = f"""
+            WITH RECURSIVE descendant_walk(current_uuid, depth) AS (
+                SELECT ?, 0
                 UNION
-                SELECT ee.event_uuid
+                SELECT ee.event_uuid, dw.depth + 1
                 FROM event_edges ee
                 INNER JOIN descendant_walk dw ON ee.parent_event_uuid = dw.current_uuid
-                WHERE ee.session_id = ?
+                WHERE ee.session_id = ? {depth_clause}
             )
             SELECT current_uuid FROM descendant_walk
         """
@@ -2559,6 +2568,7 @@ def main(
                 args.uuid,
                 direction=args.direction,
                 project_id=args.project,
+                depth_limit=args.limit,
             )
 
         elif args.command == "trajectory":
@@ -2770,6 +2780,10 @@ if __name__ == "__main__":  # pragma: no cover
     traverse_parser.add_argument("uuid", help="Starting event UUID")
     traverse_parser.add_argument(
         "--direction", choices=["ancestors", "descendants", "both"], default="both"
+    )
+    traverse_parser.add_argument(
+        "-n", "--limit", type=int, default=3,
+        help="Max traversal depth (hops). 0 = unlimited. Default: 3"
     )
 
     # trajectory command
