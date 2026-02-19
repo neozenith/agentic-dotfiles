@@ -32,9 +32,7 @@ HAS_PYRIGHT = shutil.which("pyright-langserver") is not None
 HAS_TS_SERVER = shutil.which("typescript-language-server") is not None
 
 skip_no_pyright = pytest.mark.skipif(not HAS_PYRIGHT, reason="pyright-langserver not installed")
-skip_no_ts = pytest.mark.skipif(
-    not HAS_TS_SERVER, reason="typescript-language-server not installed"
-)
+skip_no_ts = pytest.mark.skipif(not HAS_TS_SERVER, reason="typescript-language-server not installed")
 
 
 @pytest.fixture
@@ -256,9 +254,7 @@ class TestJsonRpcClient:
         id1 = client.send_request("initialize", {})
         client.wait_response(id1)
         client.send_notification("initialized", {})
-        id2 = client.send_request(
-            "textDocument/documentSymbol", {"textDocument": {"uri": "file:///test.py"}}
-        )
+        id2 = client.send_request("textDocument/documentSymbol", {"textDocument": {"uri": "file:///test.py"}})
         assert id2 == id1 + 1
 
     def test_timeout_raises(self, fake_server: subprocess.Popen[bytes]) -> None:
@@ -287,15 +283,11 @@ class TestJsonRpcClient:
 class TestLspSession:
     """Test LSP protocol operations with the fake server."""
 
-    def _make_session(
-        self, fake_server: subprocess.Popen[bytes], temp_dir: Path
-    ) -> lsp_explorer.LspSession:
+    def _make_session(self, fake_server: subprocess.Popen[bytes], temp_dir: Path) -> lsp_explorer.LspSession:
         client = lsp_explorer.JsonRpcClient(fake_server)
         return lsp_explorer.LspSession(client, temp_dir, "python")
 
-    def test_initialize_and_shutdown(
-        self, fake_server: subprocess.Popen[bytes], temp_dir: Path
-    ) -> None:
+    def test_initialize_and_shutdown(self, fake_server: subprocess.Popen[bytes], temp_dir: Path) -> None:
         """Test the full LSP lifecycle."""
         session = self._make_session(fake_server, temp_dir)
         result = session.initialize()
@@ -351,9 +343,7 @@ class TestLspSession:
         assert "contents" in result
         session.shutdown()
 
-    def test_did_open_idempotent(
-        self, fake_server: subprocess.Popen[bytes], temp_dir: Path
-    ) -> None:
+    def test_did_open_idempotent(self, fake_server: subprocess.Popen[bytes], temp_dir: Path) -> None:
         """Opening the same document twice should be safe."""
         test_file = temp_dir / "test.py"
         test_file.write_text("pass\n")
@@ -471,9 +461,7 @@ class TestHelpers:
         assert result["c"] == 6
 
     def test_format_hover_plaintext(self) -> None:
-        result = lsp_explorer._format_hover(
-            {"contents": {"kind": "plaintext", "value": "def foo() -> int"}}
-        )
+        result = lsp_explorer._format_hover({"contents": {"kind": "plaintext", "value": "def foo() -> int"}})
         assert result is not None
         assert "type" in result
 
@@ -956,12 +944,7 @@ class TestIndexCacheManager:
         mgr.close()
 
     def test_init_schema_creates_tables(self, cache: lsp_explorer.IndexCacheManager) -> None:
-        tables = {
-            row[0]
-            for row in cache.conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            ).fetchall()
-        }
+        tables = {row[0] for row in cache.conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
         assert "source_files" in tables
         assert "symbols" in tables
         assert "cache_metadata" in tables
@@ -969,12 +952,7 @@ class TestIndexCacheManager:
         assert "definition_ranges" in tables
 
     def test_init_schema_creates_views(self, cache: lsp_explorer.IndexCacheManager) -> None:
-        views = {
-            row[0]
-            for row in cache.conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='view'"
-            ).fetchall()
-        }
+        views = {row[0] for row in cache.conn.execute("SELECT name FROM sqlite_master WHERE type='view'").fetchall()}
         assert "definitions" in views
         assert "references" in views
 
@@ -1140,8 +1118,7 @@ class TestIndexQueries:
             "VALUES (1, 1, 'MyClass', 'class', 1, 7, 1, 14, 1, 1, 20)"
         )
         cache.conn.execute(
-            "INSERT INTO definition_ranges (id, min_line, max_line, min_file_id, max_file_id) "
-            "VALUES (1, 1, 20, 1, 1)"
+            "INSERT INTO definition_ranges (id, min_line, max_line, min_file_id, max_file_id) VALUES (1, 1, 20, 1, 1)"
         )
         cache.conn.execute(
             "INSERT INTO symbols (id, source_file_id, name, kind, line, col, end_line, end_col, "
@@ -1149,8 +1126,7 @@ class TestIndexQueries:
             "VALUES (2, 1, 'process', 'method', 5, 9, 5, 16, 1, 5, 15)"
         )
         cache.conn.execute(
-            "INSERT INTO definition_ranges (id, min_line, max_line, min_file_id, max_file_id) "
-            "VALUES (2, 5, 15, 1, 1)"
+            "INSERT INTO definition_ranges (id, min_line, max_line, min_file_id, max_file_id) VALUES (2, 5, 15, 1, 1)"
         )
         cache.conn.execute(
             "INSERT INTO symbols (id, source_file_id, name, kind, line, col, end_line, end_col, "
@@ -1158,8 +1134,7 @@ class TestIndexQueries:
             "VALUES (3, 1, 'main', 'function', 22, 5, 22, 9, 1, 22, 30)"
         )
         cache.conn.execute(
-            "INSERT INTO definition_ranges (id, min_line, max_line, min_file_id, max_file_id) "
-            "VALUES (3, 22, 30, 1, 1)"
+            "INSERT INTO definition_ranges (id, min_line, max_line, min_file_id, max_file_id) VALUES (3, 22, 30, 1, 1)"
         )
         # Unreferenced definition (dead code)
         cache.conn.execute(
@@ -1168,8 +1143,7 @@ class TestIndexQueries:
             "VALUES (4, 1, '_helper', 'function', 32, 5, 32, 12, 1, 32, 35)"
         )
         cache.conn.execute(
-            "INSERT INTO definition_ranges (id, min_line, max_line, min_file_id, max_file_id) "
-            "VALUES (4, 32, 35, 1, 1)"
+            "INSERT INTO definition_ranges (id, min_line, max_line, min_file_id, max_file_id) VALUES (4, 32, 35, 1, 1)"
         )
 
         # References — 'process' used in main.py's main function (line 25)
@@ -1223,9 +1197,7 @@ class TestIndexQueries:
         dead_names = [r["name"] for r in rows]
         assert "_helper" in dead_names
 
-    def test_dead_code_excludes_referenced(
-        self, populated_cache: lsp_explorer.IndexCacheManager
-    ) -> None:
+    def test_dead_code_excludes_referenced(self, populated_cache: lsp_explorer.IndexCacheManager) -> None:
         """MyClass, process, main all have references — should NOT appear as dead."""
         rows = populated_cache.conn.execute(
             """\
@@ -1508,6 +1480,27 @@ class TestNewCLI:
 # ============================================================================
 
 
+class TestIndexCacheManagerEdgeCases:
+    """Test IndexCacheManager edge cases for coverage."""
+
+    def test_needs_rebuild_no_version_key(self, temp_dir: Path) -> None:
+        """needs_rebuild returns True when cache_metadata exists but has no schema_version."""
+        db_path = temp_dir / "noversion.db"
+        cache = lsp_explorer.IndexCacheManager(db_path=db_path)
+        cache.init_schema()
+        cache.conn.execute("DELETE FROM cache_metadata WHERE key = 'schema_version'")
+        cache.conn.commit()
+        assert cache.needs_rebuild() is True
+        cache.close()
+
+    def test_get_cache_manager_default_path(self) -> None:
+        """_get_cache_manager without db_path uses default CACHE_DB_PATH."""
+        args = argparse.Namespace(pretty=False, verbose=False)
+        cache = lsp_explorer._get_cache_manager(args)
+        assert cache._db_path == lsp_explorer.CACHE_DB_PATH
+        cache.close()
+
+
 class TestWalkSymbolTree:
     """Test _walk_symbol_tree inserts definitions correctly."""
 
@@ -1543,9 +1536,7 @@ class TestWalkSymbolTree:
         cache_with_file.conn.commit()
         assert count == 1
 
-        rows = cache_with_file.conn.execute(
-            "SELECT * FROM symbols WHERE is_definition = 1"
-        ).fetchall()
+        rows = cache_with_file.conn.execute("SELECT * FROM symbols WHERE is_definition = 1").fetchall()
         assert len(rows) == 1
         assert rows[0]["name"] == "MyFunc"
         assert rows[0]["kind"] == "function"
@@ -1589,10 +1580,31 @@ class TestWalkSymbolTree:
         assert count == 2  # MyClass + __init__
 
         # Verify R-Tree entries
-        rtree_count = cache_with_file.conn.execute(
-            "SELECT COUNT(*) FROM definition_ranges"
-        ).fetchone()[0]
+        rtree_count = cache_with_file.conn.execute("SELECT COUNT(*) FROM definition_ranges").fetchone()[0]
         assert rtree_count == 2
+
+    def test_duplicate_symbol_skipped(self, cache_with_file: lsp_explorer.IndexCacheManager) -> None:
+        """Inserting the same symbol twice should hit IntegrityError and skip."""
+        raw = [
+            {
+                "name": "MyFunc",
+                "kind": 12,
+                "range": {"start": {"line": 0, "character": 0}, "end": {"line": 5, "character": 0}},
+                "selectionRange": {
+                    "start": {"line": 0, "character": 4},
+                    "end": {"line": 0, "character": 10},
+                },
+                "children": [],
+            }
+        ]
+        cursor = cache_with_file.conn.cursor()
+        count1 = cache_with_file._walk_symbol_tree(cursor, raw, 1)
+        cache_with_file.conn.commit()
+        assert count1 == 1
+        # Insert again — should hit IntegrityError and return 0
+        count2 = cache_with_file._walk_symbol_tree(cursor, raw, 1)
+        cache_with_file.conn.commit()
+        assert count2 == 0
 
 
 # ============================================================================
@@ -1611,9 +1623,7 @@ class TestIndexCommands:
         yield cache
         cache.close()
 
-    def test_cmd_index_status_no_index(
-        self, temp_dir: Path, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_cmd_index_status_no_index(self, temp_dir: Path, capsys: pytest.CaptureFixture[str]) -> None:
         db_path = temp_dir / "empty.db"
         args = argparse.Namespace(
             pretty=False,
@@ -1688,8 +1698,622 @@ class TestPyrightIndexIntegration:
 
 
 # ============================================================================
+# Unit Tests: Additional Pure Functions & Edge Cases
+# ============================================================================
+
+
+class TestJsonRpcError:
+    """Test JsonRpcError exception class."""
+
+    def test_init_with_data(self) -> None:
+        err = lsp_explorer.JsonRpcError(-32600, "Invalid Request", {"detail": "foo"})
+        assert err.code == -32600
+        assert err.error_message == "Invalid Request"
+        assert err.data == {"detail": "foo"}
+        assert "JSON-RPC error -32600" in str(err)
+
+    def test_init_without_data(self) -> None:
+        err = lsp_explorer.JsonRpcError(-32601, "Method not found")
+        assert err.code == -32601
+        assert err.data is None
+
+
+class TestServerNotFoundInit:
+    """Test ServerNotFound exception details."""
+
+    def test_python_install_hint(self) -> None:
+        err = lsp_explorer.ServerNotFound("python", "pyright-langserver")
+        assert err.language == "python"
+        assert err.binary == "pyright-langserver"
+        assert "pip install pyright" in str(err)
+
+    def test_typescript_install_hint(self) -> None:
+        err = lsp_explorer.ServerNotFound("typescript", "typescript-language-server")
+        assert "npm install" in str(err)
+
+
+class TestFormatHoverExtended:
+    """Test _format_hover edge cases not covered by existing tests."""
+
+    def test_string_contents(self) -> None:
+        result = lsp_explorer._format_hover({"contents": "def foo(): pass"})
+        assert result is not None
+        assert result["type"] == "def foo(): pass"
+
+    def test_list_contents_strings(self) -> None:
+        result = lsp_explorer._format_hover({"contents": ["line1", "line2"]})
+        assert result is not None
+        assert "line1" in result["type"]
+
+    def test_list_contents_dicts(self) -> None:
+        result = lsp_explorer._format_hover({"contents": [{"value": "sig"}, {"value": "doc"}]})
+        assert result is not None
+        assert "sig" in result["type"]
+
+    def test_list_contents_mixed(self) -> None:
+        result = lsp_explorer._format_hover({"contents": ["plain", {"value": "structured"}]})
+        assert result is not None
+
+    def test_unsupported_contents_type(self) -> None:
+        result = lsp_explorer._format_hover({"contents": 42})
+        assert result is None
+
+    def test_contents_key_missing(self) -> None:
+        result = lsp_explorer._format_hover({"contents": None})
+        assert result is None
+
+    def test_doc_with_leading_horizontal_rule(self) -> None:
+        hover = {
+            "contents": {
+                "kind": "markdown",
+                "value": "```python\ndef foo()\n```\n---\nSome docs",
+            }
+        }
+        result = lsp_explorer._format_hover(hover)
+        assert result is not None
+        assert result.get("type") == "def foo()"
+        assert result.get("doc") == "Some docs"
+
+    def test_doc_with_trailing_horizontal_rule(self) -> None:
+        hover = {
+            "contents": {
+                "kind": "markdown",
+                "value": "```python\ndef bar()\n```\nDocs here\n---",
+            }
+        }
+        result = lsp_explorer._format_hover(hover)
+        assert result is not None
+        assert result.get("doc") == "Docs here"
+
+    def test_whitespace_only_contents(self) -> None:
+        result = lsp_explorer._format_hover({"contents": {"value": "   "}})
+        assert result is None
+
+
+class TestFormatSymbolExtended:
+    """Test _format_symbol edge cases."""
+
+    def test_symbol_with_detail(self) -> None:
+        sym = {
+            "name": "age",
+            "kind": 13,
+            "range": {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 10}},
+            "detail": "int",
+        }
+        result = lsp_explorer._format_symbol(sym)
+        assert result["d"] == "int"
+
+
+class TestGetLinePreviewExtended:
+    """Test _get_line_preview edge cases."""
+
+    def test_nonexistent_file_returns_none(self) -> None:
+        result = lsp_explorer._get_line_preview(Path("/nonexistent/file.py"), 1)
+        assert result is None
+
+
+class TestUriToPathExtended:
+    """Test _uri_to_path edge cases."""
+
+    def test_non_file_uri_treated_as_path(self) -> None:
+        result = lsp_explorer._uri_to_path("some/path.py")
+        assert result == Path("some/path.py")
+
+
+class TestRelativePathExtended:
+    """Test _relative_path edge cases."""
+
+    def test_path_outside_root_returns_absolute(self) -> None:
+        result = lsp_explorer._relative_path(Path("/tmp/other/file.py"), Path("/home/user/project"))
+        assert result.startswith("/")
+
+
+class TestDecodeSemanticTokensExtended:
+    """Test decode_semantic_tokens edge cases."""
+
+    def test_type_idx_out_of_range_skipped(self) -> None:
+        legend = {"tokenTypes": ["variable"], "tokenModifiers": ["declaration"]}
+        source = "x = 1"
+        data = [0, 0, 1, 5, 0]  # type_idx=5 but only 1 type in legend
+        tokens = lsp_explorer.decode_semantic_tokens(data, legend, source)
+        assert tokens == []
+
+    def test_empty_name_skipped(self) -> None:
+        legend = {"tokenTypes": ["variable"], "tokenModifiers": ["declaration"]}
+        source = "x"
+        data = [0, 10, 3, 0, 0]  # col=10 past end of the 1-char line
+        tokens = lsp_explorer.decode_semantic_tokens(data, legend, source)
+        assert tokens == []
+
+
+# ============================================================================
+# Tests: cmd_* Functions with Seeded SQLite Database
+# ============================================================================
+
+
+class TestCmdWithPopulatedDB:
+    """Test cmd_* functions with a pre-populated SQLite database.
+
+    These tests exercise the CLI command wrappers (cmd_lookup, cmd_dead,
+    cmd_trace, cmd_files, cmd_index) against a real SQLite database seeded
+    with known symbol data. No live LSP server is needed.
+    """
+
+    @pytest.fixture
+    def populated_cache(self, temp_dir: Path) -> Any:
+        """Create a cache with realistic symbol data for query testing."""
+        db_path = temp_dir / "populated.db"
+        cache = lsp_explorer.IndexCacheManager(db_path=db_path)
+        cache.init_schema()
+
+        # Source files
+        cache.conn.execute(
+            "INSERT INTO source_files (id, filepath, relative_path, mtime, size_bytes, "
+            "indexed_at, language, lsp_server, file_type) "
+            "VALUES (1, '/project/src/main.py', 'src/main.py', 1000.0, 500, "
+            "'2025-01-01T00:00:00', 'python', 'pyright-langserver', 'source')"
+        )
+        cache.conn.execute(
+            "INSERT INTO source_files (id, filepath, relative_path, mtime, size_bytes, "
+            "indexed_at, language, lsp_server, file_type) "
+            "VALUES (2, '/project/tests/test_main.py', 'tests/test_main.py', 1000.0, 300, "
+            "'2025-01-01T00:00:00', 'python', 'pyright-langserver', 'test')"
+        )
+
+        # Definitions
+        cache.conn.execute(
+            "INSERT INTO symbols (id, source_file_id, name, kind, line, col, end_line, end_col, "
+            "is_definition, scope_start_line, scope_end_line) "
+            "VALUES (1, 1, 'MyClass', 'class', 5, 7, 5, 14, 1, 5, 25)"
+        )
+        cache.conn.execute(
+            "INSERT INTO symbols (id, source_file_id, name, kind, line, col, end_line, end_col, "
+            "is_definition, scope_start_line, scope_end_line) "
+            "VALUES (2, 1, 'do_stuff', 'function', 10, 5, 10, 13, 1, 10, 15)"
+        )
+        cache.conn.execute(
+            "INSERT INTO symbols (id, source_file_id, name, kind, line, col, end_line, end_col, "
+            "is_definition, scope_start_line, scope_end_line) "
+            "VALUES (3, 1, '_private_helper', 'function', 17, 5, 17, 20, 1, 17, 20)"
+        )
+        cache.conn.execute(
+            "INSERT INTO symbols (id, source_file_id, name, kind, line, col, end_line, end_col, "
+            "is_definition, scope_start_line, scope_end_line) "
+            "VALUES (4, 2, 'test_do_stuff', 'function', 3, 5, 3, 18, 1, 3, 10)"
+        )
+
+        # References (non-definition uses)
+        cache.conn.execute(
+            "INSERT INTO symbols (id, source_file_id, name, kind, line, col, end_line, end_col, "
+            "is_definition) "
+            "VALUES (5, 2, 'MyClass', 'variable', 5, 10, 5, 17, 0)"
+        )
+        cache.conn.execute(
+            "INSERT INTO symbols (id, source_file_id, name, kind, line, col, end_line, end_col, "
+            "is_definition) "
+            "VALUES (6, 2, 'do_stuff', 'function', 6, 5, 6, 13, 0)"
+        )
+
+        # Containments: references inside test_do_stuff
+        cache.conn.execute("INSERT INTO symbol_containments (inner_symbol_id, outer_symbol_id) VALUES (5, 4)")
+        cache.conn.execute("INSERT INTO symbol_containments (inner_symbol_id, outer_symbol_id) VALUES (6, 4)")
+
+        # R-Tree entries for definitions
+        for sym_id, min_line, max_line, file_id in [
+            (1, 5, 25, 1),
+            (2, 10, 15, 1),
+            (3, 17, 20, 1),
+            (4, 3, 10, 2),
+        ]:
+            cache.conn.execute(
+                "INSERT INTO definition_ranges (id, min_line, max_line, min_file_id, max_file_id) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (sym_id, min_line, max_line, file_id, file_id),
+            )
+
+        cache.conn.commit()
+        yield db_path
+        cache.close()
+
+    def _make_args(self, db_path: Path, **kwargs: Any) -> argparse.Namespace:
+        defaults: dict[str, Any] = {
+            "pretty": False,
+            "verbose": False,
+            "db_path": str(db_path),
+            "root": None,
+            "timeout": 30.0,
+        }
+        defaults.update(kwargs)
+        return argparse.Namespace(**defaults)
+
+    # --- cmd_lookup ---
+
+    def test_cmd_lookup_basic(self, populated_cache: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        args = self._make_args(populated_cache, name="MyClass")
+        result = lsp_explorer.cmd_lookup(args)
+        assert result == 0
+        output = json.loads(capsys.readouterr().out)
+        assert len(output) == 1
+        assert output[0]["name"] == "MyClass"
+        assert output[0]["file"] == "src/main.py"
+
+    def test_cmd_lookup_with_kind_filter(self, populated_cache: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        args = self._make_args(populated_cache, name="do_stuff", kind="function")
+        result = lsp_explorer.cmd_lookup(args)
+        assert result == 0
+        output = json.loads(capsys.readouterr().out)
+        # "do_stuff" LIKE match also catches "test_do_stuff"
+        assert len(output) >= 1
+        assert all(r["kind"] == "function" for r in output)
+
+    def test_cmd_lookup_with_file_type(self, populated_cache: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        args = self._make_args(populated_cache, name="test", file_type="test")
+        result = lsp_explorer.cmd_lookup(args)
+        assert result == 0
+        output = json.loads(capsys.readouterr().out)
+        assert all(r["file_type"] == "test" for r in output)
+
+    def test_cmd_lookup_no_index(self, temp_dir: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        args = self._make_args(temp_dir / "empty.db", name="foo")
+        result = lsp_explorer.cmd_lookup(args)
+        assert result == 1
+
+    # --- cmd_dead ---
+
+    def test_cmd_dead_basic(self, populated_cache: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        args = self._make_args(populated_cache, kind=None, file_type=None, exclude_private=False)
+        result = lsp_explorer.cmd_dead(args)
+        assert result == 0
+        output = json.loads(capsys.readouterr().out)
+        dead_names = [d["name"] for d in output["dead"]]
+        # _private_helper and test_do_stuff have no references
+        assert "_private_helper" in dead_names
+        assert "test_do_stuff" in dead_names
+        # MyClass and do_stuff have references — should NOT be dead
+        assert "MyClass" not in dead_names
+        assert "do_stuff" not in dead_names
+
+    def test_cmd_dead_exclude_private(self, populated_cache: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        args = self._make_args(populated_cache, kind=None, file_type=None, exclude_private=True)
+        result = lsp_explorer.cmd_dead(args)
+        assert result == 0
+        output = json.loads(capsys.readouterr().out)
+        dead_names = [d["name"] for d in output["dead"]]
+        assert "_private_helper" not in dead_names
+
+    def test_cmd_dead_with_kind_filter(self, populated_cache: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        args = self._make_args(populated_cache, kind="class", file_type=None, exclude_private=False)
+        result = lsp_explorer.cmd_dead(args)
+        assert result == 0
+
+    def test_cmd_dead_with_file_type(self, populated_cache: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        args = self._make_args(populated_cache, kind=None, file_type="source", exclude_private=False)
+        result = lsp_explorer.cmd_dead(args)
+        assert result == 0
+
+    def test_cmd_dead_no_index(self, temp_dir: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        args = self._make_args(temp_dir / "empty.db", kind=None, file_type=None, exclude_private=False)
+        result = lsp_explorer.cmd_dead(args)
+        assert result == 1
+
+    # --- cmd_trace ---
+
+    def test_cmd_trace_exact_match(self, populated_cache: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        args = self._make_args(populated_cache, file="src/main.py", line=10, col=5, depth=3)
+        result = lsp_explorer.cmd_trace(args)
+        assert result == 0
+        output = json.loads(capsys.readouterr().out)
+        assert "trace" in output
+        assert "count" in output
+
+    def test_cmd_trace_fuzzy_line_match(self, populated_cache: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        # Wrong col forces fallback to line-only match
+        args = self._make_args(populated_cache, file="src/main.py", line=10, col=999, depth=3)
+        result = lsp_explorer.cmd_trace(args)
+        assert result == 0
+
+    def test_cmd_trace_not_found(self, populated_cache: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        args = self._make_args(populated_cache, file="nonexistent.py", line=1, col=1, depth=3)
+        result = lsp_explorer.cmd_trace(args)
+        assert result == 1
+        err = json.loads(capsys.readouterr().err)
+        assert "No definition found" in err["error"]
+
+    def test_cmd_trace_no_index(self, temp_dir: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        args = self._make_args(temp_dir / "empty.db", file="main.py", line=1, col=1, depth=3)
+        result = lsp_explorer.cmd_trace(args)
+        assert result == 1
+
+    # --- cmd_files ---
+
+    def test_cmd_files_basic(self, populated_cache: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        args = self._make_args(populated_cache, language=None, file_type=None)
+        result = lsp_explorer.cmd_files(args)
+        assert result == 0
+        output = json.loads(capsys.readouterr().out)
+        assert output["count"] == 2
+
+    def test_cmd_files_with_language(self, populated_cache: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        args = self._make_args(populated_cache, language="python", file_type=None)
+        result = lsp_explorer.cmd_files(args)
+        assert result == 0
+        output = json.loads(capsys.readouterr().out)
+        assert output["count"] == 2
+
+    def test_cmd_files_with_file_type(self, populated_cache: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        args = self._make_args(populated_cache, language=None, file_type="test")
+        result = lsp_explorer.cmd_files(args)
+        assert result == 0
+        output = json.loads(capsys.readouterr().out)
+        assert output["count"] == 1
+        assert output["files"][0]["file"] == "tests/test_main.py"
+
+    def test_cmd_files_no_index(self, temp_dir: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        args = self._make_args(temp_dir / "empty.db", language=None, file_type=None)
+        result = lsp_explorer.cmd_files(args)
+        assert result == 1
+
+    # --- cmd_index ---
+
+    def test_cmd_index_frozen_mode(self, populated_cache: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        args = self._make_args(populated_cache, cache_mode="frozen")
+        result = lsp_explorer.cmd_index(args)
+        assert result == 0
+        output = json.loads(capsys.readouterr().out)
+        assert output["status"] == "frozen"
+
+
+# ============================================================================
+# Tests: main() Error Handling
+# ============================================================================
+
+
+class TestMainErrorHandling:
+    """Test the main() dispatcher and its exception handling for each error type.
+
+    Each exception type in the try/except chain produces a specific JSON error
+    on stderr and a specific exit code. We test them all by injecting a function
+    that raises the desired exception.
+    """
+
+    def _make_args(self, func: Any, verbose: bool = False) -> argparse.Namespace:
+        return argparse.Namespace(verbose=verbose, func=func)
+
+    def test_success(self) -> None:
+        ret = lsp_explorer.main(self._make_args(lambda args: 0))
+        assert ret == 0
+
+    def test_verbose_enables_debug_logging(self) -> None:
+        ret = lsp_explorer.main(self._make_args(lambda args: 0, verbose=True))
+        assert ret == 0
+
+    def test_server_not_found(self, capsys: pytest.CaptureFixture[str]) -> None:
+        def raise_it(args: Any) -> int:
+            raise lsp_explorer.ServerNotFound("python", "pyright-langserver")
+
+        ret = lsp_explorer.main(self._make_args(raise_it))
+        assert ret == 1
+        err = json.loads(capsys.readouterr().err)
+        assert "not found" in err["error"]
+        assert "hint" in err
+
+    def test_unsupported_language(self, capsys: pytest.CaptureFixture[str]) -> None:
+        def raise_it(args: Any) -> int:
+            raise lsp_explorer.UnsupportedLanguage(".xyz")
+
+        ret = lsp_explorer.main(self._make_args(raise_it))
+        assert ret == 1
+        err = json.loads(capsys.readouterr().err)
+        assert ".xyz" in err["error"]
+
+    def test_file_not_found(self, capsys: pytest.CaptureFixture[str]) -> None:
+        def raise_it(args: Any) -> int:
+            raise FileNotFoundError("missing.py")
+
+        ret = lsp_explorer.main(self._make_args(raise_it))
+        assert ret == 1
+        err = json.loads(capsys.readouterr().err)
+        assert "File not found" in err["error"]
+
+    def test_timeout_error(self, capsys: pytest.CaptureFixture[str]) -> None:
+        def raise_it(args: Any) -> int:
+            raise TimeoutError("Server took too long")
+
+        ret = lsp_explorer.main(self._make_args(raise_it))
+        assert ret == 1
+        err = json.loads(capsys.readouterr().err)
+        assert "hint" in err
+
+    def test_json_rpc_error(self, capsys: pytest.CaptureFixture[str]) -> None:
+        def raise_it(args: Any) -> int:
+            raise lsp_explorer.JsonRpcError(-32600, "Invalid Request")
+
+        ret = lsp_explorer.main(self._make_args(raise_it))
+        assert ret == 1
+        err = json.loads(capsys.readouterr().err)
+        assert "Invalid Request" in err["error"]
+
+    def test_keyboard_interrupt(self) -> None:
+        def raise_it(args: Any) -> int:
+            raise KeyboardInterrupt()
+
+        ret = lsp_explorer.main(self._make_args(raise_it))
+        assert ret == 130
+
+
+# ============================================================================
+# Integration Tests: cmd_* with Live LSP (pyright)
+# ============================================================================
+
+
+@skip_no_pyright
+class TestCmdLiveLsp:
+    """Test cmd_* functions end-to-end with a real pyright server.
+
+    These tests verify the full cmd -> CodeExplorer -> LspSession -> pyright
+    pipeline for each CLI command. They are slow (~2-5s each) because they
+    start and stop a real pyright-langserver subprocess.
+    """
+
+    def test_cmd_symbols(self, python_fixture: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        args = argparse.Namespace(
+            file=str(python_fixture),
+            root=python_fixture.parent,
+            timeout=30.0,
+            pretty=False,
+            verbose=False,
+        )
+        ret = lsp_explorer.cmd_symbols(args)
+        assert ret == 0
+        output = json.loads(capsys.readouterr().out)
+        assert len(output) > 0
+
+    def test_cmd_definition(self, python_fixture: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        args = argparse.Namespace(
+            file=str(python_fixture),
+            root=python_fixture.parent,
+            timeout=30.0,
+            pretty=False,
+            verbose=False,
+            line=11,
+            col=11,
+        )
+        ret = lsp_explorer.cmd_definition(args)
+        assert ret == 0
+
+    def test_cmd_references(self, python_fixture: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        args = argparse.Namespace(
+            file=str(python_fixture),
+            root=python_fixture.parent,
+            timeout=30.0,
+            pretty=False,
+            verbose=False,
+            line=10,
+            col=5,
+        )
+        ret = lsp_explorer.cmd_references(args)
+        assert ret == 0
+
+    def test_cmd_hover(self, python_fixture: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        args = argparse.Namespace(
+            file=str(python_fixture),
+            root=python_fixture.parent,
+            timeout=30.0,
+            pretty=False,
+            verbose=False,
+            line=1,
+            col=7,
+        )
+        ret = lsp_explorer.cmd_hover(args)
+        assert ret == 0
+
+    def test_cmd_diagnostics(self, python_fixture: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        args = argparse.Namespace(
+            file=str(python_fixture),
+            root=python_fixture.parent,
+            timeout=30.0,
+            pretty=False,
+            verbose=False,
+        )
+        ret = lsp_explorer.cmd_diagnostics(args)
+        assert ret == 0
+
+    def test_cmd_explore(self, python_fixture: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        args = argparse.Namespace(
+            file=str(python_fixture),
+            root=python_fixture.parent,
+            timeout=30.0,
+            pretty=False,
+            verbose=False,
+        )
+        ret = lsp_explorer.cmd_explore(args)
+        assert ret == 0
+
+    def test_cmd_impact(self, python_fixture: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        args = argparse.Namespace(
+            file=str(python_fixture),
+            root=python_fixture.parent,
+            timeout=30.0,
+            pretty=False,
+            verbose=False,
+            line=10,
+            col=5,
+            depth=1,
+        )
+        ret = lsp_explorer.cmd_impact(args)
+        assert ret == 0
+
+    def test_cmd_index_rebuild(self, python_fixture: Path, temp_dir: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        db_path = temp_dir / "rebuild_test.db"
+        args = argparse.Namespace(
+            root=python_fixture.parent,
+            timeout=30.0,
+            pretty=False,
+            verbose=False,
+            db_path=str(db_path),
+            cache_mode="rebuild",
+        )
+        ret = lsp_explorer.cmd_index(args)
+        assert ret == 0
+        output = json.loads(capsys.readouterr().out)
+        assert output["files_indexed"] >= 1
+
+    def test_cmd_index_incremental(
+        self, python_fixture: Path, temp_dir: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        db_path = temp_dir / "incr_test.db"
+        # First: rebuild
+        args = argparse.Namespace(
+            root=python_fixture.parent,
+            timeout=30.0,
+            pretty=False,
+            verbose=False,
+            db_path=str(db_path),
+            cache_mode="rebuild",
+        )
+        lsp_explorer.cmd_index(args)
+        capsys.readouterr()  # clear output
+        # Then: incremental (no files changed, so 0 should be re-indexed)
+        args = argparse.Namespace(
+            root=python_fixture.parent,
+            timeout=30.0,
+            pretty=False,
+            verbose=False,
+            db_path=str(db_path),
+            cache_mode="incremental",
+        )
+        ret = lsp_explorer.cmd_index(args)
+        assert ret == 0
+        output = json.loads(capsys.readouterr().out)
+        assert output["files_skipped"] >= 1
+
+
+# ============================================================================
 # Entry point for uv run
 # ============================================================================
 
 if __name__ == "__main__":  # pragma: no cover
-    sys.exit(pytest.main([__file__, "-v", *sys.argv[1:]]))
+    script_dir = str(Path(__file__).parent.resolve())
+    base_args = [__file__, "-v", "--rootdir", script_dir, "-o", "addopts="]
+    extra_args = sys.argv[1:]
+    sys.exit(pytest.main(base_args + extra_args))

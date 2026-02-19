@@ -285,9 +285,7 @@ class TestCacheManager:
         # Check FTS tables
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='events_fts'")
         assert cursor.fetchone() is not None
-        cursor.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='reflections_fts'"
-        )
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='reflections_fts'")
         assert cursor.fetchone() is not None
 
     def test_init_schema_idempotent(self, temp_cache: iss.CacheManager) -> None:
@@ -405,9 +403,7 @@ class TestCacheManager:
         files = temp_cache.discover_files(Path("/nonexistent/path"))
         assert files == []
 
-    def test_update_with_empty_directory(
-        self, temp_dir: Path, temp_cache: iss.CacheManager
-    ) -> None:
+    def test_update_with_empty_directory(self, temp_dir: Path, temp_cache: iss.CacheManager) -> None:
         """Test update with a directory containing no JSONL files."""
         empty_dir = temp_dir / "empty_projects"
         empty_dir.mkdir()
@@ -685,18 +681,14 @@ class TestTurnsCommand:
 
     def test_cmd_turns_with_project_filter(self, populated_cache: iss.CacheManager) -> None:
         """Test turns with project filter."""
-        result = iss.cmd_turns(
-            populated_cache, session_id="session-abc", project_id="-Test-Project"
-        )
+        result = iss.cmd_turns(populated_cache, session_id="session-abc", project_id="-Test-Project")
 
         assert len(result) == 6
 
     def test_cmd_turns_with_time_filter(self, populated_cache: iss.CacheManager) -> None:
         """Test turns with time filters."""
         # This should return all events since they're in the future (2026)
-        result = iss.cmd_turns(
-            populated_cache, session_id="session-abc", since="2026-01-01T00:00:00"
-        )
+        result = iss.cmd_turns(populated_cache, session_id="session-abc", since="2026-01-01T00:00:00")
         assert len(result) == 6
 
 
@@ -733,18 +725,14 @@ class TestToolsCommand:
 
     def test_cmd_tools_filter_by_name(self, populated_cache: iss.CacheManager) -> None:
         """Test tools filtered by name."""
-        result = iss.cmd_tools(
-            populated_cache, session_id="session-abc", tool_name="Read", detail=True
-        )
+        result = iss.cmd_tools(populated_cache, session_id="session-abc", tool_name="Read", detail=True)
 
         assert len(result) == 1
         assert result[0]["tool_name"] == "Read"
 
     def test_cmd_tools_with_project_filter(self, populated_cache: iss.CacheManager) -> None:
         """Test tools with project filter."""
-        result = iss.cmd_tools(
-            populated_cache, session_id="session-abc", project_id="-Test-Project"
-        )
+        result = iss.cmd_tools(populated_cache, session_id="session-abc", project_id="-Test-Project")
         assert len(result) > 0
 
 
@@ -803,9 +791,7 @@ class TestSummaryCommand:
 
     def test_cmd_summary_with_project(self, populated_cache: iss.CacheManager) -> None:
         """Test summary with project filter."""
-        result = iss.cmd_summary(
-            populated_cache, session_id="session-abc", project_id="-Test-Project"
-        )
+        result = iss.cmd_summary(populated_cache, session_id="session-abc", project_id="-Test-Project")
         assert result["session_id"] == "session-abc"
 
 
@@ -938,9 +924,7 @@ class TestAgentsCommand:
 
     def test_cmd_agents_with_project(self, populated_cache: iss.CacheManager) -> None:
         """Test agents with project filter."""
-        result = iss.cmd_agents(
-            populated_cache, session_id="session-abc", project_id="-Test-Project"
-        )
+        result = iss.cmd_agents(populated_cache, session_id="session-abc", project_id="-Test-Project")
         assert isinstance(result, list)
 
 
@@ -976,9 +960,7 @@ class TestTraverseCommand:
 
     def test_cmd_traverse_both(self, populated_cache: iss.CacheManager) -> None:
         """Test traversing ancestors and descendants."""
-        result = iss.cmd_traverse(
-            populated_cache, session_id="session-abc", uuid="uuid-003", direction="both"
-        )
+        result = iss.cmd_traverse(populated_cache, session_id="session-abc", uuid="uuid-003", direction="both")
 
         uuids = {r["uuid"] for r in result}
         assert "uuid-003" in uuids  # The target
@@ -1341,9 +1323,7 @@ class TestDiscoverFilesEdgeCases:
 class TestIngestEdgeCases:
     """Tests for edge cases in file ingestion."""
 
-    def _make_file_info(
-        self, filepath: str, project_id: str, session_id: str | None, file_type: str
-    ) -> dict[str, Any]:
+    def _make_file_info(self, filepath: str, project_id: str, session_id: str | None, file_type: str) -> dict[str, Any]:
         """Create a file_info dict for ingest_file."""
         import os
 
@@ -1373,9 +1353,7 @@ class TestIngestEdgeCases:
         session_file = project_dir / "session-001.jsonl"
         session_file.write_text("\n".join(lines) + "\n")
 
-        file_info = self._make_file_info(
-            str(session_file), "test-project", "session-001", "main_session"
-        )
+        file_info = self._make_file_info(str(session_file), "test-project", "session-001", "main_session")
         count = temp_cache.ingest_file(file_info)
         assert count == 2  # Both events ingested despite empty line
 
@@ -1395,15 +1373,11 @@ class TestIngestEdgeCases:
         session_file = project_dir / "session-001.jsonl"
         session_file.write_text("\n".join(lines) + "\n")
 
-        file_info = self._make_file_info(
-            str(session_file), "test-project", "session-001", "main_session"
-        )
+        file_info = self._make_file_info(str(session_file), "test-project", "session-001", "main_session")
         count = temp_cache.ingest_file(file_info)
         assert count == 2  # Only valid events ingested
 
-    def test_ingest_agent_root_extracts_session_id(
-        self, temp_cache: iss.CacheManager, temp_dir: Path
-    ) -> None:
+    def test_ingest_agent_root_extracts_session_id(self, temp_cache: iss.CacheManager, temp_dir: Path) -> None:
         """Test that agent_root files extract sessionId from content."""
         projects_dir = temp_dir / "projects"
         projects_dir.mkdir()
@@ -1419,24 +1393,18 @@ class TestIngestEdgeCases:
         count = temp_cache.ingest_file(file_info)
         assert count == 1
 
-    def test_ingest_handles_file_not_found(
-        self, temp_cache: iss.CacheManager, temp_dir: Path
-    ) -> None:
+    def test_ingest_handles_file_not_found(self, temp_cache: iss.CacheManager, temp_dir: Path) -> None:
         """Test that FileNotFoundError is handled gracefully."""
         # Create file first so we can get mtime/size, then delete it
         fake_file = temp_dir / "fake.jsonl"
         fake_file.write_text("{}")
-        file_info = self._make_file_info(
-            str(fake_file), "test-project", "session-001", "main_session"
-        )
+        file_info = self._make_file_info(str(fake_file), "test-project", "session-001", "main_session")
         fake_file.unlink()  # Now delete it
 
         count = temp_cache.ingest_file(file_info)
         assert count == 0
 
-    def test_ingest_skips_file_history_snapshot(
-        self, temp_cache: iss.CacheManager, temp_dir: Path
-    ) -> None:
+    def test_ingest_skips_file_history_snapshot(self, temp_cache: iss.CacheManager, temp_dir: Path) -> None:
         """Test that file-history-snapshot events are skipped."""
         projects_dir = temp_dir / "projects"
         projects_dir.mkdir()
@@ -1457,15 +1425,11 @@ class TestIngestEdgeCases:
         session_file = project_dir / "session-001.jsonl"
         session_file.write_text("\n".join(lines) + "\n")
 
-        file_info = self._make_file_info(
-            str(session_file), "test-project", "session-001", "main_session"
-        )
+        file_info = self._make_file_info(str(session_file), "test-project", "session-001", "main_session")
         count = temp_cache.ingest_file(file_info)
         assert count == 2  # file-history-snapshot skipped
 
-    def test_ingest_handles_invalid_timestamp(
-        self, temp_cache: iss.CacheManager, temp_dir: Path
-    ) -> None:
+    def test_ingest_handles_invalid_timestamp(self, temp_cache: iss.CacheManager, temp_dir: Path) -> None:
         """Test that invalid timestamps don't crash ingestion."""
         projects_dir = temp_dir / "projects"
         projects_dir.mkdir()
@@ -1476,9 +1440,7 @@ class TestIngestEdgeCases:
         session_file = project_dir / "session-001.jsonl"
         session_file.write_text(content)
 
-        file_info = self._make_file_info(
-            str(session_file), "test-project", "session-001", "main_session"
-        )
+        file_info = self._make_file_info(str(session_file), "test-project", "session-001", "main_session")
         count = temp_cache.ingest_file(file_info)
         assert count == 1  # Event still ingested with null timestamp_local
 
@@ -1507,9 +1469,7 @@ class TestCmdTurnsEdgeCases:
         for turn in turns:
             assert turn["timestamp"] <= until
 
-    def test_cmd_turns_json_content_decode_error(
-        self, temp_cache: iss.CacheManager, temp_dir: Path
-    ) -> None:
+    def test_cmd_turns_json_content_decode_error(self, temp_cache: iss.CacheManager, temp_dir: Path) -> None:
         """Test that invalid JSON content falls back to text content."""
         projects_dir = temp_dir / "projects"
         projects_dir.mkdir()
@@ -1524,9 +1484,7 @@ class TestCmdTurnsEdgeCases:
         temp_cache.update(projects_dir)
 
         # Manually corrupt the message_content_json
-        temp_cache.conn.execute(
-            "UPDATE events SET message_content_json = 'invalid json' WHERE uuid = '001'"
-        )
+        temp_cache.conn.execute("UPDATE events SET message_content_json = 'invalid json' WHERE uuid = '001'")
         temp_cache.conn.commit()
 
         turns = iss.cmd_turns(temp_cache, "session-001", include_content=True)
@@ -1555,9 +1513,7 @@ class TestCmdToolsEdgeCases:
         tools = iss.cmd_tools(temp_cache, "session-001")
         assert tools == []  # No tools found
 
-    def test_cmd_tools_json_decode_error(
-        self, temp_cache: iss.CacheManager, temp_dir: Path
-    ) -> None:
+    def test_cmd_tools_json_decode_error(self, temp_cache: iss.CacheManager, temp_dir: Path) -> None:
         """Test that JSON decode error is handled gracefully."""
         projects_dir = temp_dir / "projects"
         projects_dir.mkdir()
@@ -1578,9 +1534,7 @@ class TestCmdToolsEdgeCases:
         temp_cache.update(projects_dir)
 
         # Corrupt the JSON
-        temp_cache.conn.execute(
-            "UPDATE events SET message_content_json = 'invalid' WHERE uuid = '001'"
-        )
+        temp_cache.conn.execute("UPDATE events SET message_content_json = 'invalid' WHERE uuid = '001'")
         temp_cache.conn.commit()
 
         tools = iss.cmd_tools(temp_cache, "session-001")
@@ -1590,9 +1544,7 @@ class TestCmdToolsEdgeCases:
 class TestCmdMessagesEdgeCases:
     """Tests for edge cases in cmd_messages."""
 
-    def test_cmd_messages_with_project_filter(
-        self, temp_cache: iss.CacheManager, temp_dir: Path
-    ) -> None:
+    def test_cmd_messages_with_project_filter(self, temp_cache: iss.CacheManager, temp_dir: Path) -> None:
         """Test cmd_messages with project_id filter."""
         projects_dir = temp_dir / "projects"
         projects_dir.mkdir()
@@ -1611,9 +1563,7 @@ class TestCmdMessagesEdgeCases:
         messages = iss.cmd_messages(temp_cache, "session-xyz", project_id="my-project")
         assert len(messages) == 2
 
-    def test_cmd_messages_with_agent_filter(
-        self, temp_cache: iss.CacheManager, temp_dir: Path
-    ) -> None:
+    def test_cmd_messages_with_agent_filter(self, temp_cache: iss.CacheManager, temp_dir: Path) -> None:
         """Test cmd_messages with agent_id filter."""
         projects_dir = temp_dir / "projects"
         projects_dir.mkdir()
@@ -1698,9 +1648,7 @@ class TestCmdTurnsNoContentJson:
 class TestCmdTraverseRawJsonError:
     """Tests for cmd_traverse JSON decode errors."""
 
-    def test_cmd_traverse_raw_json_decode_error(
-        self, temp_cache: iss.CacheManager, temp_dir: Path
-    ) -> None:
+    def test_cmd_traverse_raw_json_decode_error(self, temp_cache: iss.CacheManager, temp_dir: Path) -> None:
         """Test cmd_traverse with corrupted raw_json."""
         projects_dir = temp_dir / "projects"
         projects_dir.mkdir()
@@ -1734,9 +1682,7 @@ class TestCmdTraverseRawJsonError:
 class TestCmdTrajectoryEdgeCases:
     """Tests for cmd_trajectory edge cases."""
 
-    def test_cmd_trajectory_with_project_id(
-        self, temp_cache: iss.CacheManager, temp_dir: Path
-    ) -> None:
+    def test_cmd_trajectory_with_project_id(self, temp_cache: iss.CacheManager, temp_dir: Path) -> None:
         """Test cmd_trajectory with project_id filter."""
         projects_dir = temp_dir / "projects"
         projects_dir.mkdir()
@@ -1752,9 +1698,7 @@ class TestCmdTrajectoryEdgeCases:
         events = iss.cmd_trajectory(temp_cache, "session-001", project_id="my-project")
         assert len(events) == 1
 
-    def test_cmd_trajectory_raw_json_decode_error(
-        self, temp_cache: iss.CacheManager, temp_dir: Path
-    ) -> None:
+    def test_cmd_trajectory_raw_json_decode_error(self, temp_cache: iss.CacheManager, temp_dir: Path) -> None:
         """Test cmd_trajectory with corrupted raw_json."""
         projects_dir = temp_dir / "projects"
         projects_dir.mkdir()
@@ -1780,9 +1724,7 @@ class TestCmdTrajectoryEdgeCases:
 class TestCmdReflectEdgeCases:
     """Tests for cmd_reflect edge cases - runs real claude subprocess."""
 
-    def test_cmd_reflect_empty_content_skipped(
-        self, temp_cache: iss.CacheManager, temp_dir: Path
-    ) -> None:
+    def test_cmd_reflect_empty_content_skipped(self, temp_cache: iss.CacheManager, temp_dir: Path) -> None:
         """Test cmd_reflect skips events with empty content."""
         projects_dir = temp_dir / "projects"
         projects_dir.mkdir()
@@ -1811,9 +1753,7 @@ class TestCmdReflectEdgeCases:
 class TestCmdEventEdgeCases:
     """Tests for edge cases in cmd_event."""
 
-    def test_cmd_event_json_decode_error_content(
-        self, temp_cache: iss.CacheManager, temp_dir: Path
-    ) -> None:
+    def test_cmd_event_json_decode_error_content(self, temp_cache: iss.CacheManager, temp_dir: Path) -> None:
         """Test that invalid message_content_json is handled."""
         projects_dir = temp_dir / "projects"
         projects_dir.mkdir()
@@ -1926,9 +1866,7 @@ class TestMainDispatch:
         captured = capsys.readouterr()
         assert "db_path" in captured.out or "status" in captured.out
 
-    def test_main_cache_frozen_skips_update(
-        self, temp_dir: Path, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_main_cache_frozen_skips_update(self, temp_dir: Path, capsys: pytest.CaptureFixture[str]) -> None:
         """Test that --cache-frozen skips automatic cache update."""
         db_path = temp_dir / "cache.db"
         cache = iss.CacheManager(db_path=db_path)
@@ -1949,9 +1887,7 @@ class TestMainDispatch:
         # Should return empty because cache wasn't updated
         assert captured.out.strip() == "[]"
 
-    def test_main_cache_rebuild_wipes_and_rebuilds(
-        self, temp_dir: Path, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_main_cache_rebuild_wipes_and_rebuilds(self, temp_dir: Path, capsys: pytest.CaptureFixture[str]) -> None:
         """Test that --cache-rebuild wipes and rebuilds cache before query."""
         db_path = temp_dir / "cache.db"
         cache = iss.CacheManager(db_path=db_path)
@@ -2136,6 +2072,7 @@ class TestMainDispatch:
             session_id="session-123",
             uuid="uuid-001",
             direction="both",
+            limit=3,
         )
         iss.main(args, cache=cache, projects_path=temp_dir)
 
@@ -2305,9 +2242,7 @@ class TestEventEdges:
         ).fetchone()
         assert row[0] == 0
 
-    def test_edges_cleaned_on_reingest(
-        self, temp_dir: Path, rich_sample_events: list[dict[str, Any]]
-    ) -> None:
+    def test_edges_cleaned_on_reingest(self, temp_dir: Path, rich_sample_events: list[dict[str, Any]]) -> None:
         """Test that event_edges are cleaned up when a file is re-ingested."""
         # Create initial JSONL file
         projects_dir = temp_dir / "projects" / "-Test-Project"
@@ -2499,9 +2434,7 @@ class TestSchemaMigration:
         db_path = temp_dir / "test_cache.db"
         cache = iss.CacheManager(db_path=db_path)
         # Create a bare DB with cache_metadata but no version
-        cache.conn.execute(
-            "CREATE TABLE IF NOT EXISTS cache_metadata (key TEXT PRIMARY KEY, value TEXT)"
-        )
+        cache.conn.execute("CREATE TABLE IF NOT EXISTS cache_metadata (key TEXT PRIMARY KEY, value TEXT)")
         cache.conn.commit()
         assert cache.needs_rebuild() is True
 
@@ -2526,9 +2459,7 @@ class TestSchemaMigration:
 
         # After rebuild, version should be current
         assert cache.needs_rebuild() is False
-        row = cache.conn.execute(
-            "SELECT value FROM cache_metadata WHERE key = 'schema_version'"
-        ).fetchone()
+        row = cache.conn.execute("SELECT value FROM cache_metadata WHERE key = 'schema_version'").fetchone()
         assert row[0] == iss.SCHEMA_VERSION
 
 
@@ -2556,9 +2487,7 @@ class TestCompositeIndexes:
             "idx_events_session_uuid",
             "idx_source_files_project_session",
         }
-        assert expected_new_indexes.issubset(indexes), (
-            f"Missing indexes: {expected_new_indexes - indexes}"
-        )
+        assert expected_new_indexes.issubset(indexes), f"Missing indexes: {expected_new_indexes - indexes}"
 
 
 class TestMainDispatchNewTables:
@@ -2578,9 +2507,7 @@ class TestMainDispatchNewTables:
         defaults.update(kwargs)
         return Namespace(**defaults)
 
-    def test_cache_frozen_and_rebuild_with_new_tables(
-        self, temp_dir: Path, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_cache_frozen_and_rebuild_with_new_tables(self, temp_dir: Path, capsys: pytest.CaptureFixture[str]) -> None:
         """Test that --cache-rebuild properly creates new tables."""
         projects_dir = temp_dir / "projects"
         projects_dir.mkdir()
@@ -2850,11 +2777,7 @@ class TestMainParseArgs:
             timeout=10,
         )
         # Should print help (usage) and exit 0
-        assert (
-            "usage:" in result.stdout.lower()
-            or "usage:" in result.stderr.lower()
-            or result.returncode == 0
-        )
+        assert "usage:" in result.stdout.lower() or "usage:" in result.stderr.lower() or result.returncode == 0
 
     def test_argparse_help(self) -> None:
         """Test that --help works."""
@@ -2872,5 +2795,9 @@ class TestMainParseArgs:
 # Entry Point
 # ============================================================================
 
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+if __name__ == "__main__":  # pragma: no cover
+    script_dir = str(Path(__file__).parent.resolve())
+    base_args = [__file__, "-v", "--rootdir", script_dir, "-o", "addopts="]
+    extra_args = sys.argv[1:]
+    final_args = base_args + extra_args
+    sys.exit(pytest.main(final_args))

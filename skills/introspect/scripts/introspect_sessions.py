@@ -346,9 +346,7 @@ class CacheManager:
     def needs_rebuild(self) -> bool:
         """Check if the schema version requires a rebuild."""
         try:
-            row = self.conn.execute(
-                "SELECT value FROM cache_metadata WHERE key = 'schema_version'"
-            ).fetchone()
+            row = self.conn.execute("SELECT value FROM cache_metadata WHERE key = 'schema_version'").fetchone()
             if row is None:
                 return True
             return bool(row[0] != SCHEMA_VERSION)
@@ -405,19 +403,13 @@ class CacheManager:
         try:
             edge_count = cursor.execute("SELECT COUNT(*) FROM event_edges").fetchone()[0]
             reflection_count = cursor.execute("SELECT COUNT(*) FROM reflections").fetchone()[0]
-            annotation_count = cursor.execute("SELECT COUNT(*) FROM event_annotations").fetchone()[
-                0
-            ]
+            annotation_count = cursor.execute("SELECT COUNT(*) FROM event_annotations").fetchone()[0]
         except sqlite3.OperationalError:
             pass  # Tables may not exist in older schema
 
         # Get metadata
-        created_at = cursor.execute(
-            "SELECT value FROM cache_metadata WHERE key = 'created_at'"
-        ).fetchone()
-        last_update = cursor.execute(
-            "SELECT value FROM cache_metadata WHERE key = 'last_update_at'"
-        ).fetchone()
+        created_at = cursor.execute("SELECT value FROM cache_metadata WHERE key = 'created_at'").fetchone()
+        last_update = cursor.execute("SELECT value FROM cache_metadata WHERE key = 'last_update_at'").fetchone()
 
         # Get database file size
         db_size = self.db_path.stat().st_size if self.db_path.exists() else 0
@@ -540,9 +532,7 @@ class CacheManager:
         cursor = self.conn.cursor()
 
         # Delete existing data for this file (if re-ingesting)
-        existing = cursor.execute(
-            "SELECT id FROM source_files WHERE filepath = ?", (filepath,)
-        ).fetchone()
+        existing = cursor.execute("SELECT id FROM source_files WHERE filepath = ?", (filepath,)).fetchone()
         if existing:
             cursor.execute("DELETE FROM event_edges WHERE source_file_id = ?", (existing[0],))
             cursor.execute("DELETE FROM events WHERE source_file_id = ?", (existing[0],))
@@ -570,9 +560,7 @@ class CacheManager:
                     if file_type == "agent_root" and detected_session_id is None:
                         detected_session_id = raw.get("sessionId")
 
-                    event = self._parse_event_for_cache(
-                        raw, project_id, detected_session_id, filepath, line_num
-                    )
+                    event = self._parse_event_for_cache(raw, project_id, detected_session_id, filepath, line_num)
                     if event:
                         events_data.append(event)
 
@@ -716,9 +704,7 @@ class CacheManager:
             "agent_slug": agent_slug,
             "message_role": message_role,
             "message_content": message_content_text,
-            "message_content_json": json.dumps(message_content_raw)
-            if message_content_raw
-            else None,
+            "message_content_json": json.dumps(message_content_raw) if message_content_raw else None,
             "model_id": model_id,
             "input_tokens": input_tokens,
             "output_tokens": output_tokens,
@@ -860,9 +846,7 @@ class CacheManager:
         for file_info in files_to_update:
             events_added = self.ingest_file(file_info)
             total_events += events_added
-            log.debug(
-                f"  {file_info['filepath']}: {events_added} events ({file_info.get('reason', 'new')})"
-            )
+            log.debug(f"  {file_info['filepath']}: {events_added} events ({file_info.get('reason', 'new')})")
 
         self.conn.commit()
 
@@ -966,13 +950,13 @@ def resolve_project_id(cache: CacheManager, session_id: str) -> str | None:
         (session_id,),
     ).fetchone()
     if row:
-        return row["project_id"]
+        return str(row["project_id"])
     # Fallback: check the events table directly
     row = cursor.execute(
         "SELECT project_id FROM events WHERE session_id = ? LIMIT 1",
         (session_id,),
     ).fetchone()
-    return row["project_id"] if row else None
+    return str(row["project_id"]) if row else None
 
 
 def cmd_project_id(cache: CacheManager, session_id: str) -> dict[str, str]:
@@ -1340,9 +1324,7 @@ def cmd_summary(
         "project_id": session["project_id"],
         "total_events": session["event_count"],
         "user_messages": sum(t["count"] for t in type_counts if t["event_type"] == "user"),
-        "assistant_messages": sum(
-            t["count"] for t in type_counts if t["event_type"] == "assistant"
-        ),
+        "assistant_messages": sum(t["count"] for t in type_counts if t["event_type"] == "assistant"),
         "tool_calls": tool_count["count"] if tool_count else 0,
         "started_at": session["first_timestamp"],
         "ended_at": session["last_timestamp"],
@@ -1387,9 +1369,7 @@ def cmd_cost(
     input_cost = (input_tokens / 1_000_000) * pricing["input"]
     output_cost = (output_tokens / 1_000_000) * pricing["output"]
     cache_read_cost = (cache_read / 1_000_000) * pricing["input"] * pricing["cache_read_multiplier"]
-    cache_write_cost = (
-        (cache_creation / 1_000_000) * pricing["input"] * pricing["cache_write_multiplier"]
-    )
+    cache_write_cost = (cache_creation / 1_000_000) * pricing["input"] * pricing["cache_write_multiplier"]
 
     total_cost = input_cost + output_cost + cache_read_cost + cache_write_cost
 
@@ -1541,9 +1521,7 @@ def cmd_agents(
     agents = []
     for row in results:
         agent = dict(row)
-        agent["total_billable_tokens"] = (
-            agent["input_tokens"] + agent["output_tokens"] + agent["cache_creation_tokens"]
-        )
+        agent["total_billable_tokens"] = agent["input_tokens"] + agent["output_tokens"] + agent["cache_creation_tokens"]
         agents.append(agent)
 
     return agents
@@ -1730,9 +1708,7 @@ def cmd_trajectory(
         events = events[start_idx:]
 
     if end_uuid:
-        end_idx = next(
-            (i for i, e in enumerate(events) if e.get("uuid") == end_uuid), len(events) - 1
-        )
+        end_idx = next((i for i, e in enumerate(events) if e.get("uuid") == end_uuid), len(events) - 1)
         events = events[: end_idx + 1]
 
     if limit:
@@ -1917,7 +1893,7 @@ def load_pipeline(task: str, model: str, device: str = "cpu") -> Any:
     from transformers import pipeline  # noqa: E402 — deferred import for heavy ML deps
 
     log.info("Loading pipeline: task=%s model=%s device=%s", task, model, device)
-    return pipeline(task, model=model, device=device)
+    return pipeline(task, model=model, device=device)  # type: ignore[call-overload]
 
 
 def analyze_sentiment(
@@ -2013,9 +1989,7 @@ def analyze_zero_shot(
                 enriched["analysis"] = {
                     "task": "zero-shot",
                     "model": effective_model,
-                    "labels": dict(
-                        zip(pred["labels"], [round(s, 4) for s in pred["scores"]], strict=True)
-                    ),
+                    "labels": dict(zip(pred["labels"], [round(s, 4) for s in pred["scores"]], strict=True)),
                     "top_label": pred["labels"][0],
                     "top_score": round(pred["scores"][0], 4),
                 }
@@ -2117,9 +2091,7 @@ def analyze_summarize(
     pipe = load_pipeline(ML_TASK_NAMES["summarize"], effective_model)
 
     if concatenate:
-        combined_text = "\n\n".join(
-            m.get("content", "") for m in messages if m.get("content", "").strip()
-        )
+        combined_text = "\n\n".join(m.get("content", "") for m in messages if m.get("content", "").strip())
         combined_text = truncate_content(combined_text, max_chars)
 
         if combined_text.strip():
@@ -2131,9 +2103,7 @@ def analyze_summarize(
         return [
             {
                 "role": "summary",
-                "content": combined_text[:200] + "..."
-                if len(combined_text) > 200
-                else combined_text,
+                "content": combined_text[:200] + "..." if len(combined_text) > 200 else combined_text,
                 "message_count": len(messages),
                 "analysis": {
                     "task": "summarize",
@@ -2233,9 +2203,7 @@ def cmd_reflect_ml(
 
     # Run the appropriate analysis
     if engine == "sentiment":
-        analyzed = analyze_sentiment(
-            messages, model=model, batch_size=batch_size, max_chars=max_chars
-        )
+        analyzed = analyze_sentiment(messages, model=model, batch_size=batch_size, max_chars=max_chars)
     elif engine == "zero-shot":
         analyzed = analyze_zero_shot(
             messages, labels=labels or [], model=model, batch_size=batch_size, max_chars=max_chars
@@ -2758,12 +2726,18 @@ if __name__ == "__main__":  # pragma: no cover
 
     # messages command
     messages_parser = subparsers.add_parser("messages", help="Extract messages")
-    messages_parser.add_argument("session_id", nargs="?", default=None, help="Session UUID (omit to search all sessions)")
+    messages_parser.add_argument(
+        "session_id", nargs="?", default=None, help="Session UUID (omit to search all sessions)"
+    )
     messages_parser.add_argument("--role", choices=["user", "assistant"])
     messages_parser.add_argument("-n", "--limit", type=int, default=100)
     messages_parser.add_argument("--agent", help="Filter to specific agent ID")
     messages_parser.add_argument("--since", help="Filter since timestamp (ISO or relative like '30m', '1h')")
-    messages_parser.add_argument("--exclude-system", action="store_true", help="Exclude system-injected messages (tool approvals, bash output, compaction artifacts)")
+    messages_parser.add_argument(
+        "--exclude-system",
+        action="store_true",
+        help="Exclude system-injected messages (tool approvals, bash output, compaction artifacts)",
+    )
 
     # agents command
     agents_parser = subparsers.add_parser("agents", help="List subagents")
@@ -2778,12 +2752,9 @@ if __name__ == "__main__":  # pragma: no cover
     traverse_parser = subparsers.add_parser("traverse", help="Traverse event tree")
     traverse_parser.add_argument("session_id", help="Session UUID")
     traverse_parser.add_argument("uuid", help="Starting event UUID")
+    traverse_parser.add_argument("--direction", choices=["ancestors", "descendants", "both"], default="both")
     traverse_parser.add_argument(
-        "--direction", choices=["ancestors", "descendants", "both"], default="both"
-    )
-    traverse_parser.add_argument(
-        "-n", "--limit", type=int, default=3,
-        help="Max traversal depth (hops). 0 = unlimited. Default: 3"
+        "-n", "--limit", type=int, default=3, help="Max traversal depth (hops). 0 = unlimited. Default: 3"
     )
 
     # trajectory command
@@ -2796,9 +2767,7 @@ if __name__ == "__main__":  # pragma: no cover
     trajectory_parser.add_argument("-n", "--limit", type=int)
 
     # reflect command
-    reflect_parser = subparsers.add_parser(
-        "reflect", help="Meta-prompt evaluation or local ML analysis"
-    )
+    reflect_parser = subparsers.add_parser("reflect", help="Meta-prompt evaluation or local ML analysis")
     reflect_parser.add_argument("session_id", help="Session UUID")
     reflect_parser.add_argument("--prompt", help="Meta-prompt (use {{content}} placeholder)")
     reflect_parser.add_argument("--prompt-file", help="Read prompt from file")

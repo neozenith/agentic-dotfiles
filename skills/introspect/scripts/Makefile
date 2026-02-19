@@ -4,38 +4,50 @@
 # Source files
 SRC = introspect_sessions.py test_introspect_sessions.py
 
-.PHONY: all test format lint typecheck check clean help
+# --no-project prevents uv from discovering the root pyproject.toml,
+# which would otherwise inject unrelated coverage config and deps.
+UV = uv run --no-project
+
+# Shared pytest args to isolate from root pyproject.toml config
+PYTEST_ARGS = -v --rootdir . -o 'addopts='
+
+.PHONY: all test test-cov format format-check lint lint-fix typecheck check fix smoke clean help debug
+
+debug:
+	@echo "Makefile dir (PWD):  $(PWD)"
+	@echo "Shell dir (\$\$PWD):  $$(pwd)"
 
 # Default target
 all: format lint typecheck test
 
 # Run tests via PEP-723 entry point (deps declared in test file)
 test:
-	uv run test_introspect_sessions.py
+	$(UV) test_introspect_sessions.py $(PYTEST_ARGS)
 
-# Run tests with coverage
+# Run tests with coverage — invokes pytest directly so coverage starts before imports
 test-cov:
-	uv run --with pytest-cov test_introspect_sessions.py --cov=introspect_sessions --cov-report=term-missing
+	$(UV) test_introspect_sessions.py $(PYTEST_ARGS) \
+		--cov=introspect_sessions --cov-report=term-missing --cov-fail-under=90
 
 # Format code with ruff
 format:
-	uv run ruff format $(SRC)
+	$(UV) ruff format $(SRC)
 
 # Check formatting without modifying (for CI)
 format-check:
-	uv run ruff format --check $(SRC)
+	$(UV) ruff format --check $(SRC)
 
 # Lint with ruff (line-length 120 for SQL strings and long docstrings)
 lint: format
-	uv run ruff check --line-length 120 $(SRC)
+	$(UV) ruff check --line-length 120 $(SRC)
 
 # Lint and auto-fix
 lint-fix: format
-	uv run ruff check --fix --line-length 120 $(SRC)
+	$(UV) ruff check --fix --line-length 120 $(SRC)
 
 # Type check with mypy
 typecheck: fix
-	uv run mypy introspect_sessions.py --ignore-missing-imports --strict
+	$(UV) mypy introspect_sessions.py --ignore-missing-imports --strict
 
 # Run all checks (format-check + lint + typecheck) - suitable for CI
 check: format-check lint typecheck

@@ -819,13 +819,9 @@ class ServerNotFound(Exception):
         self.language = language
         self.binary = binary
         install_hint = (
-            "pip install pyright"
-            if language == "python"
-            else "npm install -g typescript-language-server typescript"
+            "pip install pyright" if language == "python" else "npm install -g typescript-language-server typescript"
         )
-        super().__init__(
-            f"Language server for {language} not found: {binary}. Install with: {install_hint}"
-        )
+        super().__init__(f"Language server for {language} not found: {binary}. Install with: {install_hint}")
 
 
 class UnsupportedLanguage(Exception):
@@ -936,9 +932,7 @@ class LanguageServerManager:
 
 
 @contextmanager
-def lsp_session_for_file(
-    file_path: Path, root_path: Path | None = None
-) -> Generator[LspSession, None, None]:
+def lsp_session_for_file(file_path: Path, root_path: Path | None = None) -> Generator[LspSession, None, None]:
     """Convenience context manager: detect language, start server, yield session."""
     resolved = file_path.resolve()
     if root_path is None:
@@ -1373,9 +1367,7 @@ class IndexCacheManager:
         """Create tables, views, and indexes. Fail-fast if R-Tree unavailable."""
         # Check R-Tree availability
         try:
-            self.conn.execute(
-                "CREATE VIRTUAL TABLE IF NOT EXISTS _rtree_check USING rtree(id, x1, x2)"
-            )
+            self.conn.execute("CREATE VIRTUAL TABLE IF NOT EXISTS _rtree_check USING rtree(id, x1, x2)")
             self.conn.execute("DROP TABLE IF EXISTS _rtree_check")
         except sqlite3.OperationalError as e:
             raise RuntimeError(
@@ -1396,9 +1388,7 @@ class IndexCacheManager:
     def needs_rebuild(self) -> bool:
         """Check if the schema version matches."""
         try:
-            row = self.conn.execute(
-                "SELECT value FROM cache_metadata WHERE key = 'schema_version'"
-            ).fetchone()
+            row = self.conn.execute("SELECT value FROM cache_metadata WHERE key = 'schema_version'").fetchone()
             if row is None:
                 return True
             return str(row["value"]) != INDEX_SCHEMA_VERSION
@@ -1423,10 +1413,7 @@ class IndexCacheManager:
         refs = c.execute("SELECT COUNT(*) FROM symbols WHERE is_definition = 0").fetchone()[0]
         containments = c.execute("SELECT COUNT(*) FROM symbol_containments").fetchone()[0]
         languages = [
-            row[0]
-            for row in c.execute(
-                "SELECT DISTINCT language FROM source_files ORDER BY language"
-            ).fetchall()
+            row[0] for row in c.execute("SELECT DISTINCT language FROM source_files ORDER BY language").fetchall()
         ]
         return {
             "files": files,
@@ -1507,9 +1494,7 @@ class IndexCacheManager:
 
     def remove_stale_files(self, current_files: set[str]) -> int:
         """Remove source_files entries not in current_files. Returns count removed."""
-        existing = {
-            row[0] for row in self.conn.execute("SELECT filepath FROM source_files").fetchall()
-        }
+        existing = {row[0] for row in self.conn.execute("SELECT filepath FROM source_files").fetchall()}
         stale = existing - current_files
         if stale:
             placeholders = ",".join("?" for _ in stale)
@@ -1572,9 +1557,7 @@ class IndexCacheManager:
             (source_file_id,),
         )
 
-    def _index_file_definitions(
-        self, session: LspSession, file_path: Path, source_file_id: int
-    ) -> int:
+    def _index_file_definitions(self, session: LspSession, file_path: Path, source_file_id: int) -> int:
         """Index definitions via documentSymbol. Returns count of definitions inserted."""
         raw_symbols = session.document_symbol(file_path)
         cursor = self.conn.cursor()
@@ -1582,9 +1565,7 @@ class IndexCacheManager:
         self.conn.commit()
         return count
 
-    def _walk_symbol_tree(
-        self, cursor: sqlite3.Cursor, symbols: list[dict[str, Any]], sf_id: int
-    ) -> int:
+    def _walk_symbol_tree(self, cursor: sqlite3.Cursor, symbols: list[dict[str, Any]], sf_id: int) -> int:
         """Recursively walk documentSymbol tree and insert definitions."""
         count = 0
         for sym in symbols:
@@ -1822,9 +1803,7 @@ class IndexCacheManager:
         stats["total_files_discovered"] = len(files)
         return stats
 
-    def update_incremental(
-        self, root_path: Path, timeout: float = DEFAULT_TIMEOUT
-    ) -> dict[str, Any]:
+    def update_incremental(self, root_path: Path, timeout: float = DEFAULT_TIMEOUT) -> dict[str, Any]:
         """Incremental: only index files with newer mtime."""
         if self.needs_rebuild():
             self.init_schema()
@@ -1942,9 +1921,7 @@ def cmd_index(args: argparse.Namespace) -> int:
     try:
         cache_mode = getattr(args, "cache_mode", "rebuild")
         if cache_mode == "frozen":
-            _output_json(
-                {"status": "frozen", "message": "Using existing cache as-is"}, pretty=args.pretty
-            )
+            _output_json({"status": "frozen", "message": "Using existing cache as-is"}, pretty=args.pretty)
             return 0
 
         if cache_mode == "rebuild":
@@ -2261,27 +2238,21 @@ def build_parser() -> argparse.ArgumentParser:
     p_sym.set_defaults(func=cmd_symbols)
 
     # definition
-    p_def = subparsers.add_parser(
-        "definition", parents=[common], help="Go to definition of symbol at position"
-    )
+    p_def = subparsers.add_parser("definition", parents=[common], help="Go to definition of symbol at position")
     p_def.add_argument("file", help="File containing the symbol")
     p_def.add_argument("line", type=int, help="Line number (1-indexed)")
     p_def.add_argument("col", type=int, help="Column number (1-indexed)")
     p_def.set_defaults(func=cmd_definition)
 
     # references
-    p_ref = subparsers.add_parser(
-        "references", parents=[common], help="Find all references to symbol at position"
-    )
+    p_ref = subparsers.add_parser("references", parents=[common], help="Find all references to symbol at position")
     p_ref.add_argument("file", help="File containing the symbol")
     p_ref.add_argument("line", type=int, help="Line number (1-indexed)")
     p_ref.add_argument("col", type=int, help="Column number (1-indexed)")
     p_ref.set_defaults(func=cmd_references)
 
     # hover
-    p_hov = subparsers.add_parser(
-        "hover", parents=[common], help="Get hover info (type signature, docs) at position"
-    )
+    p_hov = subparsers.add_parser("hover", parents=[common], help="Get hover info (type signature, docs) at position")
     p_hov.add_argument("file", help="File containing the symbol")
     p_hov.add_argument("line", type=int, help="Line number (1-indexed)")
     p_hov.add_argument("col", type=int, help="Column number (1-indexed)")
@@ -2295,16 +2266,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_diag.set_defaults(func=cmd_diagnostics)
 
     # explore
-    p_exp = subparsers.add_parser(
-        "explore", parents=[common], help="Combined symbols + diagnostics overview"
-    )
+    p_exp = subparsers.add_parser("explore", parents=[common], help="Combined symbols + diagnostics overview")
     p_exp.add_argument("file", help="File to explore")
     p_exp.set_defaults(func=cmd_explore)
 
     # impact (live LSP)
-    p_imp = subparsers.add_parser(
-        "impact", parents=[common], help="Analyze change impact (multi-hop references)"
-    )
+    p_imp = subparsers.add_parser("impact", parents=[common], help="Analyze change impact (multi-hop references)")
     p_imp.add_argument("file", help="File containing the symbol")
     p_imp.add_argument("line", type=int, help="Line number (1-indexed)")
     p_imp.add_argument("col", type=int, help="Column number (1-indexed)")
@@ -2314,9 +2281,7 @@ def build_parser() -> argparse.ArgumentParser:
     # --- Index / cache commands ---
 
     # index
-    p_idx = subparsers.add_parser(
-        "index", parents=[common, cache_parent], help="Build symbol index for a project"
-    )
+    p_idx = subparsers.add_parser("index", parents=[common, cache_parent], help="Build symbol index for a project")
     p_idx.set_defaults(func=cmd_index)
 
     # index-status
@@ -2328,27 +2293,21 @@ def build_parser() -> argparse.ArgumentParser:
     p_idx_cl.set_defaults(func=cmd_index_clear)
 
     # lookup
-    p_look = subparsers.add_parser(
-        "lookup", parents=[common], help="Find definitions by name (cached)"
-    )
+    p_look = subparsers.add_parser("lookup", parents=[common], help="Find definitions by name (cached)")
     p_look.add_argument("name", help="Symbol name (substring match)")
     p_look.add_argument("--kind", help="Filter by kind (class, function, etc.)")
     p_look.add_argument("--file-type", choices=["source", "test"], help="Filter by file type")
     p_look.set_defaults(func=cmd_lookup)
 
     # dead
-    p_dead = subparsers.add_parser(
-        "dead", parents=[common], help="Find unreferenced definitions (cached)"
-    )
+    p_dead = subparsers.add_parser("dead", parents=[common], help="Find unreferenced definitions (cached)")
     p_dead.add_argument("--kind", help="Filter by kind (class, function, etc.)")
     p_dead.add_argument("--file-type", choices=["source", "test"], help="Filter by file type")
     p_dead.add_argument("--exclude-private", action="store_true", help="Exclude _private names")
     p_dead.set_defaults(func=cmd_dead)
 
     # trace
-    p_trace = subparsers.add_parser(
-        "trace", parents=[common], help="Impact analysis from cached index"
-    )
+    p_trace = subparsers.add_parser("trace", parents=[common], help="Impact analysis from cached index")
     p_trace.add_argument("file", help="File containing the definition")
     p_trace.add_argument("line", type=int, help="Line number (1-indexed)")
     p_trace.add_argument("col", type=int, help="Column number (1-indexed)")
