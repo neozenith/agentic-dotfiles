@@ -188,6 +188,34 @@ if __name__ == "__main__":
     pytest.main([__file__, "-v", f"--cov={module}", "--cov-report=term-missing", "--cov-fail-under=50"])
 ```
 
+## Build Tool Utility: `dirty()`
+
+For scripts that generate files from inputs (like build configuration generators),
+use this Make-like mtime comparison to skip regeneration when outputs are fresh:
+
+```python
+from pathlib import Path
+
+
+def dirty(output_paths: list[Path] | Path, input_paths: list[Path] | Path) -> bool:
+    """True if any output is missing or older than any input."""
+    if isinstance(output_paths, Path):
+        output_paths = [output_paths]
+    if isinstance(input_paths, Path):
+        input_paths = [input_paths]
+
+    for out in output_paths:
+        if not out.exists():
+            return True
+
+    newest_input = max(p.stat().st_mtime for p in input_paths if p.exists())
+    oldest_output = min(p.stat().st_mtime for p in output_paths)
+    return oldest_output < newest_input
+```
+
+Use with `--status` (exit 0/1), `--force` (skip check), and `--dry-run` flags
+on file-generating subcommands.
+
 ## Standalone Cache Check Script
 
 Useful as a Makefile helper:
