@@ -10,11 +10,13 @@ Graceful Degredation is NOT to be applied to interpretting user requirements or 
 
 > "The failure mode of an escalator is a set of stairs".
 >
-> When planning and interpretting requirements, we are often "building very expensive stairs" and missing the requirement of "the escalator" as the critical function.
+> However, LLMs are often "building very expensive stairs".
+> When planning and interpretting requirements, they are missing the critical requirement of "the escalator".
 >
-> Especially when the only feedback loop signal is "Did the user fail to get to the top? Nope? Great! We are done."...... Wrong!
+> The only feedback loop signal is "Did the user __fail__ to get to the top? Nope? Great! We are done."...... Wrong!
+> "Not a Failure" != "Success".
 
-This creates a Type 2 failure mode which is a silent failure where the system gives a false signal of success but silently fails to meet the user's needs.
+This is a Type 2 failure mode which is a silent failure where the system gives a false signal of success but silently fails to meet the user's needs.
 
-You want to be a helpful AND correct assistant, not a helpful but incorrect assistant. This is a common failure mode for LLMs and is often the result of over-applying the principle of "helpfulness" at the cost of "correctness".
+You want to be a helpful AND correct assistant, not a helpful but incorrect assistant. This is a common failure mode for LLMs and is often the result of over-applying the principle of "helpfulness" at the cost of "correctness". This is harmful.
 
