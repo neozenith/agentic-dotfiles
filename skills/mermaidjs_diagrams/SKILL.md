@@ -274,7 +274,29 @@ uv run .claude/skills/mermaidjs_diagrams/scripts/mermaid_complexity.py docs/diag
 
 If any remain "complex" or "critical", repeat Step 4 for those diagrams.
 
-## Step 7: Generate PNG Images
+## Step 7: Verify Diagrams in Markdown Documentation
+
+After complexity is validated, verify that any Mermaid diagrams embedded in Markdown
+plan or documentation files render correctly via mermaid-cli:
+
+```bash
+# Verify all diagrams in a docs directory
+uv run .claude/skills/mermaidjs_diagrams/scripts/mermaid_markdown_verifier.py docs/ -v
+
+# Verify a single file
+uv run .claude/skills/mermaidjs_diagrams/scripts/mermaid_markdown_verifier.py docs/plans/my_plan.md
+
+# Glob pattern (quote to prevent shell expansion)
+uv run .claude/skills/mermaidjs_diagrams/scripts/mermaid_markdown_verifier.py "docs/**/*.md"
+```
+
+The script always outputs JSON to stdout. Check the `summary` field:
+- `"failed": 0` — all diagrams render; ready to proceed
+- `"failed": N` — open the file at `file_path`, go to `line_start`–`line_end`, read `stderr` for the error
+
+Re-run after fixing any broken fences until `"failed": 0`.
+
+## Step 8: Generate PNG Images
 
 After all agents complete and complexity is validated:
 
@@ -282,7 +304,7 @@ After all agents complete and complexity is validated:
 make -C docs/diagrams
 ```
 
-## Step 8: Sync README
+## Step 9: Sync README
 
 Update the project README.md with organized diagram sections:
 
@@ -318,6 +340,8 @@ Scopes: overview (low-density), detail (high-density)
 ```
 
 ## CLI Quick Reference
+
+### Complexity Analysis (`mermaid_complexity.py`)
 ```bash
 # Analyze with different density presets
 uv run .claude/skills/mermaidjs_diagrams/scripts/mermaid_complexity.py docs/diagrams/ -p low
@@ -338,6 +362,30 @@ uv run .claude/skills/mermaidjs_diagrams/scripts/mermaid_complexity.py docs/diag
 uv run .claude/skills/mermaidjs_diagrams/scripts/mermaid_complexity.py docs/diagrams/*--detail.mmd -p high
 ```
 
+### Markdown Verifier (`mermaid_markdown_verifier.py`)
+```bash
+# Verify a single file
+uv run .claude/skills/mermaidjs_diagrams/scripts/mermaid_markdown_verifier.py path/to/file.md
+
+# Recursive directory scan
+uv run .claude/skills/mermaidjs_diagrams/scripts/mermaid_markdown_verifier.py docs/
+
+# Glob pattern (quote to prevent shell expansion)
+uv run .claude/skills/mermaidjs_diagrams/scripts/mermaid_markdown_verifier.py "docs/plans/**/*.md"
+
+# Multiple paths with verbose output
+uv run .claude/skills/mermaidjs_diagrams/scripts/mermaid_markdown_verifier.py README.md docs/ -v
+
+# Quiet mode (errors only)
+uv run .claude/skills/mermaidjs_diagrams/scripts/mermaid_markdown_verifier.py docs/ -q
+```
+
 ## Exit Codes
+
+### `mermaid_complexity.py`
 - `0`: All diagrams are ideal or acceptable for their density level
 - `1`: One or more diagrams are complex or critical (needs attention)
+
+### `mermaid_markdown_verifier.py`
+- `0`: All diagrams rendered successfully (or no diagrams found)
+- `1`: One or more diagrams failed to render

@@ -1,5 +1,5 @@
-# Makefile for mermaid_markdown_verifier scripts
-# Run from repo root: make -C .claude/skills/mermaid_markdown_verifier/scripts <target>
+# Makefile for mermaidjs_diagrams scripts
+# Run from repo root: make -C .claude/skills/mermaidjs_diagrams/scripts <target>
 
 # Source files
 SRC = mermaid_markdown_verifier.py test_mermaid_markdown_verifier.py
