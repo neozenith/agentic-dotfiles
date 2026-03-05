@@ -276,32 +276,69 @@ If any remain "complex" or "critical", repeat Step 4 for those diagrams.
 
 ## Step 7: Verify Diagrams in Markdown Documentation
 
-After complexity is validated, verify that any Mermaid diagrams embedded in Markdown
-plan or documentation files render correctly via mermaid-cli:
+`mmdc` natively handles `.md` input — pass the markdown file directly. It extracts every
+` ```mermaid ` fence, renders each one, and writes output images to the artefacts directory.
+No separate verifier script is needed.
 
 ```bash
-# Verify all diagrams in a docs directory
-uv run .claude/skills/mermaidjs_diagrams/scripts/mermaid_markdown_verifier.py docs/ -v
+# Verify and extract all mermaid blocks from a markdown file (SVG output by default)
+npx -p @mermaid-js/mermaid-cli mmdc \
+  -i docs/plans/my_plan.md \
+  -o docs/diagrams/mmdc/my_plan.md \
+  -a docs/diagrams/mmdc/
 
-# Verify a single file
-uv run .claude/skills/mermaidjs_diagrams/scripts/mermaid_markdown_verifier.py docs/plans/my_plan.md
+# With icon packs (required for architecture-beta diagrams using Iconify icons)
+npx -p @mermaid-js/mermaid-cli mmdc \
+  -i docs/plans/my_plan.md \
+  -o docs/diagrams/mmdc/my_plan.md \
+  -a docs/diagrams/mmdc/ \
+  --iconPacks @iconify-json/logos @iconify-json/mdi
 
-# Glob pattern (quote to prevent shell expansion)
-uv run .claude/skills/mermaidjs_diagrams/scripts/mermaid_markdown_verifier.py "docs/**/*.md"
+# With custom icon pack from a URL (e.g. Azure icons not on npm)
+npx -p @mermaid-js/mermaid-cli mmdc \
+  -i docs/plans/my_plan.md \
+  -o docs/diagrams/mmdc/my_plan.md \
+  -a docs/diagrams/mmdc/ \
+  --iconPacksNamesAndUrls "azure#https://raw.githubusercontent.com/NakayamaKento/AzureIcons/refs/heads/main/icons.json"
 ```
 
-The script always outputs JSON to stdout. Check the `summary` field:
-- `"failed": 0` — all diagrams render; ready to proceed
-- `"failed": N` — open the file at `file_path`, go to `line_start`–`line_end`, read `stderr` for the error
+**Outputs:**
+- `-o` path — markdown with `![diagram](image.svg)` links replacing each mermaid fence
+- `-a` directory — one SVG/PNG per diagram block, named `{filename}-{N}.svg`
 
-Re-run after fixing any broken fences until `"failed": 0`.
+**Failure signal:** mmdc exits non-zero and prints the offending diagram + error to stderr.
+Fix the fence and re-run until exit code is `0`.
 
 ## Step 8: Generate PNG Images
 
 After all agents complete and complexity is validated:
 
 ```bash
+# Generate all PNGs from .mmd files (flowchart diagrams need no icon packs — Font Awesome is built-in)
 make -C docs/diagrams
+
+# Only set ICON_PACKS if using architecture-beta diagrams with Iconify icons
+make -C docs/diagrams ICON_PACKS="@iconify-json/logos @iconify-json/mdi"
+```
+
+Or generate a single diagram directly:
+
+```bash
+npx -p @mermaid-js/mermaid-cli mmdc \
+  -i docs/diagrams/architecture--overview.mmd \
+  -o docs/diagrams/architecture--overview.png \
+  --scale 4 --backgroundColor white \
+  --iconPacks @iconify-json/logos @iconify-json/mdi
+```
+
+**Working example:** See `.claude/skills/mermaidjs_diagrams/resources/my_flowchart.mmd` (flowchart
+with Font Awesome `fa:fa-icon` icons — no `--iconPacks` flag needed) and its rendered output
+`resources/my_flowchart.png`. Generated with:
+```bash
+npx -p @mermaid-js/mermaid-cli mmdc \
+  -i .claude/skills/mermaidjs_diagrams/resources/my_flowchart.mmd \
+  -o .claude/skills/mermaidjs_diagrams/resources/my_flowchart.png \
+  --scale 4 --backgroundColor white
 ```
 
 ## Step 9: Sync README
@@ -362,22 +399,45 @@ uv run .claude/skills/mermaidjs_diagrams/scripts/mermaid_complexity.py docs/diag
 uv run .claude/skills/mermaidjs_diagrams/scripts/mermaid_complexity.py docs/diagrams/*--detail.mmd -p high
 ```
 
-### Markdown Verifier (`mermaid_markdown_verifier.py`)
+### Markdown Rendering (`mmdc` native MD input)
+
+`mmdc` handles `.md` files directly — no wrapper script needed:
+
 ```bash
-# Verify a single file
-uv run .claude/skills/mermaidjs_diagrams/scripts/mermaid_markdown_verifier.py path/to/file.md
+# Render all mermaid fences in a markdown file → SVG artefacts
+npx -p @mermaid-js/mermaid-cli mmdc \
+  -i docs/plans/my_plan.md \
+  -o docs/diagrams/mmdc/my_plan.md \
+  -a docs/diagrams/mmdc/
 
-# Recursive directory scan
-uv run .claude/skills/mermaidjs_diagrams/scripts/mermaid_markdown_verifier.py docs/
+# With icon packs (npm packages, downloaded from unpkg.com)
+npx -p @mermaid-js/mermaid-cli mmdc \
+  -i docs/plans/my_plan.md \
+  -o docs/diagrams/mmdc/my_plan.md \
+  -a docs/diagrams/mmdc/ \
+  --iconPacks @iconify-json/logos @iconify-json/mdi
 
-# Glob pattern (quote to prevent shell expansion)
-uv run .claude/skills/mermaidjs_diagrams/scripts/mermaid_markdown_verifier.py "docs/plans/**/*.md"
+# With custom icon packs via URL (prefix#url format)
+npx -p @mermaid-js/mermaid-cli mmdc \
+  -i docs/plans/my_plan.md \
+  -o docs/diagrams/mmdc/my_plan.md \
+  -a docs/diagrams/mmdc/ \
+  --iconPacksNamesAndUrls "azure#https://raw.githubusercontent.com/NakayamaKento/AzureIcons/refs/heads/main/icons.json"
+```
 
-# Multiple paths with verbose output
-uv run .claude/skills/mermaidjs_diagrams/scripts/mermaid_markdown_verifier.py README.md docs/ -v
+### .mmd File Rendering
 
-# Quiet mode (errors only)
-uv run .claude/skills/mermaidjs_diagrams/scripts/mermaid_markdown_verifier.py docs/ -q
+```bash
+# Single .mmd → PNG with icon packs
+npx -p @mermaid-js/mermaid-cli mmdc \
+  -i docs/diagrams/my_diagram.mmd \
+  -o docs/diagrams/my_diagram.png \
+  --scale 4 --backgroundColor white \
+  --iconPacks @iconify-json/logos @iconify-json/mdi
+
+# Via Makefile (handles all .mmd → .png with ICON_PACKS variable)
+make -C docs/diagrams
+make -C docs/diagrams ICON_PACKS="@iconify-json/logos @iconify-json/mdi @iconify-json/carbon"
 ```
 
 ## Exit Codes
@@ -386,6 +446,6 @@ uv run .claude/skills/mermaidjs_diagrams/scripts/mermaid_markdown_verifier.py do
 - `0`: All diagrams are ideal or acceptable for their density level
 - `1`: One or more diagrams are complex or critical (needs attention)
 
-### `mermaid_markdown_verifier.py`
-- `0`: All diagrams rendered successfully (or no diagrams found)
-- `1`: One or more diagrams failed to render
+### `mmdc` (mermaid-cli)
+- `0`: All diagrams rendered successfully
+- `1`: One or more diagrams failed to render (error printed to stderr)

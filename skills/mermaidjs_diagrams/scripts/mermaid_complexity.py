@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.12"
+# dependencies = []
+# ///
 """
 Mermaid Diagram Complexity Analyzer
 
@@ -23,12 +27,13 @@ Usage:
     python .claude/skills/mermaidjs_diagrams/scripts/mermaid_complexity.py docs/diagrams/*.mmd --show-working
 
     # With custom thresholds
-    python .claude/skills/mermaidjs_diagrams/scripts/mermaid_complexity.py docs/diagrams/ --node-target=30 --vcs-target=50
+    python mermaid_complexity.py docs/diagrams/ --node-target 30 --vcs-target 20
     MERMAID_NODE_TARGET=30 python .claude/skills/mermaidjs_diagrams/scripts/mermaid_complexity.py docs/diagrams/
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import math
 import os
@@ -36,8 +41,15 @@ import re
 import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
+# =============================================================================
+# Script Metadata
+# =============================================================================
+
+SCRIPT = Path(__file__)
+SCRIPT_NAME = SCRIPT.stem
+SCRIPT_DIR = SCRIPT.parent.resolve()
 
 # =============================================================================
 # Configuration System
@@ -134,7 +146,7 @@ class ThresholdConfig:
     preset_name: str = "high-density"
 
     @classmethod
-    def from_preset(cls, name: str) -> "ThresholdConfig":
+    def from_preset(cls, name: str) -> ThresholdConfig:
         """Create config from a named preset."""
         name = name.lower()
         if name not in PRESETS:
@@ -143,9 +155,17 @@ class ThresholdConfig:
         preset = PRESETS[name]
         # Normalize alias to canonical name
         canonical_map = {
-            "l": "low-density", "low": "low-density", "strict": "low-density",
-            "m": "medium-density", "med": "medium-density", "medium": "medium-density", "balanced": "medium-density",
-            "h": "high-density", "high": "high-density", "permissive": "high-density", "default": "high-density",
+            "l": "low-density",
+            "low": "low-density",
+            "strict": "low-density",
+            "m": "medium-density",
+            "med": "medium-density",
+            "medium": "medium-density",
+            "balanced": "medium-density",
+            "h": "high-density",
+            "high": "high-density",
+            "permissive": "high-density",
+            "default": "high-density",
         }
         canonical = canonical_map.get(name, name)
         return cls(
@@ -163,9 +183,7 @@ class ThresholdConfig:
         )
 
     @classmethod
-    def from_env(
-        cls, env_prefix: str = "MERMAID_COMPLEXITY_", base_preset: str = "high-density"
-    ) -> ThresholdConfig:
+    def from_env(cls, env_prefix: str = "MERMAID_COMPLEXITY_", base_preset: str = "high-density") -> ThresholdConfig:
         """Load configuration from environment variables, starting from a preset."""
         # Check for preset in environment first
         preset_name = os.environ.get(f"{env_prefix}PRESET", base_preset)
@@ -260,7 +278,7 @@ class SubdivisionWorkingOut:
     needs_subdivision: bool
 
     # Recursive analysis (if applicable)
-    estimated_per_split: list[dict] = field(default_factory=list)
+    estimated_per_split: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
@@ -282,7 +300,7 @@ class ComplexityReport:
 
     # VCS formula breakdown
     vcs_formula: str
-    vcs_breakdown: dict
+    vcs_breakdown: dict[str, Any]
 
     # Thresholds and ratings
     rating: str  # "ideal", "acceptable", "complex", "critical"
@@ -298,7 +316,7 @@ class ComplexityReport:
     subgraph_names: list[str]
 
     # Thresholds used (for reference)
-    thresholds_used: dict
+    thresholds_used: dict[str, int]
 
 
 # =============================================================================
@@ -343,9 +361,7 @@ def parse_mermaid_file(content: str) -> MermaidStats:
     )
     arrow_pattern = re.compile(r"(?:-->|-.->|==>|~~~|<-->)")
 
-    subgraph_pattern = re.compile(
-        r"^[ \t]*subgraph\s+(?:\"([^\"]+)\"|(\S+))?", re.IGNORECASE
-    )
+    subgraph_pattern = re.compile(r"^[ \t]*subgraph\s+(?:\"([^\"]+)\"|(\S+))?", re.IGNORECASE)
     end_pattern = re.compile(r"^[ \t]*end\s*$", re.IGNORECASE)
     comment_pattern = re.compile(r"^[ \t]*%%")
     directive_pattern = re.compile(
@@ -353,9 +369,7 @@ def parse_mermaid_file(content: str) -> MermaidStats:
         r"stateDiagram|erDiagram|gantt|pie|journey)\s",
         re.IGNORECASE,
     )
-    style_pattern = re.compile(
-        r"^[ \t]*(?:classDef|class|linkStyle|style)\s", re.IGNORECASE
-    )
+    style_pattern = re.compile(r"^[ \t]*(?:classDef|class|linkStyle|style)\s", re.IGNORECASE)
 
     for line in lines:
         if comment_pattern.match(line):
@@ -370,11 +384,7 @@ def parse_mermaid_file(content: str) -> MermaidStats:
         # Check for subgraph start
         subgraph_match = subgraph_pattern.match(line)
         if subgraph_match:
-            name = (
-                subgraph_match.group(1)
-                or subgraph_match.group(2)
-                or f"subgraph_{len(subgraph_names)}"
-            )
+            name = subgraph_match.group(1) or subgraph_match.group(2) or f"subgraph_{len(subgraph_names)}"
             subgraph_stack.append(name)
             subgraph_names.append(name)
             max_depth = max(max_depth, len(subgraph_stack))
@@ -403,15 +413,32 @@ def parse_mermaid_file(content: str) -> MermaidStats:
         # Capture standalone node references in edges
         potential_nodes = re.findall(r"\b([A-Za-z_][A-Za-z0-9_]*)\b", line)
         keywords = {
-            "graph", "flowchart", "subgraph", "end", "TB", "TD", "BT", "RL", "LR",
-            "classDef", "class", "linkStyle", "style", "click", "callback",
-            "direction", "default", "fill", "stroke", "color", "width",
+            "graph",
+            "flowchart",
+            "subgraph",
+            "end",
+            "TB",
+            "TD",
+            "BT",
+            "RL",
+            "LR",
+            "classDef",
+            "class",
+            "linkStyle",
+            "style",
+            "click",
+            "callback",
+            "direction",
+            "default",
+            "fill",
+            "stroke",
+            "color",
+            "width",
         }
         for pn in potential_nodes:
             if pn.lower() not in {k.lower() for k in keywords}:
-                if (
-                    re.search(rf"\b{pn}\b\s*(?:-->|-.->|==>|<--|<-.|-<)", line)
-                    or re.search(rf"(?:-->|-.->|==>|<--|<-.|-<)\s*\b{pn}\b", line)
+                if re.search(rf"\b{pn}\b\s*(?:-->|-.->|==>|<--|<-.|-<)", line) or re.search(
+                    rf"(?:-->|-.->|==>|<--|<-.|-<)\s*\b{pn}\b", line
                 ):
                     nodes.add(pn)
 
@@ -430,7 +457,7 @@ def parse_mermaid_file(content: str) -> MermaidStats:
 # =============================================================================
 
 
-def calculate_complexity(stats: MermaidStats, config: ThresholdConfig) -> dict:
+def calculate_complexity(stats: MermaidStats, config: ThresholdConfig) -> dict[str, Any]:
     """
     Calculate complexity metrics from parsed stats.
 
@@ -454,10 +481,7 @@ def calculate_complexity(stats: MermaidStats, config: ThresholdConfig) -> dict:
     cyclomatic = e - n + 2
 
     # Formula breakdown for transparency
-    formula = (
-        f"({n} + {e}×{config.edge_weight} + {s}×{config.subgraph_weight}) "
-        f"× (1 + {d}×{config.depth_weight})"
-    )
+    formula = f"({n} + {e}×{config.edge_weight} + {s}×{config.subgraph_weight}) × (1 + {d}×{config.depth_weight})"
     breakdown = {
         "nodes_contribution": n,
         "edges_contribution": round(e * config.edge_weight, 2),
@@ -476,9 +500,7 @@ def calculate_complexity(stats: MermaidStats, config: ThresholdConfig) -> dict:
     }
 
 
-def rate_complexity(
-    vcs: float, nodes: int, config: ThresholdConfig
-) -> tuple[str, str]:
+def rate_complexity(vcs: float, nodes: int, config: ThresholdConfig) -> tuple[str, str]:
     """Rate the diagram complexity. Returns (rating, color)."""
     if nodes <= config.node_ideal and vcs <= config.vcs_ideal:
         return "ideal", "green"
@@ -542,27 +564,18 @@ def recommend_subdivisions(
         suggested = min(subgraphs, count + 1)
         if suggested >= count:
             subgraph_adjusted = suggested
-            subgraph_reason = (
-                f"Adjusted from {count} to {suggested} to align with "
-                f"{subgraphs} existing subgraphs"
-            )
+            subgraph_reason = f"Adjusted from {count} to {suggested} to align with {subgraphs} existing subgraphs"
 
     final_count = subgraph_adjusted
 
     # Build rationale
     rationale_parts = []
     if nodes_exceeds_acceptable:
-        rationale_parts.append(
-            f"Node count ({nodes}) exceeds threshold ({config.node_acceptable})"
-        )
+        rationale_parts.append(f"Node count ({nodes}) exceeds threshold ({config.node_acceptable})")
     if vcs_exceeds_acceptable:
-        rationale_parts.append(
-            f"VCS ({vcs:.1f}) exceeds threshold ({config.vcs_acceptable})"
-        )
+        rationale_parts.append(f"VCS ({vcs:.1f}) exceeds threshold ({config.vcs_acceptable})")
     if nodes_exceeds_complex:
-        rationale_parts.append(
-            f"⚠️ Nodes ({nodes}) exceed cognitive limit ({config.node_complex})"
-        )
+        rationale_parts.append(f"⚠️ Nodes ({nodes}) exceed cognitive limit ({config.node_complex})")
     if subgraph_adjusted != count:
         rationale_parts.append(f"Using {subgraphs} subgraphs as boundaries")
 
@@ -578,11 +591,7 @@ def recommend_subdivisions(
 
         for i in range(final_count):
             # Estimate VCS for each split
-            est_vcs = (
-                est_nodes
-                + est_edges * config.edge_weight
-                + est_subgraphs * config.subgraph_weight
-            )
+            est_vcs = est_nodes + est_edges * config.edge_weight + est_subgraphs * config.subgraph_weight
             est_rating, _ = rate_complexity(est_vcs, est_nodes, config)
 
             split_info = {
@@ -600,9 +609,7 @@ def recommend_subdivisions(
                 # Recursive: calculate how many MORE splits needed
                 additional = math.ceil(est_vcs / config.vcs_target)
                 if additional > 1:
-                    split_info["recursive_recommendation"] = (
-                        f"This split would need {additional} further subdivisions"
-                    )
+                    split_info["recursive_recommendation"] = f"This split would need {additional} further subdivisions"
 
     working_out = SubdivisionWorkingOut(
         nodes=nodes,
@@ -717,38 +724,45 @@ def format_report(report: ComplexityReport, show_working: bool = False) -> str:
         "",
         "📐 Visual Complexity Score (VCS):",
         f"   Formula:  {dim}{report.vcs_formula}{r}",
-        f"   Result:   {c}{bold}{report.visual_complexity_score:6.1f}{r}  {dim}(acceptable ≤{report.thresholds_used['vcs_acceptable']}){r}",
+        f"   Result:   {c}{bold}{report.visual_complexity_score:6.1f}{r}"  # noqa: E501
+        f"  {dim}(acceptable ≤{report.thresholds_used['vcs_acceptable']}){r}",
     ]
 
     # VCS breakdown
     bd = report.vcs_breakdown
-    lines.extend([
-        "",
-        f"   {dim}Breakdown:{r}",
-        f"     Nodes:     {bd['nodes_contribution']:6.1f}",
-        f"     Edges:   + {bd['edges_contribution']:6.1f}  {dim}({report.edges} × edge_weight){r}",
-        f"     Subgraphs:+ {bd['subgraphs_contribution']:6.1f}  {dim}({report.subgraphs} × subgraph_weight){r}",
-        f"     Base VCS:  {bd['base_vcs']:6.1f}",
-        f"     × Depth:   {bd['depth_multiplier']:6.2f}  {dim}(1 + {report.max_depth} × depth_weight){r}",
-        f"     ─────────────────",
-        f"     Final:     {bd['final_vcs']:6.1f}",
-    ])
+    lines.extend(
+        [
+            "",
+            f"   {dim}Breakdown:{r}",
+            f"     Nodes:     {bd['nodes_contribution']:6.1f}",
+            f"     Edges:   + {bd['edges_contribution']:6.1f}  {dim}({report.edges} × edge_weight){r}",
+            f"     Subgraphs:+ {bd['subgraphs_contribution']:6.1f}  {dim}({report.subgraphs} × subgraph_weight){r}",
+            f"     Base VCS:  {bd['base_vcs']:6.1f}",
+            f"     × Depth:   {bd['depth_multiplier']:6.2f}  {dim}(1 + {report.max_depth} × depth_weight){r}",
+            "     ─────────────────",
+            f"     Final:     {bd['final_vcs']:6.1f}",
+        ]
+    )
 
-    lines.extend([
-        "",
-        f"   Edge Density:          {report.edge_density:6.4f}",
-        f"   Cyclomatic Complexity: {report.cyclomatic_complexity:6d}",
-        "",
-        f"🎯 Rating: {rating_emoji.get(report.rating, '❓')} {c}{bold}{report.rating.upper()}{r}",
-    ])
+    lines.extend(
+        [
+            "",
+            f"   Edge Density:          {report.edge_density:6.4f}",
+            f"   Cyclomatic Complexity: {report.cyclomatic_complexity:6d}",
+            "",
+            f"🎯 Rating: {rating_emoji.get(report.rating, '❓')} {c}{bold}{report.rating.upper()}{r}",
+        ]
+    )
 
     if report.needs_subdivision:
-        lines.extend([
-            "",
-            f"⚠️  {bold}SUBDIVISION RECOMMENDED{r}",
-            f"   Recommended splits: {bold}{report.recommended_subdivisions}{r}",
-            f"   Rationale: {report.subdivision_rationale}",
-        ])
+        lines.extend(
+            [
+                "",
+                f"⚠️  {bold}SUBDIVISION RECOMMENDED{r}",
+                f"   Recommended splits: {bold}{report.recommended_subdivisions}{r}",
+                f"   Rationale: {report.subdivision_rationale}",
+            ]
+        )
 
         if report.subgraph_names:
             names = ", ".join(report.subgraph_names[:5])
@@ -759,53 +773,62 @@ def format_report(report: ComplexityReport, show_working: bool = False) -> str:
         # Show working out if requested
         if show_working and report.working_out:
             wo = report.working_out
-            lines.extend([
-                "",
-                f"📝 {bold}Calculation Working Out:{r}",
-                "",
-                "   Step 1: Check thresholds",
-                f"     Nodes ({wo.nodes}) > acceptable ({report.thresholds_used['node_acceptable']})? "
-                f"{'YES ❌' if wo.nodes_exceeds_acceptable else 'NO ✓'}",
-                f"     VCS ({wo.vcs:.1f}) > acceptable ({report.thresholds_used['vcs_acceptable']})? "
-                f"{'YES ❌' if wo.vcs_exceeds_acceptable else 'NO ✓'}",
-                "",
-                "   Step 2: Calculate node-based splits",
-                f"     {wo.node_based_formula}",
-                f"     → {wo.node_based_splits} split(s) needed",
-                "",
-                "   Step 3: Calculate VCS-based splits",
-                f"     {wo.vcs_based_formula}",
-                f"     → {wo.vcs_based_splits} split(s) needed",
-                "",
-                "   Step 4: Take maximum",
-                f"     max({wo.node_based_splits}, {wo.vcs_based_splits}) = "
-                f"{max(wo.node_based_splits, wo.vcs_based_splits)}",
-            ])
+            lines.extend(
+                [
+                    "",
+                    f"📝 {bold}Calculation Working Out:{r}",
+                    "",
+                    "   Step 1: Check thresholds",
+                    f"     Nodes ({wo.nodes}) > acceptable ({report.thresholds_used['node_acceptable']})? "
+                    f"{'YES ❌' if wo.nodes_exceeds_acceptable else 'NO ✓'}",
+                    f"     VCS ({wo.vcs:.1f}) > acceptable ({report.thresholds_used['vcs_acceptable']})? "
+                    f"{'YES ❌' if wo.vcs_exceeds_acceptable else 'NO ✓'}",
+                    "",
+                    "   Step 2: Calculate node-based splits",
+                    f"     {wo.node_based_formula}",
+                    f"     → {wo.node_based_splits} split(s) needed",
+                    "",
+                    "   Step 3: Calculate VCS-based splits",
+                    f"     {wo.vcs_based_formula}",
+                    f"     → {wo.vcs_based_splits} split(s) needed",
+                    "",
+                    "   Step 4: Take maximum",
+                    f"     max({wo.node_based_splits}, {wo.vcs_based_splits}) = "
+                    f"{max(wo.node_based_splits, wo.vcs_based_splits)}",
+                ]
+            )
 
             if wo.subgraph_adjusted_splits != max(wo.node_based_splits, wo.vcs_based_splits):
-                lines.extend([
-                    "",
-                    "   Step 5: Subgraph adjustment",
-                    f"     {wo.subgraph_adjustment_reason}",
-                ])
+                lines.extend(
+                    [
+                        "",
+                        "   Step 5: Subgraph adjustment",
+                        f"     {wo.subgraph_adjustment_reason}",
+                    ]
+                )
 
-            lines.extend([
-                "",
-                f"   {bold}Final recommendation: {wo.final_splits} split(s){r}",
-            ])
+            lines.extend(
+                [
+                    "",
+                    f"   {bold}Final recommendation: {wo.final_splits} split(s){r}",
+                ]
+            )
 
             # Show recursive analysis
             if wo.estimated_per_split:
-                lines.extend([
-                    "",
-                    f"🔄 {bold}Estimated Per-Split Complexity:{r}",
-                ])
+                lines.extend(
+                    [
+                        "",
+                        f"🔄 {bold}Estimated Per-Split Complexity:{r}",
+                    ]
+                )
                 any_needs_further = False
                 for split in wo.estimated_per_split:
                     split_color = color_codes.get(
-                        {"ideal": "green", "acceptable": "yellow", "complex": "orange", "critical": "red"}
-                        .get(split["estimated_rating"], ""),
-                        ""
+                        {"ideal": "green", "acceptable": "yellow", "complex": "orange", "critical": "red"}.get(
+                            split["estimated_rating"], ""
+                        ),
+                        "",
                     )
                     status = "✓" if split["estimated_rating"] in ("ideal", "acceptable") else "⚠️"
                     lines.append(
@@ -819,23 +842,28 @@ def format_report(report: ComplexityReport, show_working: bool = False) -> str:
                             lines.append(f"      └─ {dim}{split['recursive_recommendation']}{r}")
 
                 if any_needs_further:
-                    lines.extend([
-                        "",
-                        f"   ⚠️  {bold}Warning:{r} Some splits would still exceed thresholds.",
-                        f"      Consider increasing splits or reducing detail level.",
-                    ])
+                    lines.extend(
+                        [
+                            "",
+                            f"   ⚠️  {bold}Warning:{r} Some splits would still exceed thresholds.",
+                            "      Consider increasing splits or reducing detail level.",
+                        ]
+                    )
     else:
-        lines.extend([
-            "",
-            "✅ No subdivision needed - diagram is within visual clarity thresholds",
-        ])
+        lines.extend(
+            [
+                "",
+                "✅ No subdivision needed - diagram is within visual clarity thresholds",
+            ]
+        )
 
     return "\n".join(lines)
 
 
 def format_json_report(reports: list[ComplexityReport]) -> str:
     """Format reports as JSON for programmatic use."""
-    def serialize(obj):
+
+    def serialize(obj: Any) -> Any:
         if hasattr(obj, "__dict__"):
             return asdict(obj)
         return obj
@@ -858,25 +886,29 @@ def format_summary(reports: list[ComplexityReport]) -> str:
         "=" * 70,
     ]
 
-    by_rating = {"ideal": [], "acceptable": [], "complex": [], "critical": []}
+    by_rating: dict[str, list[ComplexityReport]] = {"ideal": [], "acceptable": [], "complex": [], "critical": []}
     for r in reports:
         by_rating[r.rating].append(r)
 
     needs_work = by_rating["complex"] + by_rating["critical"]
 
-    lines.extend([
-        "",
-        f"  ✅ Ideal:      {len(by_rating['ideal']):3d}",
-        f"  🟡 Acceptable: {len(by_rating['acceptable']):3d}",
-        f"  🟠 Complex:    {len(by_rating['complex']):3d}",
-        f"  🔴 Critical:   {len(by_rating['critical']):3d}",
-    ])
+    lines.extend(
+        [
+            "",
+            f"  ✅ Ideal:      {len(by_rating['ideal']):3d}",
+            f"  🟡 Acceptable: {len(by_rating['acceptable']):3d}",
+            f"  🟠 Complex:    {len(by_rating['complex']):3d}",
+            f"  🔴 Critical:   {len(by_rating['critical']):3d}",
+        ]
+    )
 
     if needs_work:
-        lines.extend([
-            "",
-            "📋 Diagrams needing attention:",
-        ])
+        lines.extend(
+            [
+                "",
+                "📋 Diagrams needing attention:",
+            ]
+        )
         for r in sorted(needs_work, key=lambda x: -x.visual_complexity_score):
             lines.append(
                 f"   • {Path(r.file_path).name}: VCS={r.visual_complexity_score:.1f}, "
@@ -893,8 +925,6 @@ def format_summary(reports: list[ComplexityReport]) -> str:
 
 def main() -> int:
     """Main entry point."""
-    import argparse
-
     # Load .env file first (lowest priority)
     ThresholdConfig.load_dotenv()
 
@@ -940,49 +970,33 @@ Environment variables (prefix MERMAID_COMPLEXITY_):
   MERMAID_COMPLEXITY_NODE_TARGET, MERMAID_COMPLEXITY_VCS_TARGET
 """,
     )
-    parser.add_argument(
-        "paths", nargs="+", help="Mermaid files or directories to analyze"
-    )
+    parser.add_argument("paths", nargs="+", help="Mermaid files or directories to analyze")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     parser.add_argument("--summary-only", action="store_true", help="Show only summary")
-    parser.add_argument(
-        "--show-working", "-w", action="store_true",
-        help="Show detailed calculation working out"
-    )
+    parser.add_argument("--show-working", "-w", action="store_true", help="Show detailed calculation working out")
     parser.add_argument("--quiet", "-q", action="store_true", help="Minimal output")
 
     # Preset argument
     parser.add_argument(
-        "--preset", "-p",
+        "--preset",
+        "-p",
         choices=["low-density", "medium-density", "high-density", "low", "med", "high", "l", "m", "h"],
-        help="Detail density preset: low (fewest nodes), medium, high (most nodes, default)"
+        help="Detail density preset: low (fewest nodes), medium, high (most nodes, default)",
     )
 
     # Threshold arguments
     thresh = parser.add_argument_group("Threshold Configuration")
     thresh.add_argument("--node-ideal", type=int, help="Node count for 'ideal' rating")
-    thresh.add_argument(
-        "--node-acceptable", type=int, help="Node count for 'acceptable' rating"
-    )
-    thresh.add_argument(
-        "--node-complex", type=int, help="Node count for 'complex' rating"
-    )
+    thresh.add_argument("--node-acceptable", type=int, help="Node count for 'acceptable' rating")
+    thresh.add_argument("--node-complex", type=int, help="Node count for 'complex' rating")
     thresh.add_argument("--vcs-ideal", type=int, help="VCS for 'ideal' rating")
     thresh.add_argument("--vcs-acceptable", type=int, help="VCS for 'acceptable' rating")
     thresh.add_argument("--vcs-complex", type=int, help="VCS for 'complex' rating")
-    thresh.add_argument(
-        "--node-target", type=int, help="Target nodes per sub-diagram"
-    )
+    thresh.add_argument("--node-target", type=int, help="Target nodes per sub-diagram")
     thresh.add_argument("--vcs-target", type=int, help="Target VCS per sub-diagram")
-    thresh.add_argument(
-        "--edge-weight", type=float, help="Weight for edges in VCS formula"
-    )
-    thresh.add_argument(
-        "--subgraph-weight", type=float, help="Weight for subgraphs in VCS formula"
-    )
-    thresh.add_argument(
-        "--depth-weight", type=float, help="Per-level depth multiplier"
-    )
+    thresh.add_argument("--edge-weight", type=float, help="Weight for edges in VCS formula")
+    thresh.add_argument("--subgraph-weight", type=float, help="Weight for subgraphs in VCS formula")
+    thresh.add_argument("--depth-weight", type=float, help="Per-level depth multiplier")
 
     args = parser.parse_args()
 
@@ -993,10 +1007,17 @@ Environment variables (prefix MERMAID_COMPLEXITY_):
 
     # Apply individual CLI threshold overrides
     cli_threshold_fields = [
-        "node_ideal", "node_acceptable", "node_complex",
-        "vcs_ideal", "vcs_acceptable", "vcs_complex",
-        "node_target", "vcs_target",
-        "edge_weight", "subgraph_weight", "depth_weight",
+        "node_ideal",
+        "node_acceptable",
+        "node_complex",
+        "vcs_ideal",
+        "vcs_acceptable",
+        "vcs_complex",
+        "node_target",
+        "vcs_target",
+        "edge_weight",
+        "subgraph_weight",
+        "depth_weight",
     ]
     for field_name in cli_threshold_fields:
         arg_value = getattr(args, field_name, None)
@@ -1007,9 +1028,11 @@ Environment variables (prefix MERMAID_COMPLEXITY_):
     # Show config info (unless quiet or json output)
     if not args.quiet and not args.json:
         print(f"\n🔧 Using preset: {config.preset_name}")
-        print(f"   Thresholds: nodes ≤{config.node_acceptable}/{config.node_complex}, "
-              f"VCS ≤{config.vcs_acceptable}/{config.vcs_complex}, "
-              f"targets: {config.node_target}/{config.vcs_target}")
+        print(
+            f"   Thresholds: nodes ≤{config.node_acceptable}/{config.node_complex}, "
+            f"VCS ≤{config.vcs_acceptable}/{config.vcs_complex}, "
+            f"targets: {config.node_target}/{config.vcs_target}"
+        )
 
     # Collect all .mmd files
     files: list[Path] = []

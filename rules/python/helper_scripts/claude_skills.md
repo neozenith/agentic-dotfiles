@@ -14,11 +14,49 @@ Every Python script `{name}.py` in a skill's scripts directory MUST have these s
 ```
 .claude/skills/{skill-name}/scripts/
 ├── {name}.py           # Main script with PEP-723 metadata
-├── {name}.sh           # Shell wrapper for uv run
+├── {name}.sh           # Shell wrapper for uv run (see exception below)
 ├── test_{name}.py      # Pytest test file (PEP-723 entry point)
 ├── conftest.py         # Coverage reload fixture
 └── Makefile            # Build automation
 ```
+
+### Exception: Shell Wrappers for Pure Python Scripts
+
+Shell wrappers (`.sh`) exist because Claude Code skills cannot directly invoke `uv`.
+**Skip the `.sh` wrapper** when the script is invoked via `uv run` directly in SKILL.md
+(e.g. `uv run .claude/skills/{skill}/scripts/{name}.py`). Pure Python scripts with no
+system-level side effects qualify. Document the invocation in SKILL.md instead.
+
+### Exception: Shared Makefile and conftest.py
+
+When a skill's `scripts/` directory contains **multiple Python scripts**, all scripts
+MAY share a single `Makefile` and single `conftest.py` rather than having per-script copies:
+
+```
+.claude/skills/{skill-name}/scripts/
+├── script_a.py
+├── script_b.py
+├── test_script_a.py    # Each script still has its own test file
+├── test_script_b.py
+├── conftest.py         # Shared: reloads ALL modules in the directory
+└── Makefile            # Shared: test/lint/typecheck targets cover all scripts
+```
+
+The shared `conftest.py` reloads every module in the directory:
+
+```python
+import importlib
+import script_a, script_b
+import pytest
+
+@pytest.fixture(autouse=True, scope="session")
+def _reload_for_coverage() -> None:
+    importlib.reload(script_a)
+    importlib.reload(script_b)
+```
+
+The shared `Makefile` uses `SCRIPTS = script_a script_b` and expands targets with
+`$(addsuffix .py,$(SCRIPTS))` so adding a new script only requires updating that one variable.
 
 ## Python Script Structure (`{name}.py`)
 
@@ -245,10 +283,12 @@ UV = uv run --no-project
 # Shared pytest args to isolate from root pyproject.toml config
 PYTEST_ARGS = -v --rootdir . -o 'addopts='
 
-.PHONY: all test test-cov format format-check lint lint-fix typecheck check fix clean help smoke
+.PHONY: all test test-cov format format-check \
+        lint lint-fix typecheck \
+        check fix clean help smoke ci
 
 # Default target
-all: format lint typecheck test
+all: format lint typecheck test-cov
 
 # Run tests via PEP-723 entry point (deps declared in test file)
 test:
@@ -280,7 +320,7 @@ typecheck: fix
 	$(UV) mypy {name}.py --ignore-missing-imports --strict
 
 # Run all checks (CI-friendly)
-check: format-check lint typecheck
+ci: format-check lint typecheck test-cov
 
 # Run all auto-fixers (local development)
 fix: format lint-fix
@@ -305,7 +345,7 @@ help:
 	@echo "  lint        - Lint code with ruff"
 	@echo "  lint-fix    - Lint and auto-fix issues"
 	@echo "  typecheck   - Type check with mypy"
-	@echo "  check       - Run all checks (CI-friendly)"
+	@echo "  ci          - Run all checks (CI-friendly)"
 	@echo "  fix         - Run all auto-fixers"
 	@echo "  smoke       - Quick CLI smoke test"
 	@echo "  clean       - Remove temp files and caches"
