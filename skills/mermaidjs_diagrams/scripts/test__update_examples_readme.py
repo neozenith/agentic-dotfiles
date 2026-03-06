@@ -12,9 +12,8 @@ import tempfile
 from argparse import Namespace
 from pathlib import Path
 
-import pytest
-
 import _update_examples_readme as mod
+import pytest
 
 
 @pytest.fixture
