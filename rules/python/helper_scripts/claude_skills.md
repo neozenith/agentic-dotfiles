@@ -27,6 +27,53 @@ Shell wrappers (`.sh`) exist because Claude Code skills cannot directly invoke `
 (e.g. `uv run .claude/skills/{skill}/scripts/{name}.py`). Pure Python scripts with no
 system-level side effects qualify. Document the invocation in SKILL.md instead.
 
+### Exception: Private Helper Scripts (`_{name}.py`)
+
+Some scripts exist solely to maintain the skill itself (e.g. regenerating a README from
+source files). These are **private helpers** — never referenced in SKILL.md, never invoked
+during skill execution, and never exposed to skill consumers.
+
+**Naming convention:** Prefix with `_` (mirroring Python's private module convention):
+
+```
+.claude/skills/{skill-name}/scripts/
+├── script_a.py             # Public: documented in SKILL.md
+├── _update_examples.py     # Private: maintenance helper, NOT in SKILL.md
+├── test_script_a.py
+├── test__update_examples.py  # Double underscore: test_ prefix + _private name
+├── conftest.py             # Reloads ALL modules including private ones
+└── Makefile
+```
+
+**Rules for private helper scripts:**
+
+- Follow all the same conventions as public scripts (PEP-723, argparse, logging, etc.)
+- Add to `PRIVATE_SCRIPTS` in the Makefile — **not** `SCRIPTS`
+- Include in all quality targets (`format`, `lint`, `typecheck`, `test-cov`)
+- Wire a **`docs` target** to the script; add `docs` as a dependency of `ci`
+- Reload in `conftest.py` alongside public modules
+- **Do NOT add to SKILL.md** — that file describes the skill's public interface
+
+**Makefile pattern for private scripts:**
+
+```makefile
+SCRIPTS = public_script_a public_script_b
+PRIVATE_SCRIPTS = _update_examples
+
+SRC = $(addsuffix .py,$(SCRIPTS)) $(addprefix test_,$(addsuffix .py,$(SCRIPTS))) \
+      $(addsuffix .py,$(PRIVATE_SCRIPTS)) $(addprefix test_,$(addsuffix .py,$(PRIVATE_SCRIPTS)))
+
+# Private script wired to docs target
+docs:
+	$(UV) _update_examples.py
+
+# ci depends on docs so documentation is always regenerated in CI
+ci: format-check lint typecheck test-cov docs
+
+typecheck: fix
+	$(UV) mypy $(addsuffix .py,$(SCRIPTS) $(PRIVATE_SCRIPTS)) --ignore-missing-imports --strict
+```
+
 ### Exception: Shared Makefile and conftest.py
 
 When a skill's `scripts/` directory contains **multiple Python scripts**, all scripts
@@ -300,23 +347,23 @@ test-cov:
 		--cov={name} --cov-report=term-missing --cov-fail-under=90
 
 # Format code with ruff
-format:
+format: $(SRC)
 	$(UV) ruff format $(SRC)
 
 # Check formatting without modifying (for CI)
-format-check:
+format-check: $(SRC)
 	$(UV) ruff format --check $(SRC)
 
 # Lint with ruff (line-length 120 for SQL strings and long docstrings)
-lint: format
+lint: format $(SRC)
 	$(UV) ruff check --line-length 120 $(SRC)
 
 # Lint and auto-fix
-lint-fix: format
+lint-fix: format $(SRC)
 	$(UV) ruff check --fix --line-length 120 $(SRC)
 
 # Type check with mypy
-typecheck: fix
+typecheck: fix {name}.py
 	$(UV) mypy {name}.py --ignore-missing-imports --strict
 
 # Run all checks (CI-friendly)
