@@ -6,7 +6,7 @@ allowed-tools:
   - Grep
   - Glob
   - Bash(.claude/skills/introspect/scripts/introspect_sessions.sh *)
-user-invocable: true
+user-invokable: true
 ---
 
 # Claude Code Introspection

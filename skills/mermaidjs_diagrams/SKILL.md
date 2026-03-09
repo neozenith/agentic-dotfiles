@@ -10,7 +10,7 @@ allowed-tools:
   - Grep
   - Glob
   - Task
-user-invocable: true
+user-invokable: true
 ---
 
 # Context
