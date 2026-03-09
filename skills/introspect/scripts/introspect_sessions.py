@@ -1213,6 +1213,33 @@ def cmd_tools(
     return sorted(summary.values(), key=lambda x: x["call_count"], reverse=True)
 
 
+def _escape_fts5_query(pattern: str) -> str:
+    """Escape a plain-text search string for safe use in FTS5 MATCH.
+
+    FTS5 query syntax reserves characters like . : * + - ^ ( ) " and
+    keywords AND/OR/NOT/NEAR.  Wrapping each whitespace-delimited token
+    in double-quotes forces FTS5 to pass them through the tokenizer as
+    literals rather than interpreting them as operators.
+
+    Examples:
+        common.cpp       -> "common.cpp"
+        foo AND bar      -> "foo" "AND" "bar"
+        hello world      -> "hello" "world"
+        "already quoted"  -> "already quoted"  (pass-through)
+    """
+    stripped = pattern.strip()
+    if not stripped:
+        return '""'
+    # If the user already wrapped the whole thing in double quotes, pass through
+    if stripped.startswith('"') and stripped.endswith('"') and stripped.count('"') == 2:
+        return stripped
+    # Split on whitespace, wrap each token in double-quotes.
+    # Internal double-quotes are escaped by doubling them (FTS5 convention).
+    tokens = stripped.split()
+    escaped = " ".join(f'"{tok.replace(chr(34), chr(34)+chr(34))}"' for tok in tokens)
+    return escaped
+
+
 def cmd_search(
     cache: CacheManager,
     pattern: str,
@@ -1226,6 +1253,9 @@ def cmd_search(
     ensure_cache(cache)
     cursor = cache.conn.cursor()
 
+    # Escape plain-text pattern for FTS5 query syntax
+    fts_pattern = _escape_fts5_query(pattern)
+
     # Use FTS5 for search
     query = """
         SELECT
@@ -1237,7 +1267,7 @@ def cmd_search(
         JOIN source_files sf ON e.source_file_id = sf.id
         WHERE events_fts MATCH ?
     """
-    params: list[Any] = [pattern]
+    params: list[Any] = [fts_pattern]
 
     if project_id:
         query += " AND e.project_id = ?"
