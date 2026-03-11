@@ -353,6 +353,55 @@ Update the project README.md with organized diagram sections:
 *High-level system components* | [Source](docs/diagrams/architecture--overview.mmd)
 ```
 
+# Common Pitfalls
+
+## Multiline Text in Flowchart Node Labels
+
+**`\n` does NOT work** in Mermaid flowchart node labels. It renders as literal garbled characters
+in SVG/PNG output. Use `<br/>` instead:
+
+```mermaid
+flowchart LR
+    %% WRONG — \n renders as garbled symbols in PNG/SVG output
+    A["Line one\nLine two"]
+
+    %% CORRECT — <br/> creates a proper line break
+    B["Line one<br/>Line two"]
+```
+
+Both `<br>` and `<br/>` work, but `<br/>` is preferred for SVG validity.
+
+### Alternative: Markdown Strings (Mermaid v10.7+)
+
+For richer formatting (bold, italic, auto-wrap), use the `` ["`...`"] `` syntax with real
+newlines in the source file:
+
+```mermaid
+flowchart LR
+    A["`**Phase 1**
+    Creates output tables`"]
+```
+
+| Feature | `<br/>` tags | Markdown strings |
+|---------|-------------|-----------------|
+| Mermaid version | All versions | v10.7+ |
+| Inline formatting | No | Bold, italic |
+| Auto-wrap | No | Yes |
+| Source readability | Single line | Multi-line |
+
+### Where `<br/>` does NOT work
+
+- **Subgraph labels**: `subgraph title` does not support `<br/>` — use short single-line titles
+- **Edge labels**: `-->|label|` supports `<br/>` but readability suffers at small scale
+- **erDiagram**: Entity-relationship diagrams use a different syntax and do not support `<br/>`
+
+### Avoid Unicode Special Characters in Node Labels
+
+Characters like `↳` (U+21B3), `→` (U+2192), `·` (U+00B7), and other Unicode symbols can cause
+rendering failures or garbled output in mmdc PNG/SVG generation, even when they display correctly
+in browser-based Mermaid previews. Stick to **ASCII-only text** in node labels and use standard
+punctuation (`-`, `+`, `>`, `*`, `:`) instead of Unicode arrows, bullets, or decorative characters.
+
 # Quick Reference
 
 ## Complexity Formula
@@ -439,6 +488,30 @@ npx -p @mermaid-js/mermaid-cli mmdc \
 make -C docs/diagrams
 make -C docs/diagrams ICON_PACKS="@iconify-json/logos @iconify-json/mdi @iconify-json/carbon"
 ```
+
+### Per-Project Diagram Makefile Target
+
+For subprojects that have mermaid blocks in their own `README.md`, add a `diagrams` target
+that renders all fences into a local `diagrams/` folder. mmdc's markdown input mode extracts
+each mermaid fence as a separate SVG artefact and generates a `README.md` copy with
+`![diagram](./README-N.svg)` links replacing the fences:
+
+```makefile
+# ── Diagrams ─────────────────────────────────────────────────────
+DIAGRAMS_DIR = diagrams
+MMDC = npx -p @mermaid-js/mermaid-cli mmdc
+MMDC_FLAGS = --scale 4 --backgroundColor white
+
+diagrams:                ## Render README Mermaid diagrams to SVG
+	@mkdir -p $(DIAGRAMS_DIR)
+	$(MMDC) -i README.md -o $(DIAGRAMS_DIR)/README.md -a $(DIAGRAMS_DIR)/ $(MMDC_FLAGS)
+
+diagrams-clean:          ## Remove rendered diagram artefacts
+	rm -rf $(DIAGRAMS_DIR)
+```
+
+**Output format**: markdown mode always produces SVG artefacts (vector format — scalable, text-selectable,
+smaller than PNG). For PNG output, render standalone `.mmd` files instead (see `.mmd File Rendering` above).
 
 ## Exit Codes
 
