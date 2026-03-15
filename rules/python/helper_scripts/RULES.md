@@ -8,7 +8,9 @@ paths:
 
 Rules for standalone Python scripts using PEP-723 inline metadata.
 
-> Extends `python/RULES.md` for standalone scripts.
+> Extends `../RULES.md` for standalone scripts.
+
+Detailed snippets [boilerplate](boilerplate.md) and [conventions](../RULES.md) apply.
 
 ## Execution
 
@@ -29,17 +31,6 @@ Every script must declare dependencies at the top:
 # ]
 # ///
 ```
-
-## Naming Convention
-
-Use `<verb>_<task>.py` format (3-5 words for task):
-
-| Verb | Purpose |
-|------|---------|
-| `explore`, `discover`, `analyse` | Research/discovery (can be one-off) |
-| `triage` | Collate logs/tests, suggest next steps |
-| `process`, `export`, `extract`, `migrate`, `convert` | Idempotent transformations |
-| `fix` | One-off corrections (temporary) |
 
 ## Structure
 
