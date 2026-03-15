@@ -768,6 +768,53 @@ class TestSearchCommand:
         result = iss.cmd_search(populated_cache, pattern="help", limit=1)
         assert len(result) <= 1
 
+    def test_cmd_search_special_chars_no_crash(self, populated_cache: iss.CacheManager) -> None:
+        """Test search with FTS5-reserved characters doesn't raise."""
+        # These would all cause 'syntax error near ...' without escaping
+        for pattern in ["common.cpp", "foo:bar", "a*b", "NOT", "a AND b", "(parens)", "a+b", 'with"quote']:
+            result = iss.cmd_search(populated_cache, pattern=pattern)
+            assert isinstance(result, list)
+
+
+class TestEscapeFts5Query:
+    """Tests for _escape_fts5_query helper."""
+
+    def test_plain_word(self) -> None:
+        assert iss._escape_fts5_query("hello") == '"hello"'
+
+    def test_multiple_words(self) -> None:
+        assert iss._escape_fts5_query("hello world") == '"hello" "world"'
+
+    def test_dotted_filename(self) -> None:
+        assert iss._escape_fts5_query("common.cpp") == '"common.cpp"'
+
+    def test_colon(self) -> None:
+        assert iss._escape_fts5_query("foo:bar") == '"foo:bar"'
+
+    def test_boolean_keywords_escaped(self) -> None:
+        assert iss._escape_fts5_query("foo AND bar") == '"foo" "AND" "bar"'
+
+    def test_already_quoted_passthrough(self) -> None:
+        assert iss._escape_fts5_query('"exact phrase"') == '"exact phrase"'
+
+    def test_empty_string(self) -> None:
+        assert iss._escape_fts5_query("") == '""'
+
+    def test_whitespace_only(self) -> None:
+        assert iss._escape_fts5_query("   ") == '""'
+
+    def test_internal_double_quote(self) -> None:
+        result = iss._escape_fts5_query('say "hi" please')
+        # Internal quotes doubled: "say" """hi""" "please"
+        assert '""' in result
+        assert result.startswith('"')
+
+    def test_asterisk(self) -> None:
+        assert iss._escape_fts5_query("foo*") == '"foo*"'
+
+    def test_parentheses(self) -> None:
+        assert iss._escape_fts5_query("(group)") == '"(group)"'
+
 
 class TestSummaryCommand:
     """Tests for the cmd_summary function."""

@@ -10,7 +10,7 @@ allowed-tools:
   - Grep
   - Glob
   - Task
-user-invocable: true
+user-invokable: true
 ---
 
 # Context
@@ -274,15 +274,74 @@ uv run .claude/skills/mermaidjs_diagrams/scripts/mermaid_complexity.py docs/diag
 
 If any remain "complex" or "critical", repeat Step 4 for those diagrams.
 
-## Step 7: Generate PNG Images
+## Step 7: Verify Diagrams in Markdown Documentation
+
+`mmdc` natively handles `.md` input — pass the markdown file directly. It extracts every
+` ```mermaid ` fence, renders each one, and writes output images to the artefacts directory.
+No separate verifier script is needed.
+
+```bash
+# Verify and extract all mermaid blocks from a markdown file (SVG output by default)
+npx -p @mermaid-js/mermaid-cli mmdc \
+  -i docs/plans/my_plan.md \
+  -o docs/diagrams/mmdc/my_plan.md \
+  -a docs/diagrams/mmdc/
+
+# With icon packs (required for architecture-beta diagrams using Iconify icons)
+npx -p @mermaid-js/mermaid-cli mmdc \
+  -i docs/plans/my_plan.md \
+  -o docs/diagrams/mmdc/my_plan.md \
+  -a docs/diagrams/mmdc/ \
+  --iconPacks @iconify-json/logos @iconify-json/mdi
+
+# With custom icon pack from a URL (e.g. Azure icons not on npm)
+npx -p @mermaid-js/mermaid-cli mmdc \
+  -i docs/plans/my_plan.md \
+  -o docs/diagrams/mmdc/my_plan.md \
+  -a docs/diagrams/mmdc/ \
+  --iconPacksNamesAndUrls "azure#https://raw.githubusercontent.com/NakayamaKento/AzureIcons/refs/heads/main/icons.json"
+```
+
+**Outputs:**
+- `-o` path — markdown with `![diagram](image.svg)` links replacing each mermaid fence
+- `-a` directory — one SVG/PNG per diagram block, named `{filename}-{N}.svg`
+
+**Failure signal:** mmdc exits non-zero and prints the offending diagram + error to stderr.
+Fix the fence and re-run until exit code is `0`.
+
+## Step 8: Generate PNG Images
 
 After all agents complete and complexity is validated:
 
 ```bash
+# Generate all PNGs from .mmd files (flowchart diagrams need no icon packs — Font Awesome is built-in)
 make -C docs/diagrams
+
+# Only set ICON_PACKS if using architecture-beta diagrams with Iconify icons
+make -C docs/diagrams ICON_PACKS="@iconify-json/logos @iconify-json/mdi"
 ```
 
-## Step 8: Sync README
+Or generate a single diagram directly:
+
+```bash
+npx -p @mermaid-js/mermaid-cli mmdc \
+  -i docs/diagrams/architecture--overview.mmd \
+  -o docs/diagrams/architecture--overview.png \
+  --scale 4 --backgroundColor white \
+  --iconPacks @iconify-json/logos @iconify-json/mdi
+```
+
+**Working example:** See `.claude/skills/mermaidjs_diagrams/resources/my_flowchart.mmd` (flowchart
+with Font Awesome `fa:fa-icon` icons — no `--iconPacks` flag needed) and its rendered output
+`resources/my_flowchart.png`. Generated with:
+```bash
+npx -p @mermaid-js/mermaid-cli mmdc \
+  -i .claude/skills/mermaidjs_diagrams/resources/my_flowchart.mmd \
+  -o .claude/skills/mermaidjs_diagrams/resources/my_flowchart.png \
+  --scale 4 --backgroundColor white
+```
+
+## Step 9: Sync README
 
 Update the project README.md with organized diagram sections:
 
@@ -293,6 +352,55 @@ Update the project README.md with organized diagram sections:
 ![Architecture Overview](docs/diagrams/architecture--overview.png)
 *High-level system components* | [Source](docs/diagrams/architecture--overview.mmd)
 ```
+
+# Common Pitfalls
+
+## Multiline Text in Flowchart Node Labels
+
+**`\n` does NOT work** in Mermaid flowchart node labels. It renders as literal garbled characters
+in SVG/PNG output. Use `<br/>` instead:
+
+```mermaid
+flowchart LR
+    %% WRONG — \n renders as garbled symbols in PNG/SVG output
+    A["Line one\nLine two"]
+
+    %% CORRECT — <br/> creates a proper line break
+    B["Line one<br/>Line two"]
+```
+
+Both `<br>` and `<br/>` work, but `<br/>` is preferred for SVG validity.
+
+### Alternative: Markdown Strings (Mermaid v10.7+)
+
+For richer formatting (bold, italic, auto-wrap), use the `` ["`...`"] `` syntax with real
+newlines in the source file:
+
+```mermaid
+flowchart LR
+    A["`**Phase 1**
+    Creates output tables`"]
+```
+
+| Feature | `<br/>` tags | Markdown strings |
+|---------|-------------|-----------------|
+| Mermaid version | All versions | v10.7+ |
+| Inline formatting | No | Bold, italic |
+| Auto-wrap | No | Yes |
+| Source readability | Single line | Multi-line |
+
+### Where `<br/>` does NOT work
+
+- **Subgraph labels**: `subgraph title` does not support `<br/>` — use short single-line titles
+- **Edge labels**: `-->|label|` supports `<br/>` but readability suffers at small scale
+- **erDiagram**: Entity-relationship diagrams use a different syntax and do not support `<br/>`
+
+### Avoid Unicode Special Characters in Node Labels
+
+Characters like `↳` (U+21B3), `→` (U+2192), `·` (U+00B7), and other Unicode symbols can cause
+rendering failures or garbled output in mmdc PNG/SVG generation, even when they display correctly
+in browser-based Mermaid previews. Stick to **ASCII-only text** in node labels and use standard
+punctuation (`-`, `+`, `>`, `*`, `:`) instead of Unicode arrows, bullets, or decorative characters.
 
 # Quick Reference
 
@@ -318,6 +426,8 @@ Scopes: overview (low-density), detail (high-density)
 ```
 
 ## CLI Quick Reference
+
+### Complexity Analysis (`mermaid_complexity.py`)
 ```bash
 # Analyze with different density presets
 uv run .claude/skills/mermaidjs_diagrams/scripts/mermaid_complexity.py docs/diagrams/ -p low
@@ -338,6 +448,77 @@ uv run .claude/skills/mermaidjs_diagrams/scripts/mermaid_complexity.py docs/diag
 uv run .claude/skills/mermaidjs_diagrams/scripts/mermaid_complexity.py docs/diagrams/*--detail.mmd -p high
 ```
 
+### Markdown Rendering (`mmdc` native MD input)
+
+`mmdc` handles `.md` files directly — no wrapper script needed:
+
+```bash
+# Render all mermaid fences in a markdown file → SVG artefacts
+npx -p @mermaid-js/mermaid-cli mmdc \
+  -i docs/plans/my_plan.md \
+  -o docs/diagrams/mmdc/my_plan.md \
+  -a docs/diagrams/mmdc/
+
+# With icon packs (npm packages, downloaded from unpkg.com)
+npx -p @mermaid-js/mermaid-cli mmdc \
+  -i docs/plans/my_plan.md \
+  -o docs/diagrams/mmdc/my_plan.md \
+  -a docs/diagrams/mmdc/ \
+  --iconPacks @iconify-json/logos @iconify-json/mdi
+
+# With custom icon packs via URL (prefix#url format)
+npx -p @mermaid-js/mermaid-cli mmdc \
+  -i docs/plans/my_plan.md \
+  -o docs/diagrams/mmdc/my_plan.md \
+  -a docs/diagrams/mmdc/ \
+  --iconPacksNamesAndUrls "azure#https://raw.githubusercontent.com/NakayamaKento/AzureIcons/refs/heads/main/icons.json"
+```
+
+### .mmd File Rendering
+
+```bash
+# Single .mmd → PNG with icon packs
+npx -p @mermaid-js/mermaid-cli mmdc \
+  -i docs/diagrams/my_diagram.mmd \
+  -o docs/diagrams/my_diagram.png \
+  --scale 4 --backgroundColor white \
+  --iconPacks @iconify-json/logos @iconify-json/mdi
+
+# Via Makefile (handles all .mmd → .png with ICON_PACKS variable)
+make -C docs/diagrams
+make -C docs/diagrams ICON_PACKS="@iconify-json/logos @iconify-json/mdi @iconify-json/carbon"
+```
+
+### Per-Project Diagram Makefile Target
+
+For subprojects that have mermaid blocks in their own `README.md`, add a `diagrams` target
+that renders all fences into a local `diagrams/` folder. mmdc's markdown input mode extracts
+each mermaid fence as a separate SVG artefact and generates a `README.md` copy with
+`![diagram](./README-N.svg)` links replacing the fences:
+
+```makefile
+# ── Diagrams ─────────────────────────────────────────────────────
+DIAGRAMS_DIR = diagrams
+MMDC = npx -p @mermaid-js/mermaid-cli mmdc
+MMDC_FLAGS = --scale 4 --backgroundColor white
+
+diagrams:                ## Render README Mermaid diagrams to SVG
+	@mkdir -p $(DIAGRAMS_DIR)
+	$(MMDC) -i README.md -o $(DIAGRAMS_DIR)/README.md -a $(DIAGRAMS_DIR)/ $(MMDC_FLAGS)
+
+diagrams-clean:          ## Remove rendered diagram artefacts
+	rm -rf $(DIAGRAMS_DIR)
+```
+
+**Output format**: markdown mode always produces SVG artefacts (vector format — scalable, text-selectable,
+smaller than PNG). For PNG output, render standalone `.mmd` files instead (see `.mmd File Rendering` above).
+
 ## Exit Codes
+
+### `mermaid_complexity.py`
 - `0`: All diagrams are ideal or acceptable for their density level
 - `1`: One or more diagrams are complex or critical (needs attention)
+
+### `mmdc` (mermaid-cli)
+- `0`: All diagrams rendered successfully
+- `1`: One or more diagrams failed to render (error printed to stderr)

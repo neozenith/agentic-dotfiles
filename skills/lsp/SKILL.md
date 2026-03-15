@@ -6,7 +6,7 @@ allowed-tools:
   - Grep
   - Glob
   - Bash(.claude/skills/lsp/scripts/lsp_explorer.sh *)
-user-invocable: true
+user-invokable: true
 ---
 
 # LSP Explorer

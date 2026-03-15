@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.12"
+# dependencies = []
+# ///
 """
 Universal diagram infrastructure setup for Mermaid.js diagrams.
 Works for ANY project - creates standard structure.
@@ -8,14 +12,39 @@ Usage:
     uv run .claude/skills/mermaidjs_diagrams/scripts/setup_diagrams.py
 """
 
+from __future__ import annotations
+
+import argparse
 import sys
 from pathlib import Path
 
-MAKEFILE_TEMPLATE = """# When a MermaidJS source file (*.mmd) is updated, generate a corresponding PNG file.
-%.png: %.mmd
-\tnpx -p @mermaid-js/mermaid-cli mmdc --input $< --output $@ --theme default --backgroundColor white --scale 4
+# =============================================================================
+# Script Metadata
+# =============================================================================
 
-# A top level target to mark that all diagrams have a correpsonding png that should exist if it doesn't already.
+SCRIPT = Path(__file__)
+SCRIPT_NAME = SCRIPT.stem
+SCRIPT_DIR = SCRIPT.parent.resolve()
+
+MAKEFILE_TEMPLATE = """# Flowchart diagrams use Font Awesome icons (fa:fa-icon syntax) — no icon packs needed.
+# Only set ICON_PACKS if you are rendering architecture-beta diagrams with Iconify icons.
+# Override at the command line: make diagrams ICON_PACKS="@iconify-json/logos @iconify-json/mdi"
+ICON_PACKS ?=
+
+# Build the --iconPacks flag only when ICON_PACKS is non-empty
+ICON_PACK_FLAG = $(if $(strip $(ICON_PACKS)),--iconPacks $(ICON_PACKS),)
+
+# When a MermaidJS source file (*.mmd) is updated, generate a corresponding PNG file.
+%.png: %.mmd
+\tnpx -p @mermaid-js/mermaid-cli mmdc \\
+\t\t--input $< \\
+\t\t--output $@ \\
+\t\t--theme default \\
+\t\t--backgroundColor white \\
+\t\t--scale 4 \\
+\t\t$(ICON_PACK_FLAG)
+
+# A top level target to mark that all diagrams have a corresponding png that should exist if it doesn't already.
 diagrams: $(patsubst %.mmd,%.png,$(wildcard *.mmd))
 
 all: diagrams
@@ -74,13 +103,13 @@ def create_file_from_template(path: Path, content: str, description: str | None 
         return False
 
 
-def setup_diagrams_infrastructure():
-    """Create docs/diagrams infrastructure if missing.
+def setup_diagrams_infrastructure(target_folder: Path | None = None) -> tuple[list[Path], Path]:
+    """Create diagram infrastructure if missing.
 
     Returns list of existing .mmd files or empty list for new setup.
     """
     # Create directory
-    diagrams_dir = Path("docs/diagrams")
+    diagrams_dir = target_folder or Path("docs/diagrams")
     if not diagrams_dir.exists():
         diagrams_dir.mkdir(parents=True)
         print(f"✅ Created directory: {diagrams_dir}")
@@ -96,7 +125,6 @@ def setup_diagrams_infrastructure():
     makefile_content = (diagrams_dir / "Makefile").read_text()
     if "\tnpx" not in makefile_content:
         print("⚠️  Warning: Makefile may not have proper tabs (should use \\t not spaces)")
-
 
     print(f"\n✅ Setup complete! Diagram directory: {diagrams_dir}")
     print("\nNext steps:")
@@ -115,12 +143,21 @@ def setup_diagrams_infrastructure():
     return mmd_files, diagrams_dir
 
 
-def main():
+def main() -> int:
     """Main entry point"""
+    parser = argparse.ArgumentParser(description="Set up Mermaid.js diagram infrastructure.")
+    parser.add_argument(
+        "--target-folder",
+        type=Path,
+        default=None,
+        help="Target directory to create (default: docs/diagrams)",
+    )
+    args = parser.parse_args()
+
     print("🚀 Setting up Mermaid.js diagram infrastructure...\n")
 
     try:
-        mmd_files, diagrams_dir = setup_diagrams_infrastructure()
+        mmd_files, diagrams_dir = setup_diagrams_infrastructure(args.target_folder)
         return 0
     except Exception as e:
         print(f"\n❌ Error during setup: {e}", file=sys.stderr)
