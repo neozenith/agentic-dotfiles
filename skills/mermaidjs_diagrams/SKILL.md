@@ -56,7 +56,7 @@ mkdir -p "${BASE}/${VARIANT}"
 npx -p @mermaid-js/mermaid-cli mmdc \
   -i "${INPUT}" \
   -o "${BASE}/${VARIANT}/document.md" \
-  -e png -t dark -b transparent
+  --scale 4 -e png -t dark -b transparent
 ```
 
 ### Render multiple variants (common use case)
@@ -71,7 +71,7 @@ mkdir -p "${BASE}/${VARIANT}"
 npx -p @mermaid-js/mermaid-cli mmdc \
   -i "${INPUT}" \
   -o "${BASE}/${VARIANT}/document.md" \
-  -e png -t dark -b transparent
+  --scale 4 -e png -t dark -b transparent
 
 # Variant 2: default + white + PNG (for README, light-mode docs)
 VARIANT="default_white_png"
@@ -79,7 +79,7 @@ mkdir -p "${BASE}/${VARIANT}"
 npx -p @mermaid-js/mermaid-cli mmdc \
   -i "${INPUT}" \
   -o "${BASE}/${VARIANT}/document.md" \
-  -e png -t default -b white
+  --scale 4 -e png -t default -b white
 ```
 
 ### Verification use
@@ -87,7 +87,7 @@ npx -p @mermaid-js/mermaid-cli mmdc \
 mmdc exits non-zero if any fence fails. Use as a validation step:
 ```bash
 npx -p @mermaid-js/mermaid-cli mmdc \
-  -i document.md -o /dev/null -a /tmp/mmdc-verify/ -t dark -b transparent
+  -i document.md -o /dev/null -a /tmp/mmdc-verify/ --scale 4 -t dark -b transparent
 ```
 
 ### Icon packs

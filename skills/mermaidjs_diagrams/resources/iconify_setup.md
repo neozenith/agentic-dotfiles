@@ -119,20 +119,20 @@ Pass one or more `@iconify-json/<set>` package names:
 npx -p @mermaid-js/mermaid-cli mmdc \
   -i my_diagram.mmd \
   -o my_diagram.png \
-  --iconPacks @iconify-json/logos
+  --scale 4 --iconPacks @iconify-json/logos
 
 # Multiple packs (space-separated after the flag)
 npx -p @mermaid-js/mermaid-cli mmdc \
   -i my_diagram.mmd \
   -o my_diagram.png \
-  --iconPacks @iconify-json/logos @iconify-json/mdi @iconify-json/carbon
+  --scale 4 --iconPacks @iconify-json/logos @iconify-json/mdi @iconify-json/carbon
 
 # Markdown input with icon packs
 npx -p @mermaid-js/mermaid-cli mmdc \
   -i docs/plans/my_plan.md \
   -o docs/diagrams/mmdc/my_plan.md \
   -a docs/diagrams/mmdc/ \
-  --iconPacks @iconify-json/logos @iconify-json/mdi
+  --scale 4 --iconPacks @iconify-json/logos @iconify-json/mdi
 ```
 
 ### `--iconPacksNamesAndUrls` — custom URL packs
@@ -144,13 +144,13 @@ For icon packs not on npm, or for pinned/custom versions. Format: `prefix#url`:
 npx -p @mermaid-js/mermaid-cli mmdc \
   -i my_diagram.mmd \
   -o my_diagram.png \
-  --iconPacksNamesAndUrls "azure#https://raw.githubusercontent.com/NakayamaKento/AzureIcons/refs/heads/main/icons.json"
+  --scale 4 --iconPacksNamesAndUrls "azure#https://raw.githubusercontent.com/NakayamaKento/AzureIcons/refs/heads/main/icons.json"
 
 # Multiple custom packs (space-separated)
 npx -p @mermaid-js/mermaid-cli mmdc \
   -i my_diagram.mmd \
   -o my_diagram.png \
-  --iconPacksNamesAndUrls \
+  --scale 4 --iconPacksNamesAndUrls \
     "azure#https://example.com/azure-icons.json" \
     "myorg#https://example.com/internal-icons.json"
 
@@ -158,7 +158,7 @@ npx -p @mermaid-js/mermaid-cli mmdc \
 npx -p @mermaid-js/mermaid-cli mmdc \
   -i my_diagram.mmd \
   -o my_diagram.png \
-  --iconPacks @iconify-json/logos @iconify-json/mdi \
+  --scale 4 --iconPacks @iconify-json/logos @iconify-json/mdi \
   --iconPacksNamesAndUrls "azure#https://raw.githubusercontent.com/NakayamaKento/AzureIcons/refs/heads/main/icons.json"
 ```
 

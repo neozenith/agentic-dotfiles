@@ -46,7 +46,7 @@ mkdir -p "${BASE}/${VARIANT}"
 npx -p @mermaid-js/mermaid-cli mmdc \
   -i "${INPUT}" \
   -o "${BASE}/${VARIANT}/document.md" \
-  -e png -t dark -b transparent
+  --scale 4 -e png -t dark -b transparent
 ```
 
 ### Render multiple variants
@@ -63,7 +63,7 @@ mkdir -p "${BASE}/${VARIANT}"
 npx -p @mermaid-js/mermaid-cli mmdc \
   -i "${INPUT}" \
   -o "${BASE}/${VARIANT}/document.md" \
-  -e png -t dark -b transparent
+  --scale 4 -e png -t dark -b transparent
 
 # Variant 2: default + white + PNG (for README, light-mode docs)
 VARIANT="default_white_png"
@@ -71,7 +71,7 @@ mkdir -p "${BASE}/${VARIANT}"
 npx -p @mermaid-js/mermaid-cli mmdc \
   -i "${INPUT}" \
   -o "${BASE}/${VARIANT}/document.md" \
-  -e png -t default -b white
+  --scale 4 -e png -t default -b white
 ```
 
 ### SVG variant (scalable vector output)
@@ -85,7 +85,7 @@ mkdir -p "${BASE}/${VARIANT}"
 npx -p @mermaid-js/mermaid-cli mmdc \
   -i "${INPUT}" \
   -o "${BASE}/${VARIANT}/document.md" \
-  -e svg -t dark -b transparent
+  --scale 4 -e svg -t dark -b transparent
 ```
 
 **Output structure** (for two PNG variants):
@@ -132,7 +132,7 @@ mkdir -p "${BASE}/${VARIANT}"
 npx -p @mermaid-js/mermaid-cli mmdc \
   -i "${INPUT}" \
   -o "${BASE}/${VARIANT}/document.md" \
-  -e png -t dark -b transparent
+  --scale 4 -e png -t dark -b transparent
 ```
 
 **Exit code 0** = all diagrams valid. **Non-zero** = error printed to stderr with
@@ -147,7 +147,7 @@ npx -p @mermaid-js/mermaid-cli mmdc \
   -i document.md \
   -o output_dir/document.md \
   -a output_dir/ \
-  -t dark -b transparent \
+  --scale 4 -t dark -b transparent \
   --iconPacks @iconify-json/logos @iconify-json/mdi
 ```
 
@@ -170,9 +170,9 @@ diagrams:                ## Render README Mermaid diagrams (both variants)
 	@mkdir -p $(DIAGRAMS_DIR)/dark_transparent_png
 	@mkdir -p $(DIAGRAMS_DIR)/default_white_png
 	$(MMDC) -i README.md -o $(DIAGRAMS_DIR)/dark_transparent_png/README.md \
-		-e png -t dark -b transparent
+		--scale 4 -e png -t dark -b transparent
 	$(MMDC) -i README.md -o $(DIAGRAMS_DIR)/default_white_png/README.md \
-		-e png -t default -b white
+		--scale 4 -e png -t default -b white
 
 diagrams-clean:          ## Remove rendered diagram artefacts
 	rm -rf $(DIAGRAMS_DIR)
