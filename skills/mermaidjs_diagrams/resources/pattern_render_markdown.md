@@ -84,7 +84,7 @@ VARIANT="dark_transparent_svg"
 mkdir -p "${BASE}/${VARIANT}"
 npx -p @mermaid-js/mermaid-cli mmdc \
   -i "${INPUT}" \
-  -o "${BASE}/${VARIANT}/" \
+  -a "${BASE}/${VARIANT}/" \
   --scale 4 -e svg -t dark -b transparent
 ```
 
