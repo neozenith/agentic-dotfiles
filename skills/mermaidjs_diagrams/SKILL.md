@@ -49,13 +49,13 @@ The `VARIANT` tuple sets the output folder and the corresponding mmdc flags:
 
 ```bash
 INPUT="path/to/document.md"
-BASE="docs/diagrams/mmdc"
+BASE=".mmdc_cache"
 VARIANT="dark_transparent_png"       # default variant
 
 mkdir -p "${BASE}/${VARIANT}"
 npx -p @mermaid-js/mermaid-cli mmdc \
   -i "${INPUT}" \
-  -o "${BASE}/${VARIANT}/document.md" \
+  -a "${BASE}/${VARIANT}/" \
   --scale 4 -e png -t dark -b transparent
 ```
 
@@ -63,14 +63,14 @@ npx -p @mermaid-js/mermaid-cli mmdc \
 
 ```bash
 INPUT="path/to/document.md"
-BASE="docs/diagrams/mmdc"
+BASE=".mmdc_cache"
 
 # Variant 1: dark + transparent + PNG (default)
 VARIANT="dark_transparent_png"
 mkdir -p "${BASE}/${VARIANT}"
 npx -p @mermaid-js/mermaid-cli mmdc \
   -i "${INPUT}" \
-  -o "${BASE}/${VARIANT}/document.md" \
+  -a "${BASE}/${VARIANT}/" \
   --scale 4 -e png -t dark -b transparent
 
 # Variant 2: default + white + PNG (for README, light-mode docs)
@@ -78,7 +78,7 @@ VARIANT="default_white_png"
 mkdir -p "${BASE}/${VARIANT}"
 npx -p @mermaid-js/mermaid-cli mmdc \
   -i "${INPUT}" \
-  -o "${BASE}/${VARIANT}/document.md" \
+  -a "${BASE}/${VARIANT}/" \
   --scale 4 -e png -t default -b white
 ```
 

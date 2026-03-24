@@ -29,7 +29,7 @@ Examples:
 ## Rendering from a Markdown File
 
 All examples use two variables:
-- `BASE` -- output root directory (e.g. `docs/diagrams/mmdc`)
+- `BASE` -- output root directory (e.g. `.mmdc_cache` since I will often gitignore `.*_cache`)
 - `VARIANT` -- the `{theme}_{backgroundColor}_{format}` tuple
 
 The `-e` flag controls the artefact format (`png` or `svg`). Theme and background
@@ -39,13 +39,13 @@ flags apply to both formats.
 
 ```bash
 INPUT="path/to/document.md"
-BASE="docs/diagrams/mmdc"
+BASE=".mmdc_cache"
 VARIANT="dark_transparent_png"       # default variant
 
 mkdir -p "${BASE}/${VARIANT}"
 npx -p @mermaid-js/mermaid-cli mmdc \
   -i "${INPUT}" \
-  -o "${BASE}/${VARIANT}/document.md" \
+  -a "${BASE}/${VARIANT}/" \
   --scale 4 -e png -t dark -b transparent
 ```
 
@@ -55,14 +55,14 @@ Generate both light and dark variants side by side:
 
 ```bash
 INPUT="path/to/document.md"
-BASE="docs/diagrams/mmdc"
+BASE=".mmdc_cache"
 
 # Variant 1: dark + transparent + PNG (default)
 VARIANT="dark_transparent_png"
 mkdir -p "${BASE}/${VARIANT}"
 npx -p @mermaid-js/mermaid-cli mmdc \
   -i "${INPUT}" \
-  -o "${BASE}/${VARIANT}/document.md" \
+  -a "${BASE}/${VARIANT}/" \
   --scale 4 -e png -t dark -b transparent
 
 # Variant 2: default + white + PNG (for README, light-mode docs)
@@ -70,7 +70,7 @@ VARIANT="default_white_png"
 mkdir -p "${BASE}/${VARIANT}"
 npx -p @mermaid-js/mermaid-cli mmdc \
   -i "${INPUT}" \
-  -o "${BASE}/${VARIANT}/document.md" \
+  -a "${BASE}/${VARIANT}/" \
   --scale 4 -e png -t default -b white
 ```
 
@@ -78,13 +78,13 @@ npx -p @mermaid-js/mermaid-cli mmdc \
 
 ```bash
 INPUT="path/to/document.md"
-BASE="docs/diagrams/mmdc"
+BASE=".mmdc_cache"
 VARIANT="dark_transparent_svg"
 
 mkdir -p "${BASE}/${VARIANT}"
 npx -p @mermaid-js/mermaid-cli mmdc \
   -i "${INPUT}" \
-  -o "${BASE}/${VARIANT}/document.md" \
+  -o "${BASE}/${VARIANT}/" \
   --scale 4 -e svg -t dark -b transparent
 ```
 
@@ -125,13 +125,13 @@ render from the source markdown to verify all fences are valid:
 
 ```bash
 INPUT="path/to/document.md"
-BASE="docs/diagrams/mmdc"
+BASE=".mmdc_cache"
 VARIANT="dark_transparent_png"
 
 mkdir -p "${BASE}/${VARIANT}"
 npx -p @mermaid-js/mermaid-cli mmdc \
   -i "${INPUT}" \
-  -o "${BASE}/${VARIANT}/document.md" \
+  -a "${BASE}/${VARIANT}/" \
   --scale 4 -e png -t dark -b transparent
 ```
 
@@ -145,7 +145,6 @@ When using `architecture-beta` diagrams with Iconify icons, add `--iconPacks`:
 ```bash
 npx -p @mermaid-js/mermaid-cli mmdc \
   -i document.md \
-  -o output_dir/document.md \
   -a output_dir/ \
   --scale 4 -t dark -b transparent \
   --iconPacks @iconify-json/logos @iconify-json/mdi
@@ -169,9 +168,9 @@ MMDC = npx -p @mermaid-js/mermaid-cli mmdc
 diagrams:                ## Render README Mermaid diagrams (both variants)
 	@mkdir -p $(DIAGRAMS_DIR)/dark_transparent_png
 	@mkdir -p $(DIAGRAMS_DIR)/default_white_png
-	$(MMDC) -i README.md -o $(DIAGRAMS_DIR)/dark_transparent_png/README.md \
+	$(MMDC) -i README.md -a $(DIAGRAMS_DIR)/dark_transparent_png/ \
 		--scale 4 -e png -t dark -b transparent
-	$(MMDC) -i README.md -o $(DIAGRAMS_DIR)/default_white_png/README.md \
+	$(MMDC) -i README.md -a $(DIAGRAMS_DIR)/default_white_png/ \
 		--scale 4 -e png -t default -b white
 
 diagrams-clean:          ## Remove rendered diagram artefacts
