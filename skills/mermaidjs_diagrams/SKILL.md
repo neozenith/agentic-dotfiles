@@ -261,6 +261,7 @@ VCS = (nodes + edges*0.5 + subgraphs*3) * (1 + depth*0.1)
 
 | File | Content |
 |------|---------|
+| `resources/color_theming.md` | Color palettes, HSL encoding, dark/light mode safety, subgraph coloring |
 | `resources/pattern_render_markdown.md` | Full render-from-markdown documentation |
 | `resources/pattern_managed_mmd.md` | Full managed `.mmd` workflow documentation |
 | `resources/examples/` | Sample `.mmd` files and rendered PNG output |
