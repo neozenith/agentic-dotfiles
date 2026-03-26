@@ -45,49 +45,78 @@ Output folder: `{theme}_{backgroundColor}_{format}` (e.g. `dark_transparent_png`
 
 ### Render a single variant
 
-The `VARIANT` tuple sets the output folder and the corresponding mmdc flags:
+The `VARIANT` tuple is computed from `THEME`, `BGCOLOR`, and `OUTPUT_FORMAT`:
 
 ```bash
 INPUT="path/to/document.md"
-BASE=".mmdc_cache"
-VARIANT="dark_transparent_png"       # default variant
+INPUT_PATH="path/to/"
+OUTPUT_FORMAT="png"
+THEME=dark
+BGCOLOR=transparent
+VARIANT="${THEME}_${BGCOLOR}_${OUTPUT_FORMAT}"
+OUTPUT_BASE=".mmdc_cache"
+OUTPUT_TARGET="${OUTPUT_BASE}/${VARIANT}/${INPUT_PATH}/"
+OUTPUT="${OUTPUT_BASE}/${VARIANT}/${INPUT}"
 
-mkdir -p "${BASE}/${VARIANT}"
 npx -p @mermaid-js/mermaid-cli mmdc \
   -i "${INPUT}" \
-  -a "${BASE}/${VARIANT}/" \
-  --scale 4 -e png -t dark -b transparent
+  -a "${OUTPUT_TARGET}" \
+  -o "${OUTPUT}" \
+  --scale 4 -e "${OUTPUT_FORMAT}" -t "${THEME}" -b "${BGCOLOR}"
 ```
 
 ### Render multiple variants (common use case)
 
 ```bash
 INPUT="path/to/document.md"
-BASE=".mmdc_cache"
+INPUT_PATH="path/to/"
+OUTPUT_BASE=".mmdc_cache"
 
 # Variant 1: dark + transparent + PNG (default)
-VARIANT="dark_transparent_png"
-mkdir -p "${BASE}/${VARIANT}"
+OUTPUT_FORMAT="png"
+THEME=dark
+BGCOLOR=transparent
+VARIANT="${THEME}_${BGCOLOR}_${OUTPUT_FORMAT}"
+OUTPUT_TARGET="${OUTPUT_BASE}/${VARIANT}/${INPUT_PATH}/"
+OUTPUT="${OUTPUT_BASE}/${VARIANT}/${INPUT}"
 npx -p @mermaid-js/mermaid-cli mmdc \
   -i "${INPUT}" \
-  -a "${BASE}/${VARIANT}/" \
-  --scale 4 -e png -t dark -b transparent
+  -a "${OUTPUT_TARGET}" \
+  -o "${OUTPUT}" \
+  --scale 4 -e "${OUTPUT_FORMAT}" -t "${THEME}" -b "${BGCOLOR}"
 
 # Variant 2: default + white + PNG (for README, light-mode docs)
-VARIANT="default_white_png"
-mkdir -p "${BASE}/${VARIANT}"
+OUTPUT_FORMAT="png"
+THEME=default
+BGCOLOR=white
+VARIANT="${THEME}_${BGCOLOR}_${OUTPUT_FORMAT}"
+OUTPUT_TARGET="${OUTPUT_BASE}/${VARIANT}/${INPUT_PATH}/"
+OUTPUT="${OUTPUT_BASE}/${VARIANT}/${INPUT}"
 npx -p @mermaid-js/mermaid-cli mmdc \
   -i "${INPUT}" \
-  -a "${BASE}/${VARIANT}/" \
-  --scale 4 -e png -t default -b white
+  -a "${OUTPUT_TARGET}" \
+  -o "${OUTPUT}" \
+  --scale 4 -e "${OUTPUT_FORMAT}" -t "${THEME}" -b "${BGCOLOR}"
 ```
 
 ### Verification use
 
 mmdc exits non-zero if any fence fails. Use as a validation step:
 ```bash
+INPUT="document.md"
+OUTPUT_FORMAT="png"
+THEME=dark
+BGCOLOR=transparent
+VARIANT="${THEME}_${BGCOLOR}_${OUTPUT_FORMAT}"
+OUTPUT_BASE="tmp/mmdc-verify"
+OUTPUT_TARGET="${OUTPUT_BASE}/${VARIANT}/"
+OUTPUT="${OUTPUT_BASE}/${VARIANT}/${INPUT}"
+
 npx -p @mermaid-js/mermaid-cli mmdc \
-  -i document.md -o /dev/null -a /tmp/mmdc-verify/ --scale 4 -t dark -b transparent
+  -i "${INPUT}" \
+  -a "${OUTPUT_TARGET}" \
+  -o "${OUTPUT}" \
+  --scale 4 -e "${OUTPUT_FORMAT}" -t "${THEME}" -b "${BGCOLOR}"
 ```
 
 ### Icon packs

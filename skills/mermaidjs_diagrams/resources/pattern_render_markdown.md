@@ -28,25 +28,38 @@ Examples:
 
 ## Rendering from a Markdown File
 
-All examples use two variables:
-- `BASE` -- output root directory (e.g. `.mmdc_cache` since I will often gitignore `.*_cache`)
-- `VARIANT` -- the `{theme}_{backgroundColor}_{format}` tuple
+All examples use these core variables:
 
-The `-e` flag controls the artefact format (`png` or `svg`). Theme and background
-flags apply to both formats.
+| Variable | Purpose |
+|----------|---------|
+| `INPUT` | Source markdown file path |
+| `INPUT_PATH` | Directory portion of `INPUT` |
+| `THEME` | Mermaid theme (`dark`, `default`) |
+| `BGCOLOR` | Background colour (`transparent`, `white`, `black`) |
+| `OUTPUT_FORMAT` | Output format (`png`, `svg`) |
+| `VARIANT` | Computed as `${THEME}_${BGCOLOR}_${OUTPUT_FORMAT}` |
+| `OUTPUT_BASE` | Output root directory (e.g. `.mmdc_cache`) |
+| `OUTPUT_TARGET` | Assets directory: `${OUTPUT_BASE}/${VARIANT}/${INPUT_PATH}/` |
+| `OUTPUT` | Output file: `${OUTPUT_BASE}/${VARIANT}/${INPUT}` |
 
 ### Render a single variant
 
 ```bash
 INPUT="path/to/document.md"
-BASE=".mmdc_cache"
-VARIANT="dark_transparent_png"       # default variant
+INPUT_PATH="path/to/"
+OUTPUT_FORMAT="png"
+THEME=dark
+BGCOLOR=transparent
+VARIANT="${THEME}_${BGCOLOR}_${OUTPUT_FORMAT}"
+OUTPUT_BASE=".mmdc_cache"
+OUTPUT_TARGET="${OUTPUT_BASE}/${VARIANT}/${INPUT_PATH}/"
+OUTPUT="${OUTPUT_BASE}/${VARIANT}/${INPUT}"
 
-mkdir -p "${BASE}/${VARIANT}"
 npx -p @mermaid-js/mermaid-cli mmdc \
   -i "${INPUT}" \
-  -a "${BASE}/${VARIANT}/" \
-  --scale 4 -e png -t dark -b transparent
+  -a "${OUTPUT_TARGET}" \
+  -o "${OUTPUT}" \
+  --scale 4 -e "${OUTPUT_FORMAT}" -t "${THEME}" -b "${BGCOLOR}"
 ```
 
 ### Render multiple variants
@@ -55,48 +68,65 @@ Generate both light and dark variants side by side:
 
 ```bash
 INPUT="path/to/document.md"
-BASE=".mmdc_cache"
+INPUT_PATH="path/to/"
+OUTPUT_BASE=".mmdc_cache"
 
 # Variant 1: dark + transparent + PNG (default)
-VARIANT="dark_transparent_png"
-mkdir -p "${BASE}/${VARIANT}"
+OUTPUT_FORMAT="png"
+THEME=dark
+BGCOLOR=transparent
+VARIANT="${THEME}_${BGCOLOR}_${OUTPUT_FORMAT}"
+OUTPUT_TARGET="${OUTPUT_BASE}/${VARIANT}/${INPUT_PATH}/"
+OUTPUT="${OUTPUT_BASE}/${VARIANT}/${INPUT}"
 npx -p @mermaid-js/mermaid-cli mmdc \
   -i "${INPUT}" \
-  -a "${BASE}/${VARIANT}/" \
-  --scale 4 -e png -t dark -b transparent
+  -a "${OUTPUT_TARGET}" \
+  -o "${OUTPUT}" \
+  --scale 4 -e "${OUTPUT_FORMAT}" -t "${THEME}" -b "${BGCOLOR}"
 
 # Variant 2: default + white + PNG (for README, light-mode docs)
-VARIANT="default_white_png"
-mkdir -p "${BASE}/${VARIANT}"
+OUTPUT_FORMAT="png"
+THEME=default
+BGCOLOR=white
+VARIANT="${THEME}_${BGCOLOR}_${OUTPUT_FORMAT}"
+OUTPUT_TARGET="${OUTPUT_BASE}/${VARIANT}/${INPUT_PATH}/"
+OUTPUT="${OUTPUT_BASE}/${VARIANT}/${INPUT}"
 npx -p @mermaid-js/mermaid-cli mmdc \
   -i "${INPUT}" \
-  -a "${BASE}/${VARIANT}/" \
-  --scale 4 -e png -t default -b white
+  -a "${OUTPUT_TARGET}" \
+  -o "${OUTPUT}" \
+  --scale 4 -e "${OUTPUT_FORMAT}" -t "${THEME}" -b "${BGCOLOR}"
 ```
 
 ### SVG variant (scalable vector output)
 
 ```bash
 INPUT="path/to/document.md"
-BASE=".mmdc_cache"
-VARIANT="dark_transparent_svg"
+INPUT_PATH="path/to/"
+OUTPUT_FORMAT="svg"
+THEME=dark
+BGCOLOR=transparent
+VARIANT="${THEME}_${BGCOLOR}_${OUTPUT_FORMAT}"
+OUTPUT_BASE=".mmdc_cache"
+OUTPUT_TARGET="${OUTPUT_BASE}/${VARIANT}/${INPUT_PATH}/"
+OUTPUT="${OUTPUT_BASE}/${VARIANT}/${INPUT}"
 
-mkdir -p "${BASE}/${VARIANT}"
 npx -p @mermaid-js/mermaid-cli mmdc \
   -i "${INPUT}" \
-  -a "${BASE}/${VARIANT}/" \
-  --scale 4 -e svg -t dark -b transparent
+  -a "${OUTPUT_TARGET}" \
+  -o "${OUTPUT}" \
+  --scale 4 -e "${OUTPUT_FORMAT}" -t "${THEME}" -b "${BGCOLOR}"
 ```
 
 **Output structure** (for two PNG variants):
 ```
-${BASE}/
-├── dark_transparent_png/
+${OUTPUT_BASE}/
+├── dark_transparent_png/${INPUT_PATH}
 │   ├── document.md           # Markdown with ![diagram] image tags
 │   ├── document-1.png        # First mermaid fence rendered
 │   ├── document-2.png        # Second mermaid fence rendered
 │   └── ...
-└── default_white_png/
+└── default_white_png/${INPUT_PATH}
     ├── document.md
     ├── document-1.png
     └── ...
@@ -107,14 +137,19 @@ ${BASE}/
 For individual `.mmd` files (e.g. extracted from markdown or managed separately):
 
 ```bash
-BASE="docs/diagrams"
-VARIANT="dark_transparent_png"
+OUTPUT_FORMAT="png"
+THEME=dark
+BGCOLOR=transparent
+VARIANT="${THEME}_${BGCOLOR}_${OUTPUT_FORMAT}"
+OUTPUT_BASE="docs/diagrams"
+OUTPUT_TARGET="${OUTPUT_BASE}/${VARIANT}/"
+OUTPUT="${OUTPUT_BASE}/${VARIANT}/diagram.${OUTPUT_FORMAT}"
 
-mkdir -p "${BASE}/${VARIANT}"
 npx -p @mermaid-js/mermaid-cli mmdc \
-  -i "${BASE}/diagram.mmd" \
-  -o "${BASE}/${VARIANT}/diagram.png" \
-  --scale 4 -t dark -b transparent
+  -i "${OUTPUT_BASE}/diagram.mmd" \
+  -a "${OUTPUT_TARGET}" \
+  -o "${OUTPUT}" \
+  --scale 4 -e "${OUTPUT_FORMAT}" -t "${THEME}" -b "${BGCOLOR}"
 ```
 
 ## Using as Verification
@@ -125,14 +160,20 @@ render from the source markdown to verify all fences are valid:
 
 ```bash
 INPUT="path/to/document.md"
-BASE=".mmdc_cache"
-VARIANT="dark_transparent_png"
+INPUT_PATH="path/to/"
+OUTPUT_FORMAT="png"
+THEME=dark
+BGCOLOR=transparent
+VARIANT="${THEME}_${BGCOLOR}_${OUTPUT_FORMAT}"
+OUTPUT_BASE=".mmdc_cache"
+OUTPUT_TARGET="${OUTPUT_BASE}/${VARIANT}/${INPUT_PATH}/"
+OUTPUT="${OUTPUT_BASE}/${VARIANT}/${INPUT}"
 
-mkdir -p "${BASE}/${VARIANT}"
 npx -p @mermaid-js/mermaid-cli mmdc \
   -i "${INPUT}" \
-  -a "${BASE}/${VARIANT}/" \
-  --scale 4 -e png -t dark -b transparent
+  -a "${OUTPUT_TARGET}" \
+  -o "${OUTPUT}" \
+  --scale 4 -e "${OUTPUT_FORMAT}" -t "${THEME}" -b "${BGCOLOR}"
 ```
 
 **Exit code 0** = all diagrams valid. **Non-zero** = error printed to stderr with
@@ -143,10 +184,20 @@ the offending diagram. Fix the fence and re-run.
 When using `architecture-beta` diagrams with Iconify icons, add `--iconPacks`:
 
 ```bash
+INPUT="document.md"
+OUTPUT_FORMAT="png"
+THEME=dark
+BGCOLOR=transparent
+VARIANT="${THEME}_${BGCOLOR}_${OUTPUT_FORMAT}"
+OUTPUT_BASE=".mmdc_cache"
+OUTPUT_TARGET="${OUTPUT_BASE}/${VARIANT}/"
+OUTPUT="${OUTPUT_BASE}/${VARIANT}/${INPUT}"
+
 npx -p @mermaid-js/mermaid-cli mmdc \
-  -i document.md \
-  -a output_dir/ \
-  --scale 4 -t dark -b transparent \
+  -i "${INPUT}" \
+  -a "${OUTPUT_TARGET}" \
+  -o "${OUTPUT}" \
+  --scale 4 -e "${OUTPUT_FORMAT}" -t "${THEME}" -b "${BGCOLOR}" \
   --iconPacks @iconify-json/logos @iconify-json/mdi
 ```
 
