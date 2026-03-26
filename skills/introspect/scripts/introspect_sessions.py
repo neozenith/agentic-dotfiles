@@ -52,9 +52,8 @@ SCRIPT_DIR = SCRIPT.parent.resolve()
 CLAUDE_HOME = Path.home() / ".claude"
 PROJECTS_PATH = CLAUDE_HOME / "projects"
 
-# Cache stored in current working directory's .claude/cache/
-CWD_CLAUDE_DIR = Path.cwd() / ".claude"
-CACHE_DIR = CWD_CLAUDE_DIR / "cache"
+# Cache stored in home directory's .claude/cache/introspect_sessions.db
+CACHE_DIR = CLAUDE_HOME / "cache"
 CACHE_DB_PATH = CACHE_DIR / "introspect_sessions.db"
 
 # Logging setup
