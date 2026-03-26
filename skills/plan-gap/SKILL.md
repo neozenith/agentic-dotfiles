@@ -1,23 +1,23 @@
 ---
 name: plan-gap
-description: "Gap analysis planning mode. Iteratively refines a markdown document with Overview, Current State, Desired State, Gap Analysis, Success Measures, and Negative Measures sections. Validates Mermaid diagrams and enforces requirement integrity through structured questioning."
-argument-hint: "<path-to-plan.md | path/to/folder/>"
+description: "Gap analysis planning mode. Iteratively refines a gap analysis document (local markdown file or GitHub issue) with Overview, Current State, Desired State, Gap Analysis, Success Measures, and Negative Measures sections. Validates Mermaid diagrams and enforces requirement integrity through structured questioning."
+argument-hint: "<path-to-plan.md | path/to/folder/ | owner/repo#N | owner/repo>"
 user-invocable: true
 ---
 
 # Gap Analysis Planning Mode
 
-You are now in **planning mode**. Your sole purpose is to iteratively refine a gap analysis document at the target file path provided as an argument.
+You are now in **planning mode**. Your sole purpose is to iteratively refine a gap analysis document at the target provided as an argument. The target may be a local markdown file or a GitHub issue.
 
 ## Target Document
 
-The argument is either a **file path** or a **directory path**.
+The argument is a **file path**, a **directory path**, or a **GitHub issue reference**.
 
 ### Resolving the target
 
-1. **Argument ends with `.md`** — treat it as a file path.
+1. **Argument ends with `.md`** — treat it as a local file path.
    - If the file exists, read it and continue refining from its current state.
-   - If the file does not exist, create it with the skeleton below.
+   - If the file does not exist, create it with the skeleton from `resources/spec-body.md`.
 
 2. **Argument is a directory** (no `.md` extension, or ends with `/`) — create a new
    markdown file inside that directory.
@@ -28,102 +28,76 @@ The argument is either a **file path** or a **directory path**.
    - Confirm the proposed filename with the user before creating it.
    - If the directory does not exist, create it.
 
+3. **Argument matches `owner/repo#N`** or is a **GitHub issue URL**
+   (`https://github.com/owner/repo/issues/N`) — treat it as an existing GitHub issue.
+   - Verify `gh` CLI is available and authenticated (see `resources/gh-cli.md`).
+   - Read the issue via `gh issue view N --repo owner/repo --json number,title,body,state,labels,comments`.
+   - Continue refining from the issue body's current state.
+   - Read `resources/gh-issues.md` for the full mapping between document structure
+     and issue body/comments.
+
+4. **Argument matches `owner/repo`** (no `#N`) — create a **new GitHub issue**.
+   - Verify `gh` CLI is available and authenticated (see `resources/gh-cli.md`).
+   - Ask the user to describe the initiative in one sentence.
+   - Derive an issue title: `"Gap Analysis: <description>"`.
+   - Confirm the proposed title with the user before creating.
+   - Create the issue with the skeleton from `resources/spec-body.md` as the body via `gh issue create`.
+   - The issue title serves as the `# [Title]` heading — do not duplicate it in the body.
+
+### GitHub issue backend notes
+
+When the target is a GitHub issue, these rules apply throughout all phases:
+
+- **Reads** use `gh issue view --json body` (not the Read tool).
+- **Edits** use the read-modify-write pattern: read body → modify section → write
+  entire body back via `gh issue edit --body`. The `--body` flag performs a **full
+  replacement** — see `resources/gh-cli.md` for details.
+- **Phase 2 questions** are posted as **issue comments** (append-only), not body edits.
+  After incorporating an answer, update the body to reflect the new state.
+- **Mermaid diagrams** render natively on GitHub — no mmdc validation is required for
+  rendering correctness, but local mmdc validation is still recommended if available
+  to catch syntax errors before pushing to the issue.
+- **HTML comments** (`<!-- ... -->`) are preserved in the body but hidden in the
+  rendered view — use them for markers (`ASSUMPTION`, `PAYWALLED`, `LINK_NOT_VERIFIED`).
+- **Closing the issue** signals that the gap analysis is complete (Phase 3 passed).
+
 ## Document Structure
 
-The plan document MUST contain exactly these six sections in this order:
+Read `resources/spec-body.md` (relative to this skill's directory) for the full
+specification of the six mandatory sections, their content requirements, Mermaid
+diagram obligations, per-gap detail fields, and the skeleton template.
 
-```markdown
-# [Title]
+**Quick reference — the six sections in order:**
 
-## Overview
-
-Brief description of the initiative, its scope, and why this gap analysis exists.
-
-## Current State
-
-What exists today. Describe the system, process, or situation as it is now.
-MUST contain at least one Mermaid diagram visualizing the current architecture,
-data flow, or relationships. Text alone is not sufficient.
-
-## Desired State
-
-What the target looks like when done. Describe the system, process, or situation
-as it should be after the work is complete.
-MUST contain at least one Mermaid diagram visualizing the target architecture,
-data flow, or relationships. Text alone is not sufficient.
-
-## Gap Analysis
-
-The delta between Current State and Desired State. Each gap should be a concrete,
-actionable item — not a vague aspiration.
-
-### Gap Map
-
-MANDATORY fixed heading. A `flowchart LR` Mermaid diagram mapping the Current State
-items through each identified gap to the corresponding Desired State items. Three
-subgraphs: Current (what exists), Gaps (what must change), Desired (what results).
-Each current-state item connects through a gap node to its desired-state counterpart.
-
-### Dependencies
-
-MANDATORY fixed heading. Immediately follows the Gap Map. A `flowchart LR` Mermaid
-diagram showing the dependency ordering between gaps — which gaps must be resolved
-before others can begin. Use solid arrows for hard dependencies and dotted arrows
-(with labels) for validation/feedback relationships. Include a recommended
-implementation order below the diagram.
-
-### Per-Gap Detail
-
-After the two mandatory diagrams, each gap gets its own `### G<N>: <Title>` subsection
-with these fields:
-
-- **Current:** What exists today for this specific area.
-- **Gap:** What must change and why.
-- **Output(s):** Tangible deliverables produced when this gap is closed. This section
-  completes the sentence "When complete I will have..." List concrete artifacts: source
-  files created or modified (specify language — C, Python, TypeScript, SQL, etc.), test
-  files, configuration changes, documentation updates, new CLI commands, database
-  schema changes, etc. Be specific about file types and locations, not vague ("updated
-  code").
-- **References** *(optional but strongly encouraged):* Exact code snippets of critical
-  logic discovered during the research phase, or parametrised versions representing a
-  pattern. This serves two purposes:
-  1. **Early code review** — surfaces nuanced logic before full implementation, where
-     the failure mode is ambiguity about how the logic should actually work.
-  2. **Few-shot context for agentic execution** — when an agent picks up this plan in
-     a clean context, these snippets act as concrete examples of the intended approach,
-     preventing the agent from reinventing the logic differently.
-
-  Include: function signatures, SQL queries, algorithm pseudocode, API call patterns,
-  grammar definitions, or configuration templates. Annotate with comments explaining
-  non-obvious choices.
-
-## Success Measures
-
-Escalator criteria. Each measure is a mandatory requirement that MUST be satisfied
-for the work to be considered complete. These are not "nice to haves."
-
-When the gap analysis targets a code project change, scan the project for existing
-quality standards files (`CLAUDE.md`, `AGENTS.md`, or equivalent) and incorporate
-their quality checks, testing requirements, and conventions as success measures.
-The project's own bar is the minimum — the gap analysis may add domain-specific
-measures on top, but must never fall below what the project already enforces.
-
-## Negative Measures
-
-Expensive-stairs criteria. Each negative measure describes a failure mode where the
-system appears to work but silently fails to deliver the intended value. These are
-the Type 2 failures — false signals of success.
-```
+1. **Overview** — initiative scope and purpose, bullet-point gap index, Dependencies
+   diagram
+2. **Current State** — what exists today (MUST include Mermaid diagram)
+3. **Desired State** — target end state (MUST include Mermaid diagram)
+4. **Gap Analysis** — delta with mandatory Gap Map (`flowchart TD`), Dependencies
+   (`flowchart LR`), and per-gap `G<N>:` subsections (Current / Gap / Output(s) /
+   References / ADRs)
+5. **Success Measures** — Project Quality Bar (CI Gates) + Domain-Specific Measures
+6. **Negative Measures** — Quality Bar Violations + Domain-Specific Failures
 
 ## Workflow
 
 ### Phase 1: Bootstrap
 
-#### Step 1a: File setup
+#### Step 1a: Target setup
 
-1. If the file does not exist, create it with the skeleton above and a placeholder title.
+**Local markdown file:**
+1. If the file does not exist, create it with the skeleton from `resources/spec-body.md`
+   and a placeholder title.
 2. If the file exists, read it and assess completeness of each section.
+
+**GitHub issue:**
+1. If creating a new issue (`owner/repo`), create it with the skeleton from
+   `resources/spec-body.md` as the body via `gh issue create`.
+2. If resuming an existing issue (`owner/repo#N`), read it via
+   `gh issue view N --repo owner/repo --json number,title,body,state,labels,comments`
+   and assess completeness of each section in the body.
+3. In both cases, cache the issue body locally — see `resources/gh-issues.md` for the
+   local cache pattern.
 
 #### Step 1b: Dual deep research
 
@@ -216,32 +190,121 @@ Combine the verified findings from both tracks into the document:
 
 1. Populate **Current State** from Track A findings (with codebase citations)
 2. Populate **Desired State** from Track B findings (with verified URLs)
-3. Draft initial **Gap Analysis** from the delta between the two
-4. Add Mermaid diagrams to all three sections (minimum one each)
+3. Draft initial **Gap Analysis** from the delta between the two — identify the
+   top-level `G<N>` gaps with titles
+4. Populate the **Overview** with a bullet-point gap index and the Dependencies
+   diagram (both are required per `resources/spec-body.md`)
+5. Add Mermaid diagrams to Current State, Desired State, Gap Map, and Dependencies
+   (minimum one each)
+6. For each gap, seed any obvious `<!-- UNRESOLVED -->` ADR placeholders for design
+   decisions that surfaced during research but lack clear answers
+
+#### Step 1e: Per-gap deep research
+
+Once the top-level gaps are identified, launch **N parallel subagents** (one per gap)
+for a focused second pass. Each subagent receives a fresh context containing only:
+
+- The gap title, the Current and Gap fields as drafted in Step 1d
+- The specific area of the codebase or external landscape to investigate
+
+Each per-gap subagent should:
+
+- Perform deeper codebase exploration (`Explore` or `feature-dev:code-explorer`)
+  targeting the specific files, functions, and data flows relevant to that single gap
+- Identify concrete **Output(s)** — exact file paths to create or modify, with
+  languages, line numbers, and function signatures
+- Draft **References** — code snippets, SQL patterns, algorithm pseudocode, or
+  configuration templates that capture the intended implementation approach
+- Surface any design decisions that need resolution as candidate ADR entries
+
+The per-gap agents run in parallel. Their findings are incorporated into the
+respective `G<N>` subsections, enriching Output(s) and References beyond what the
+broad Phase 1b research could provide.
+
+#### Step 1f: Quality and failure mode research
+
+Launch **two parallel subagents** to research the project's quality standards and
+potential failure modes. These run concurrently with each other (and may overlap
+with Step 1e if context allows).
+
+**Subagent A — Quality standards (feeds Success Measures)**
+
+Launch an `Explore` subagent to scan the project for codified quality standards.
+Search locations in priority order:
+
+1. Agentic configuration — `CLAUDE.md`, `AGENTS.md`, `.claude/rules/`, agentic
+   memory files (`~/.claude/projects/*/memory/`)
+2. CI/CD pipelines — GitHub Actions workflows (`.github/workflows/`), Makefiles,
+   build scripts
+3. Project tooling — `Makefile`, `package.json`, `pyproject.toml`, `biome.json`, `.eslintrc`, `tsconfig.json`,
+   coverage configs, linter configs
+4. README and contributing docs — `README.md`, `CONTRIBUTING.md`, `docs/`
+
+The agent should return a concrete table of CI gates (command, threshold, enforcement
+status) and a list of coding conventions that apply to the gap analysis deliverables.
+
+**Subagent B — Failure modes (feeds Negative Measures)**
+
+Launch an `Explore` subagent to proactively discover potential "gotchas" and failure
+modes. Search locations:
+
+1. Agentic memory — `~/.claude/projects/*/memory/` files, especially feedback-type
+   memories recording past corrections and anti-patterns
+2. Agentic rules — `.claude/rules/` directories for explicit prohibitions and
+   conventions
+3. Lessons learned — project memory entries, `CLAUDE.md` sections on known pitfalls
+4. Test patterns — existing test suites for patterns the project enforces (e.g., no
+   mocking, real database connections, specific assertion patterns)
+
+The agent should return a list of project-specific failure modes that could apply to
+the gap analysis deliverables — scenarios where code appears correct but violates a
+project convention or repeats a known historical mistake.
+
+#### Step 1g: Final assembly
+
+Incorporate findings from Steps 1e and 1f:
+
+1. Update each `G<N>` with enriched Output(s), References, and ADR placeholders
+2. Populate **Success Measures** with Project Quality Bar (from Subagent A) and
+   draft domain-specific measures (one per gap minimum)
+3. Populate **Negative Measures** with Quality Bar Violations (from Subagent B) and
+   draft domain-specific failures
+4. Update the Overview gap index if any gaps were added, merged, or reordered
 5. Summarize what is present and what remains ambiguous — transition to Phase 2
 
 ### Phase 2: Iterative Refinement Loop
 
 Repeat the following cycle until the document is complete and unambiguous:
 
-1. **Evaluate ambiguities** — Review the entire document. Identify all open questions,
-   unclear requirements, missing details, and implicit assumptions.
+1. **Scan unresolved ADRs** — Collect all `<!-- UNRESOLVED -->` ADR entries across
+   every `G<N>` subsection. Each represents a concrete design decision that needs
+   human input. Also identify any non-ADR ambiguities (missing details, implicit
+   assumptions, unclear requirements) and create ADR placeholders for them in the
+   relevant gap.
 
-2. **Rank by impact** — From all identified ambiguities, determine the single most
-   important question. This is the question whose answer will resolve the most
-   uncertainty and likely cascade into answering other open questions.
+2. **Rank by cross-gap impact** — From all unresolved ADRs, determine the single
+   question whose answer would resolve the most ADRs simultaneously. Prefer questions
+   that span multiple gaps — a single answer that resolves ADRs in G2, G5, and G6
+   is better than three separate questions. This is the key mechanism for reducing
+   total questions asked of the human.
 
 3. **Ask one question** — Present the question to the user clearly. Explain:
    - Why this question matters
-   - What sections it affects
-   - What other ambiguities might be resolved by the answer
+   - Which `G<N>` gaps and ADRs it affects (list them)
+   - What other ambiguities would be resolved by the answer (cascade effect)
+   - Also provide your own list of plausible researched recommendations (and reasoning) 
+     for the user to allow easy confirmation for sensible suggestions.
 
-4. **Incorporate the answer** — Update the document with the new information.
-   A single answer often resolves multiple ambiguities — propagate changes to all
-   affected sections.
+4. **Incorporate the answer** — Update the document with the new information:
+   - Resolve the affected ADRs: fill in **Decision** and **Rationale**, remove the
+     `<!-- UNRESOLVED -->` marker
+   - Propagate cascading effects to Output(s), References, Success Measures, and
+     Negative Measures in all affected gaps
+   - Update the Overview gap index if gaps were added, merged, or reordered
 
-5. **Re-evaluate** — After updating, reassess remaining ambiguities. If the document
-   is now complete and internally consistent, exit the loop. Otherwise, return to step 1.
+5. **Re-evaluate** — After updating, reassess remaining unresolved ADRs. If no
+   `<!-- UNRESOLVED -->` markers remain and the document is internally consistent,
+   exit the loop. Otherwise, return to step 1.
 
 ### Phase 3: Validation
 
@@ -292,8 +355,11 @@ After the refinement loop converges:
   - Which section(s) were updated
   - How many ambiguities remain (rough count)
   - What the next most important question is (or "complete — moving to validation")
-- When editing the document, use the Edit tool to make precise changes rather than
+- When editing a **local file**, use the Edit tool to make precise changes rather than
   rewriting the entire file.
+- When editing a **GitHub issue**, read the current body, modify the relevant section,
+  and write the full body back via `gh issue edit --body`. Post refinement questions
+  and status updates as issue comments.
 - Do not add content the user has not confirmed. If you need to make an assumption
   to fill a section, mark it explicitly with `<!-- ASSUMPTION: ... -->` and flag it
   as an ambiguity to resolve.
@@ -305,6 +371,9 @@ This skill bundles the following reference documents in its `resources/` directo
 
 | File | Purpose |
 |------|---------|
+| `resources/spec-body.md` | Document body specification — six sections, per-gap fields, skeleton template |
 | `resources/escalators-not-stairs.md` | Requirement integrity principles — read during Phase 3 validation |
 | `resources/mermaidjs_diagrams.md` | Mermaid diagram reference — rendering, complexity thresholds, pitfalls |
 | `resources/playwright-cli.md` | Link verification — detection, fallback chain, and unverified markers |
+| `resources/gh-cli.md` | GitHub CLI reference — detection, authentication, issue CRUD commands |
+| `resources/gh-issues.md` | GitHub issues backend — local cache, sync protocol, edit history lineage |
