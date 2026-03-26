@@ -56,13 +56,58 @@ data flow, or relationships. Text alone is not sufficient.
 
 The delta between Current State and Desired State. Each gap should be a concrete,
 actionable item — not a vague aspiration.
-MUST contain at least one Mermaid diagram visualizing the transitions, migration
-paths, or dependency graph between current and desired states.
+
+### Gap Map
+
+MANDATORY fixed heading. A `flowchart LR` Mermaid diagram mapping the Current State
+items through each identified gap to the corresponding Desired State items. Three
+subgraphs: Current (what exists), Gaps (what must change), Desired (what results).
+Each current-state item connects through a gap node to its desired-state counterpart.
+
+### Dependencies
+
+MANDATORY fixed heading. Immediately follows the Gap Map. A `flowchart LR` Mermaid
+diagram showing the dependency ordering between gaps — which gaps must be resolved
+before others can begin. Use solid arrows for hard dependencies and dotted arrows
+(with labels) for validation/feedback relationships. Include a recommended
+implementation order below the diagram.
+
+### Per-Gap Detail
+
+After the two mandatory diagrams, each gap gets its own `### G<N>: <Title>` subsection
+with these fields:
+
+- **Current:** What exists today for this specific area.
+- **Gap:** What must change and why.
+- **Output(s):** Tangible deliverables produced when this gap is closed. This section
+  completes the sentence "When complete I will have..." List concrete artifacts: source
+  files created or modified (specify language — C, Python, TypeScript, SQL, etc.), test
+  files, configuration changes, documentation updates, new CLI commands, database
+  schema changes, etc. Be specific about file types and locations, not vague ("updated
+  code").
+- **References** *(optional but strongly encouraged):* Exact code snippets of critical
+  logic discovered during the research phase, or parametrised versions representing a
+  pattern. This serves two purposes:
+  1. **Early code review** — surfaces nuanced logic before full implementation, where
+     the failure mode is ambiguity about how the logic should actually work.
+  2. **Few-shot context for agentic execution** — when an agent picks up this plan in
+     a clean context, these snippets act as concrete examples of the intended approach,
+     preventing the agent from reinventing the logic differently.
+
+  Include: function signatures, SQL queries, algorithm pseudocode, API call patterns,
+  grammar definitions, or configuration templates. Annotate with comments explaining
+  non-obvious choices.
 
 ## Success Measures
 
 Escalator criteria. Each measure is a mandatory requirement that MUST be satisfied
 for the work to be considered complete. These are not "nice to haves."
+
+When the gap analysis targets a code project change, scan the project for existing
+quality standards files (`CLAUDE.md`, `AGENTS.md`, or equivalent) and incorporate
+their quality checks, testing requirements, and conventions as success measures.
+The project's own bar is the minimum — the gap analysis may add domain-specific
+measures on top, but must never fall below what the project already enforces.
 
 ## Negative Measures
 
@@ -118,18 +163,44 @@ This research directly feeds the **Desired State** and **Gap Analysis** sections
 
 #### Step 1c: Link verification
 
-After Track B completes, verify **every external URL** cited in the research using
-the `/playwright-cli` skill (NOT Playwright MCP). For each URL:
+After Track B completes, verify **every external URL** cited in the research.
+Read `resources/playwright-cli.md` (relative to this skill's directory) for the full
+detection logic, command reference, and marker definitions.
 
-1. `playwright-cli open` → `playwright-cli goto <url>`
-2. Check the page loaded successfully:
-   - **Dead link / 404 / 5xx** → remove the citation, note it was unverifiable
-   - **Paywall / login wall** → keep the citation but mark it `<!-- PAYWALLED -->`
-     and note that content could not be independently verified
-   - **Content mismatch** — the page exists but does not contain the asserted content
-     → remove or correct the citation
-   - **Success** — page loads and content matches the assertion → keep the citation
-3. `playwright-cli close` when done
+**Step 1: Detect available verification tooling**
+
+```bash
+which playwright-cli && playwright-cli --version
+```
+
+Select the highest-available tier for the entire verification batch:
+
+| Priority | Tool | Capability |
+|----------|------|------------|
+| Tier 1 | `playwright-cli` (the `/playwright-cli` skill, NOT Playwright MCP) | Full browser — JS rendering, screenshots, interaction |
+| Tier 2 | `WebFetch` tool | HTTP fetch — static content, no JS rendering |
+| Tier 3 | *(none)* | Mark all external links `<!-- LINK_NOT_VERIFIED -->` |
+
+**Step 2: Verify each URL using the selected tier**
+
+For each URL, classify the outcome:
+
+| Outcome | Action |
+|---------|--------|
+| Page loads, content matches assertion | Keep citation as-is |
+| Dead link / 404 / 5xx | Remove citation, note it was unverifiable |
+| Paywall / login wall | Keep citation, mark `<!-- PAYWALLED -->` |
+| Content mismatch (page exists, wrong content) | Remove or correct the citation |
+| JS-required page with Tier 2 only | Mark `<!-- UNVERIFIED: requires browser rendering -->` |
+
+**Step 3: Add document-level warning if any links are unverified**
+
+If operating at Tier 2 or Tier 3, or if any individual URL could not be confirmed,
+add a warning comment at the top of the document:
+
+```markdown
+<!-- WARNING: N external link(s) could not be independently verified. Search for LINK_NOT_VERIFIED to review. -->
+```
 
 **Hallucination is a critical failure.** Every factual claim in the research must be
 traceable to either:
@@ -137,7 +208,7 @@ traceable to either:
 - A verified external URL
 
 Any finding that cannot be corroborated by one of these must be removed or flagged
-as `<!-- UNVERIFIED: ... -->` for the user to confirm.
+with the appropriate marker (see `resources/playwright-cli.md`) for the user to confirm.
 
 #### Step 1d: Research synthesis
 
@@ -236,3 +307,4 @@ This skill bundles the following reference documents in its `resources/` directo
 |------|---------|
 | `resources/escalators-not-stairs.md` | Requirement integrity principles — read during Phase 3 validation |
 | `resources/mermaidjs_diagrams.md` | Mermaid diagram reference — rendering, complexity thresholds, pitfalls |
+| `resources/playwright-cli.md` | Link verification — detection, fallback chain, and unverified markers |
