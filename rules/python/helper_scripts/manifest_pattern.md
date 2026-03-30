@@ -19,6 +19,12 @@ Use this pattern when a script:
 - Has long-running builds where you want to track progress
 - Needs to generate commands for CI/CD or parallel execution
 
+> **Cloud execution?** If the script also needs to offload work to remote compute
+> (EC2 spot instances, parallel workers, SQS dispatch), see
+> [cloud_enabled_manifest_pattern.md](cloud_enabled_manifest_pattern.md) which
+> extends this pattern with S3 remote state, heartbeat monitoring, ASG auto-scaling,
+> and AMI priming.
+
 ## Core Data Structure
 
 Each permutation is a dict with these required fields:

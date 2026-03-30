@@ -89,6 +89,7 @@ Conditional rule files that extend this base. Each activates based on its frontm
 
 - [boilerplate.md](boilerplate.md) — Full implementation templates (PEP-723 metadata, argparse, logging, caching). Use when **creating a new script from scratch**.
 - [manifest_pattern.md](manifest_pattern.md) — Subcommand-based CLI for permutation pipelines with staged builds, hierarchical logging, and self-command generation. Use when a script **generates multiple output artifacts from a cross-product of parameters**.
+- [cloud_enabled_manifest_pattern.md](cloud_enabled_manifest_pattern.md) — Extends the manifest pattern with S3 remote state, SQS worker dispatch, ASG auto-scaling, heartbeat monitoring, and AMI priming. Use when a manifest-pattern script needs to **offload execution to cloud compute** (EC2 spot instances, parallel workers).
 - [triage.md](triage.md) — Conventions for `triage_*.py` scripts that collate logs/tests and suggest next steps. Use when writing a script whose **verb is `triage`**.
 - [aws.md](aws.md) — AWS service interaction rules (authentication, boto3 patterns, error handling). Use when a script **calls AWS APIs or uses boto3/CDK**.
 - [ml_huggingface.md](ml_huggingface.md) — HuggingFace `transformers` pipeline conventions, including the deferred-import exception for heavy ML libraries. Use when a script **loads ML models via HuggingFace**.
