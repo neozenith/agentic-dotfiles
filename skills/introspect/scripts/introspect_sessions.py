@@ -59,7 +59,7 @@ CACHE_DB_PATH = CACHE_DIR / "introspect_sessions.db"
 # Logging setup
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = "4"
+SCHEMA_VERSION = "5"
 
 # ML Analysis Configuration (used by reflect --engine)
 ML_DEFAULT_MODELS: dict[str, str] = {
@@ -269,6 +269,7 @@ CREATE TABLE IF NOT EXISTS events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     uuid TEXT,
     parent_uuid TEXT,
+    prompt_id TEXT,
     event_type TEXT NOT NULL,
     msg_kind TEXT,
     timestamp TEXT,
@@ -297,6 +298,7 @@ CREATE TABLE IF NOT EXISTS events (
 
 CREATE INDEX IF NOT EXISTS idx_events_uuid ON events(uuid);
 CREATE INDEX IF NOT EXISTS idx_events_parent_uuid ON events(parent_uuid);
+CREATE INDEX IF NOT EXISTS idx_events_prompt_id ON events(prompt_id);
 CREATE INDEX IF NOT EXISTS idx_events_session ON events(session_id);
 CREATE INDEX IF NOT EXISTS idx_events_project ON events(project_id);
 CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type);
@@ -714,17 +716,18 @@ class CacheManager:
         for event in events_data:
             cursor.execute(
                 """INSERT INTO events
-                   (uuid, parent_uuid, event_type, msg_kind, timestamp, timestamp_local,
+                   (uuid, parent_uuid, prompt_id, event_type, msg_kind, timestamp, timestamp_local,
                     session_id, project_id, is_sidechain, agent_id, agent_slug,
                     message_role, message_content, message_content_json, model_id,
                     input_tokens, output_tokens, cache_read_tokens,
                     cache_creation_tokens, cache_5m_tokens,
                     token_rate, billable_tokens, total_cost_usd,
                     source_file_id, line_number, raw_json)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     event["uuid"],
                     event["parent_uuid"],
+                    event["prompt_id"],
                     event["event_type"],
                     event["msg_kind"],
                     event["timestamp"],
@@ -789,6 +792,7 @@ class CacheManager:
         timestamp = raw.get("timestamp")
         uuid = raw.get("uuid")
         parent_uuid = raw.get("parentUuid")
+        prompt_id = raw.get("promptId")
         is_sidechain = raw.get("isSidechain", False)
         agent_id = raw.get("agentId")
         agent_slug = raw.get("slug")
@@ -844,6 +848,7 @@ class CacheManager:
         return {
             "uuid": uuid,
             "parent_uuid": parent_uuid,
+            "prompt_id": prompt_id,
             "event_type": event_type,
             "msg_kind": msg_kind,
             "timestamp": timestamp,
@@ -979,6 +984,101 @@ class CacheManager:
         self.conn.commit()
         log.info("Aggregate tables rebuilt")
 
+    def build_cross_agent_edges(self, session_id: str, project_id: str) -> int:
+        """Create synthetic bridge edges from subagent first events to parent tool_use events.
+
+        Subagent JSONL first events have ``parentUuid=null`` — they are roots of their own
+        conversation thread with no direct pointer back to the parent session.
+
+        **Join key — ``promptId``:** Claude Code writes the same ``promptId`` to both:
+
+        - The subagent's first event (the ``user`` message injected as its initial context).
+        - The parent session's ``tool_result`` event that delivers the agent's response.
+
+        The parent ``tool_result`` itself has ``parentUuid`` pointing to the ``tool_use``
+        event that spawned the agent.  So the bridge walks:
+
+            subagent_first.prompt_id == tool_result.prompt_id
+            → tool_result.parent_uuid == tool_use.uuid
+            → bridge edge: (subagent_first_uuid, tool_use_uuid)
+
+        Bridge edges use the subagent's ``source_file_id`` so they are automatically cleaned
+        up and recreated whenever the subagent file is re-ingested.
+
+        Returns the number of new edges inserted.
+        """
+        cursor = self.conn.cursor()
+
+        # Find all subagent "root" events: null parentUuid + non-null agentId + is_sidechain
+        # and a non-null promptId (the join key)
+        subagent_starts = cursor.execute(
+            """
+            SELECT e.uuid, e.prompt_id, e.agent_id, e.source_file_id
+            FROM events e
+            WHERE e.session_id = ?
+              AND e.parent_uuid IS NULL
+              AND e.agent_id IS NOT NULL
+              AND e.is_sidechain = 1
+              AND e.prompt_id IS NOT NULL
+            """,
+            (session_id,),
+        ).fetchall()
+
+        created = 0
+        for start in subagent_starts:
+            # Skip if any bridge edge for this event_uuid already exists
+            exists = cursor.execute(
+                "SELECT 1 FROM event_edges WHERE session_id = ? AND event_uuid = ?",
+                (session_id, start["uuid"]),
+            ).fetchone()
+            if exists:
+                continue
+
+            # Find the tool_use that spawned this agent via prompt_id:
+            #   subagent_first.prompt_id == tool_result.prompt_id
+            #   tool_result.parent_uuid  == tool_use.uuid
+            parent_tool_use = cursor.execute(
+                """
+                SELECT tool_result.parent_uuid AS tool_use_uuid
+                FROM events tool_result
+                WHERE tool_result.session_id = ?
+                  AND tool_result.agent_id IS NULL
+                  AND tool_result.msg_kind = 'tool_result'
+                  AND tool_result.prompt_id = ?
+                  AND tool_result.parent_uuid IS NOT NULL
+                LIMIT 1
+                """,
+                (session_id, start["prompt_id"]),
+            ).fetchone()
+
+            if parent_tool_use and parent_tool_use["tool_use_uuid"]:
+                cursor.execute(
+                    """
+                    INSERT INTO event_edges
+                        (project_id, session_id, event_uuid, parent_event_uuid, source_file_id)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        project_id,
+                        session_id,
+                        start["uuid"],
+                        parent_tool_use["tool_use_uuid"],
+                        start["source_file_id"],
+                    ),
+                )
+                created += 1
+                log.debug(
+                    "bridge edge: %s → %s (agent_id=%s, prompt_id=%s)",
+                    start["uuid"],
+                    parent_tool_use["tool_use_uuid"],
+                    start["agent_id"],
+                    start["prompt_id"],
+                )
+
+        if created:
+            self.conn.commit()
+        return created
+
     def update(self, projects_path: Path) -> dict[str, Any]:
         """Perform incremental update of the cache. Returns counts."""
         log.info("Starting incremental cache update...")
@@ -995,16 +1095,27 @@ class CacheManager:
             log.info("Cache is up to date")
             return {"files_updated": 0, "events_added": 0}
 
-        # Ingest updated files
+        # Ingest updated files, tracking which sessions were touched
         total_events = 0
+        affected_sessions: dict[str, str] = {}  # session_id → project_id
         for file_info in files_to_update:
             events_added = self.ingest_file(file_info)
             total_events += events_added
             log.debug(
                 f"  {file_info['filepath']}: {events_added} events ({file_info.get('reason', 'new')})"
             )
+            sid = file_info.get("session_id")
+            if sid:
+                affected_sessions[sid] = file_info["project_id"]
 
         self.conn.commit()
+
+        # Build cross-agent bridge edges for every touched session
+        total_bridges = 0
+        for sid, pid in affected_sessions.items():
+            total_bridges += self.build_cross_agent_edges(sid, pid)
+        if total_bridges:
+            log.info(f"Created {total_bridges} cross-agent bridge edges")
 
         # Rebuild aggregates
         self.rebuild_aggregates()

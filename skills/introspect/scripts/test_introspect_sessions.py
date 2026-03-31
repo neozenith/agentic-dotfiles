@@ -991,6 +991,218 @@ class TestTraverseSummaryMode:
         assert isinstance(result, list)
 
 
+class TestBuildCrossAgentEdges:
+    """Tests for CacheManager.build_cross_agent_edges (subagent graph integration)."""
+
+    def _make_tool_use_content(self, tool_name: str = "Agent") -> str:
+        """Return JSON for an assistant message with a tool_use content block."""
+        return json.dumps(
+            [{"type": "tool_use", "name": tool_name, "id": "tool-spawn-001", "input": {}}]
+        )
+
+    def _make_bridge_session(
+        self,
+        temp_dir: Path,
+        session_id: str,
+        prompt_id: str = "pid-001",
+        tool_use_uuid: str = "p-uuid-002",
+        tool_result_uuid: str = "p-uuid-003",
+        sa_first_uuid: str = "sa-uuid-001",
+        sa_agent_id: str = "sa001",
+    ) -> tuple[Path, Path]:
+        """Helper: build a parent session with tool_use+tool_result and a subagent file."""
+        project_dir = temp_dir / "-Test-Project"
+        project_dir.mkdir(exist_ok=True)
+
+        parent_file = project_dir / f"{session_id}.jsonl"
+        parent_file.write_text(
+            "\n".join([
+                make_event("user", "p-uuid-001", timestamp="2026-01-01T00:00:00.000Z",
+                           session_id=session_id),
+                # tool_use event that spawns the agent
+                json.dumps({
+                    "type": "assistant", "uuid": tool_use_uuid, "parentUuid": "p-uuid-001",
+                    "timestamp": "2026-01-01T00:00:01.000Z", "sessionId": session_id,
+                    "message": {"role": "assistant",
+                                "content": [{"type": "tool_use", "name": "Agent",
+                                             "id": "toolu-001", "input": {}}]},
+                }),
+                # tool_result event — carries the same promptId as the subagent's first event
+                json.dumps({
+                    "type": "user", "uuid": tool_result_uuid, "parentUuid": tool_use_uuid,
+                    "timestamp": "2026-01-01T00:00:05.000Z", "sessionId": session_id,
+                    "promptId": prompt_id,  # ← natural join key
+                    "message": {"role": "user",
+                                "content": [{"type": "tool_result", "tool_use_id": "toolu-001",
+                                             "content": "agent output"}]},
+                }),
+            ]),
+            encoding="utf-8",
+        )
+
+        sub_dir = project_dir / session_id / "subagents"
+        sub_dir.mkdir(parents=True, exist_ok=True)
+        subagent_file = sub_dir / f"agent-{sa_agent_id}.jsonl"
+        subagent_file.write_text(
+            json.dumps({
+                "type": "user", "uuid": sa_first_uuid, "parentUuid": None,
+                "timestamp": "2026-01-01T00:00:01.003Z", "sessionId": session_id,
+                "agentId": sa_agent_id, "isSidechain": True,
+                "promptId": prompt_id,  # ← same as tool_result.promptId
+                "message": {"role": "user", "content": "do the task"},
+            }),
+            encoding="utf-8",
+        )
+        return parent_file, subagent_file
+
+    def _ingest_pair(
+        self, cache: iss.CacheManager, parent: Path, sub: Path, session_id: str
+    ) -> None:
+        for f, ft in [(parent, "main_session"), (sub, "subagent")]:
+            st = f.stat()
+            cache.ingest_file({
+                "filepath": str(f), "project_id": "-Test-Project",
+                "session_id": session_id, "file_type": ft,
+                "mtime": st.st_mtime, "size_bytes": st.st_size,
+            })
+        cache.conn.commit()
+
+    def test_bridge_edge_created(self, temp_cache: iss.CacheManager, temp_dir: Path) -> None:
+        """Bridge edge links subagent first event to parent tool_use via promptId."""
+        session_id = "sess-bridge-01"
+        parent_file, subagent_file = self._make_bridge_session(
+            temp_dir, session_id, prompt_id="pid-001",
+            tool_use_uuid="p-uuid-002", sa_first_uuid="sa-uuid-001",
+        )
+        self._ingest_pair(temp_cache, parent_file, subagent_file, session_id)
+
+        # Build bridge edges
+        created = temp_cache.build_cross_agent_edges(session_id, "-Test-Project")
+        assert created == 1
+
+        # Verify the edge exists: sa-uuid-001 → p-uuid-002 (tool_use UUID, not tool_result)
+        row = temp_cache.conn.execute(
+            "SELECT parent_event_uuid FROM event_edges WHERE event_uuid = ? AND session_id = ?",
+            ("sa-uuid-001", session_id),
+        ).fetchone()
+        assert row is not None
+        assert row[0] == "p-uuid-002"
+
+    def test_bridge_edge_idempotent(self, temp_cache: iss.CacheManager, temp_dir: Path) -> None:
+        """Calling build_cross_agent_edges twice does not create duplicate edges."""
+        session_id = "sess-bridge-02"
+        parent_file, subagent_file = self._make_bridge_session(
+            temp_dir, session_id, prompt_id="pid-002", sa_first_uuid="sa-uuid-002",
+        )
+        self._ingest_pair(temp_cache, parent_file, subagent_file, session_id)
+
+        first = temp_cache.build_cross_agent_edges(session_id, "-Test-Project")
+        second = temp_cache.build_cross_agent_edges(session_id, "-Test-Project")
+        assert first == 1
+        assert second == 0  # idempotent
+
+        count = temp_cache.conn.execute(
+            "SELECT COUNT(*) FROM event_edges WHERE event_uuid = ?", ("sa-uuid-002",)
+        ).fetchone()[0]
+        assert count == 1
+
+    def test_no_bridge_when_no_prompt_id_match(
+        self, temp_cache: iss.CacheManager, temp_dir: Path
+    ) -> None:
+        """If no tool_result with matching promptId exists, no bridge edge is created."""
+        project_dir = temp_dir / "-Test-Project"
+        project_dir.mkdir(exist_ok=True)
+        session_id = "sess-bridge-03"
+
+        # Parent session: tool_use exists but NO tool_result with matching promptId
+        parent_file = project_dir / f"{session_id}.jsonl"
+        parent_file.write_text(
+            "\n".join([
+                make_event("user", "p-uuid-001", timestamp="2026-01-01T00:00:00.000Z",
+                           session_id=session_id),
+                json.dumps({
+                    "type": "assistant", "uuid": "p-uuid-002", "parentUuid": "p-uuid-001",
+                    "timestamp": "2026-01-01T00:00:01.000Z", "sessionId": session_id,
+                    "message": {"role": "assistant",
+                                "content": [{"type": "tool_use", "name": "Agent",
+                                             "id": "toolu-001", "input": {}}]},
+                }),
+                # tool_result with a DIFFERENT promptId — no match
+                json.dumps({
+                    "type": "user", "uuid": "p-uuid-003", "parentUuid": "p-uuid-002",
+                    "timestamp": "2026-01-01T00:00:05.000Z", "sessionId": session_id,
+                    "promptId": "pid-DIFFERENT",
+                    "message": {"role": "user",
+                                "content": [{"type": "tool_result", "tool_use_id": "toolu-001",
+                                             "content": "output"}]},
+                }),
+            ]),
+            encoding="utf-8",
+        )
+        sub_dir = project_dir / session_id / "subagents"
+        sub_dir.mkdir(parents=True, exist_ok=True)
+        subagent_file = sub_dir / "agent-sa003.jsonl"
+        subagent_file.write_text(
+            json.dumps({
+                "type": "user", "uuid": "sa-uuid-003", "parentUuid": None,
+                "timestamp": "2026-01-01T00:00:01.003Z", "sessionId": session_id,
+                "agentId": "sa003", "isSidechain": True,
+                "promptId": "pid-003",  # ← different from parent's tool_result
+                "message": {"role": "user", "content": "task"},
+            }),
+            encoding="utf-8",
+        )
+        self._ingest_pair(temp_cache, parent_file, subagent_file, session_id)
+
+        created = temp_cache.build_cross_agent_edges(session_id, "-Test-Project")
+        assert created == 0
+
+    def test_graph_traversal_follows_bridge_edges(
+        self, temp_cache: iss.CacheManager, temp_dir: Path
+    ) -> None:
+        """After bridge edges are built, graph traversal reaches subagent events."""
+        session_id = "sess-bridge-04"
+        parent_file, _ = self._make_bridge_session(
+            temp_dir, session_id, prompt_id="pid-004",
+            tool_use_uuid="p-uuid-002", sa_first_uuid="sa-uuid-001", sa_agent_id="sa004",
+        )
+
+        # Add a second subagent event with parentUuid back to the first
+        sub_dir = temp_dir / "-Test-Project" / session_id / "subagents"
+        subagent_file = sub_dir / "agent-sa004.jsonl"
+        existing = subagent_file.read_text(encoding="utf-8")
+        subagent_file.write_text(
+            existing + "\n" + json.dumps({
+                "type": "assistant", "uuid": "sa-uuid-002", "parentUuid": "sa-uuid-001",
+                "timestamp": "2026-01-01T00:00:03.000Z", "sessionId": session_id,
+                "agentId": "sa004", "isSidechain": True,
+                "message": {"role": "assistant",
+                            "content": [{"type": "text", "text": "done"}]},
+            }),
+            encoding="utf-8",
+        )
+        self._ingest_pair(temp_cache, parent_file, subagent_file, session_id)
+
+        # Without bridge edges, traversal from parent tool_use finds only parent events
+        before = iss.cmd_traverse(
+            temp_cache, session_id=session_id, uuid="p-uuid-002", direction="descendants"
+        )
+        before_uuids = {e["uuid"] for e in before}
+        assert "sa-uuid-001" not in before_uuids
+        assert "sa-uuid-002" not in before_uuids
+
+        # After bridge edges, subagent events are reachable
+        temp_cache.build_cross_agent_edges(session_id, "-Test-Project")
+
+        after = iss.cmd_traverse(
+            temp_cache, session_id=session_id, uuid="p-uuid-002", direction="descendants",
+            depth_limit=5,
+        )
+        after_uuids = {e["uuid"] for e in after}
+        assert "sa-uuid-001" in after_uuids
+        assert "sa-uuid-002" in after_uuids
+
+
 class TestEventCommand:
     """Tests for the cmd_event function."""
 
@@ -2765,8 +2977,9 @@ class TestMainParseArgs:
 
     def test_argparse_no_command_prints_help(self) -> None:
         """Test that running with no command prints help."""
+        script = Path(__file__).parent / "introspect_sessions.py"
         result = subprocess.run(
-            [sys.executable, "introspect_sessions.py"],
+            [sys.executable, str(script)],
             capture_output=True,
             text=True,
             timeout=10,
@@ -2780,8 +2993,9 @@ class TestMainParseArgs:
 
     def test_argparse_help(self) -> None:
         """Test that --help works."""
+        script = Path(__file__).parent / "introspect_sessions.py"
         result = subprocess.run(
-            [sys.executable, "introspect_sessions.py", "--help"],
+            [sys.executable, str(script), "--help"],
             capture_output=True,
             text=True,
             timeout=10,

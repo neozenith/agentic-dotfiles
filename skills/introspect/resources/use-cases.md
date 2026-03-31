@@ -3,8 +3,8 @@
 ## Introspect the Current Session
 
 ```bash
-.claude/skills/introspect/scripts/introspect_sessions.sh turns ${CLAUDE_SESSION_ID} -t tool_use
-.claude/skills/introspect/scripts/introspect_sessions.sh turns ${CLAUDE_SESSION_ID} -t human assistant_text
+.claude/skills/introspect/scripts/introspect_sessions.sh traverse ${CLAUDE_SESSION_ID} --all -t tool_use
+.claude/skills/introspect/scripts/introspect_sessions.sh traverse ${CLAUDE_SESSION_ID} --all -t human assistant_text
 ```
 
 ## Debug a Previous Session
@@ -13,11 +13,8 @@
 # Find recent sessions
 .claude/skills/introspect/scripts/introspect_sessions.sh sessions -n 5 -- PROJECT_ID
 
-# Inspect a specific session
-.claude/skills/introspect/scripts/introspect_sessions.sh summary OTHER_SESSION_ID
-
 # View tool results (where errors often appear)
-.claude/skills/introspect/scripts/introspect_sessions.sh turns OTHER_SESSION_ID -t tool_result
+.claude/skills/introspect/scripts/introspect_sessions.sh traverse OTHER_SESSION_ID --all -t tool_result
 ```
 
 ## Analyze Tool Patterns
@@ -33,17 +30,20 @@
 ## Trace a Conversation Thread
 
 ```bash
-# Find all ancestors and descendants of an event
+# Walk ancestors and descendants of a specific event (includes subagent threads via bridge edges)
 .claude/skills/introspect/scripts/introspect_sessions.sh traverse SESSION_ID TARGET_UUID
 
-# Just the response chain (descendants)
-.claude/skills/introspect/scripts/introspect_sessions.sh traverse SESSION_ID TARGET_UUID --direction descendants
+# Just the response chain (descendants — follows into spawned subagents)
+.claude/skills/introspect/scripts/introspect_sessions.sh traverse SESSION_ID TARGET_UUID --direction descendants --depth 10
+
+# Ancestors only — typical for "how did we get here?"
+.claude/skills/introspect/scripts/introspect_sessions.sh traverse SESSION_ID TARGET_UUID --direction ancestors
 ```
 
 ## Token Usage by Subagent
 
 ```bash
-.claude/skills/introspect/scripts/introspect_sessions.sh -f json agents SESSION_ID \
+.claude/skills/introspect/scripts/introspect_sessions.sh -f json traverse SESSION_ID --summary \
     | jq 'sort_by(-.total_billable_tokens)'
 ```
 
@@ -56,30 +56,38 @@ user intent timeline after compaction:
 ```bash
 # All human-typed prompts in the last 24h
 .claude/skills/introspect/scripts/introspect_sessions.sh \
-    --project=PROJECT_ID turns -t human --since 24h
+    --project=PROJECT_ID traverse SESSION_ID --all -t human --since 24h
 
 # Compact timeline view
 .claude/skills/introspect/scripts/introspect_sessions.sh \
-    --project=PROJECT_ID turns -t human --since 24h \
-    | jq '[.[] | {timestamp, session: .session_id[:8], content: (.content[:100])}]'
-
-# Single session intent recovery
-.claude/skills/introspect/scripts/introspect_sessions.sh \
-    turns SESSION_ID -t human
+    --project=PROJECT_ID traverse SESSION_ID --all -t human --since 24h \
+    | jq '[.[] | {timestamp, session: .agent_slug, content: (.content[:100])}]'
 ```
 
 ## Common jq Patterns
 
 ```bash
 # Find tool calls with high frequency
-introspect_sessions.sh turns ${CLAUDE_SESSION_ID} -t tool_use \
-    | jq '[group_by(.tool_name)[] | {tool: .[0].tool_name, count: length}] | sort_by(-.count)'
+introspect_sessions.sh traverse ${CLAUDE_SESSION_ID} --all -t tool_use \
+    | jq '[group_by(.agent_slug)[] | {tool: .[0].agent_slug, count: length}] | sort_by(-.count)'
 
 # Get all sessions for a project
 introspect_sessions.sh sessions -- PROJECT_ID | jq '.[].session_id'
 
-# Extract UUIDs from a session for range queries
-introspect_sessions.sh turns ${CLAUDE_SESSION_ID} | jq '.[0].uuid, .[-1].uuid'
+# Extract first and last UUIDs from a session
+introspect_sessions.sh traverse ${CLAUDE_SESSION_ID} --all | jq '.[0].uuid, .[-1].uuid'
+
+# Total cost for a session
+introspect_sessions.sh traverse ${CLAUDE_SESSION_ID} --all --no-content \
+    | jq '[.[].total_cost_usd] | add'
+
+# Top 5 most expensive events
+introspect_sessions.sh traverse ${CLAUDE_SESSION_ID} --all \
+    | jq 'sort_by(-.total_cost_usd) | .[:5] | .[] | {uuid, msg_kind, total_cost_usd}'
+
+# Cost breakdown by agent/subagent
+introspect_sessions.sh -f json traverse ${CLAUDE_SESSION_ID} --summary \
+    | jq '.[] | {agent: (.agent_slug // "main"), cost: .total_cost_usd}'
 ```
 
 ## Architecture
@@ -98,6 +106,20 @@ The bash wrapper is needed because Claude Code skills cannot directly invoke `uv
 **Zero-dependency script** — uses only Python 3.12+ stdlib (sqlite3, json, argparse, subprocess). No DuckDB or third-party packages required at runtime. ML engines (`--engine`) inject HuggingFace dependencies at runtime via `uv run --with`.
 
 **String substitution:** `${CLAUDE_SESSION_ID}` is substituted with the current session UUID by Claude Code at skill invocation time.
+
+### Subagent Integration
+
+Subagent JSONL files are stored under `{session_id}/subagents/` and ingested with
+`session_id = parent_session_uuid`. Their first event always has `parentUuid=null`
+(a root with no pointer back to the parent). At cache-update time, a **synthetic bridge
+edge** is created from each subagent's first event to the parent's triggering `tool_use`
+event using `promptId` as the natural join key — the same UUID is written to both the
+subagent's first event and the parent's `tool_result` event, whose `parentUuid` points
+to the `tool_use`. This exact join requires no timestamp heuristics.
+
+After bridge edges are built, graph traversal with `--direction descendants` naturally
+follows into spawned subagent threads. The `--all` and `--summary` modes always include
+subagent events since they share the same `session_id`.
 
 ### JSONL Event Structure
 
