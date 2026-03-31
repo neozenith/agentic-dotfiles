@@ -285,7 +285,9 @@ class TestCacheManager:
         # Check FTS tables
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='events_fts'")
         assert cursor.fetchone() is not None
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='reflections_fts'")
+        cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='reflections_fts'"
+        )
         assert cursor.fetchone() is not None
 
     def test_init_schema_idempotent(self, temp_cache: iss.CacheManager) -> None:
@@ -336,6 +338,43 @@ class TestCacheManager:
         cache = iss.CacheManager(db_path=db_path)
         # Don't init schema, just try to clear
         cache.clear()  # Should not raise
+
+    def test_reset_wipes_db_file_and_reinitializes(self, temp_dir: Path) -> None:
+        """Test that reset() deletes the DB file and creates a fresh schema."""
+        db_path = temp_dir / "reset_test.db"
+        cache = iss.CacheManager(db_path=db_path)
+        cache.init_schema()
+        # Insert some data to prove it gets wiped
+        cache.conn.execute("INSERT INTO projects (project_id) VALUES (?)", ("old-project",))
+        cache.conn.commit()
+        assert cache.conn.execute("SELECT COUNT(*) FROM projects").fetchone()[0] == 1
+
+        cache.reset()
+
+        # DB file was deleted and recreated — tables exist and are empty
+        assert db_path.exists()
+        assert cache.conn.execute("SELECT COUNT(*) FROM projects").fetchone()[0] == 0
+
+    def test_reset_creates_fresh_schema_with_new_columns(self, temp_dir: Path) -> None:
+        """Test that reset() recreates the schema, picking up any new columns."""
+        db_path = temp_dir / "schema_test.db"
+        cache = iss.CacheManager(db_path=db_path)
+        cache.init_schema()
+
+        cache.reset()
+
+        # msg_kind column must exist after reset
+        cursor = cache.conn.cursor()
+        cursor.execute("PRAGMA table_info(events)")
+        columns = {row[1] for row in cursor.fetchall()}
+        assert "msg_kind" in columns
+
+    def test_reset_on_nonexistent_db_is_safe(self, temp_dir: Path) -> None:
+        """Test that reset() works safely when the DB file doesn't yet exist."""
+        db_path = temp_dir / "nonexistent.db"
+        cache = iss.CacheManager(db_path=db_path)
+        cache.reset()  # Should not raise
+        assert db_path.exists()
 
     def test_get_status_returns_correct_info(self, temp_cache: iss.CacheManager) -> None:
         """Test that get_status returns expected fields."""
@@ -403,7 +442,9 @@ class TestCacheManager:
         files = temp_cache.discover_files(Path("/nonexistent/path"))
         assert files == []
 
-    def test_update_with_empty_directory(self, temp_dir: Path, temp_cache: iss.CacheManager) -> None:
+    def test_update_with_empty_directory(
+        self, temp_dir: Path, temp_cache: iss.CacheManager
+    ) -> None:
         """Test update with a directory containing no JSONL files."""
         empty_dir = temp_dir / "empty_projects"
         empty_dir.mkdir()
@@ -656,13 +697,34 @@ class TestTurnsCommand:
         assert "turn_num" in result[0]
         assert "content" in result[0]
 
-    def test_cmd_turns_with_event_type_filter(self, populated_cache: iss.CacheManager) -> None:
-        """Test turns with event type filter."""
-        result = iss.cmd_turns(populated_cache, session_id="session-abc", event_types=["user"])
+    def test_cmd_turns_with_msg_kind_filter(self, populated_cache: iss.CacheManager) -> None:
+        """Test turns filtered by msg_kind (the 9-kind classification, not raw event_type)."""
+        # fixture: uuid-001 (human), uuid-005 (human) → 2 results
+        result = iss.cmd_turns(populated_cache, session_id="session-abc", event_types=["human"])
 
-        assert len(result) == 3  # Only user events
+        assert len(result) == 2
         for turn in result:
-            assert turn["type"] == "user"
+            assert turn["msg_kind"] == "human"
+            assert turn["type"] == "user"  # raw event_type still present
+
+    def test_cmd_turns_includes_msg_kind_in_output(self, populated_cache: iss.CacheManager) -> None:
+        """Test that msg_kind field is present in turn output."""
+        result = iss.cmd_turns(populated_cache, session_id="session-abc")
+
+        assert len(result) == 6
+        for turn in result:
+            assert "msg_kind" in turn
+            assert turn["msg_kind"] in {
+                "human",
+                "task_notification",
+                "tool_result",
+                "user_text",
+                "meta",
+                "assistant_text",
+                "thinking",
+                "tool_use",
+                "other",
+            }
 
     def test_cmd_turns_with_limit_and_offset(self, populated_cache: iss.CacheManager) -> None:
         """Test turns with pagination."""
@@ -681,59 +743,82 @@ class TestTurnsCommand:
 
     def test_cmd_turns_with_project_filter(self, populated_cache: iss.CacheManager) -> None:
         """Test turns with project filter."""
-        result = iss.cmd_turns(populated_cache, session_id="session-abc", project_id="-Test-Project")
+        result = iss.cmd_turns(
+            populated_cache, session_id="session-abc", project_id="-Test-Project"
+        )
 
         assert len(result) == 6
 
     def test_cmd_turns_with_time_filter(self, populated_cache: iss.CacheManager) -> None:
         """Test turns with time filters."""
         # This should return all events since they're in the future (2026)
-        result = iss.cmd_turns(populated_cache, session_id="session-abc", since="2026-01-01T00:00:00")
+        result = iss.cmd_turns(
+            populated_cache, session_id="session-abc", since="2026-01-01T00:00:00"
+        )
         assert len(result) == 6
 
 
-class TestToolsCommand:
-    """Tests for the cmd_tools function."""
+class TestComputeEventCosts:
+    """Tests for _compute_event_costs — per-event cost calculation."""
 
-    def test_cmd_tools_summary(self, populated_cache: iss.CacheManager) -> None:
-        """Test tools summary mode."""
-        result = iss.cmd_tools(populated_cache, session_id="session-abc")
+    def test_known_model_returns_cost_fields(self) -> None:
+        """Known model returns correct token_rate, billable_tokens, total_cost_usd."""
+        token_rate, billable, cost = iss._compute_event_costs(
+            "claude-sonnet-4-6", 1_000_000, 0, 0, 0
+        )
+        assert token_rate == 3.0
+        assert billable == 1_000_000.0
+        assert cost == pytest.approx(3.0)
 
+    def test_output_tokens_weighted_5x(self) -> None:
+        """Output tokens count 5× input tokens in billable_tokens."""
+        _, billable, _ = iss._compute_event_costs("claude-sonnet-4-6", 0, 100, 0, 0)
+        assert billable == pytest.approx(500.0)
+
+    def test_cache_read_tokens_weighted_0_1x(self) -> None:
+        """Cache reads cost 0.1× input rate."""
+        _, billable, cost = iss._compute_event_costs("claude-sonnet-4-6", 0, 0, 1_000_000, 0)
+        assert billable == pytest.approx(100_000.0)
+        assert cost == pytest.approx(0.30)
+
+    def test_cache_creation_tokens_weighted_1_25x(self) -> None:
+        """Cache writes cost 1.25× input rate."""
+        _, billable, cost = iss._compute_event_costs("claude-sonnet-4-6", 0, 0, 0, 1_000_000)
+        assert billable == pytest.approx(1_250_000.0)
+        assert cost == pytest.approx(3.75)
+
+    def test_opus_rate(self) -> None:
+        """Opus family uses $15/Mtok input rate."""
+        token_rate, _, cost = iss._compute_event_costs("claude-opus-4-6", 1_000_000, 0, 0, 0)
+        assert token_rate == 15.0
+        assert cost == pytest.approx(15.0)
+
+    def test_unknown_model_yields_zero_cost(self) -> None:
+        """Unknown model returns token_rate=0 and total_cost_usd=0."""
+        token_rate, billable, cost = iss._compute_event_costs(None, 1000, 500, 0, 0)
+        assert token_rate == 0.0
+        assert billable == 0.0
+        assert cost == 0.0
+
+    def test_turns_output_includes_cost_fields(self, populated_cache: iss.CacheManager) -> None:
+        """cmd_turns results carry token_rate, billable_tokens, total_cost_usd from DB."""
+        result = iss.cmd_turns(populated_cache, session_id="session-abc")
         assert len(result) > 0
-        # Should have Read and Bash tools
-        tool_names = {t["tool_name"] for t in result}
-        assert "Read" in tool_names
-        assert "Bash" in tool_names
+        for turn in result:
+            assert "token_rate" in turn
+            assert "billable_tokens" in turn
+            assert "total_cost_usd" in turn
+            assert "cache_read_tokens" in turn
+            assert "cache_creation_tokens" in turn
 
-        # Check structure
-        for tool in result:
-            assert "tool_name" in tool
-            assert "call_count" in tool
-            assert "first_used" in tool
-            assert "last_used" in tool
-
-    def test_cmd_tools_detail(self, populated_cache: iss.CacheManager) -> None:
-        """Test tools detail mode."""
-        result = iss.cmd_tools(populated_cache, session_id="session-abc", detail=True)
-
-        assert len(result) >= 2  # At least Read and Bash
-        for call in result:
-            assert "timestamp" in call
-            assert "tool_name" in call
-            assert "tool_call_id" in call
-            assert "tool_input" in call
-
-    def test_cmd_tools_filter_by_name(self, populated_cache: iss.CacheManager) -> None:
-        """Test tools filtered by name."""
-        result = iss.cmd_tools(populated_cache, session_id="session-abc", tool_name="Read", detail=True)
-
-        assert len(result) == 1
-        assert result[0]["tool_name"] == "Read"
-
-    def test_cmd_tools_with_project_filter(self, populated_cache: iss.CacheManager) -> None:
-        """Test tools with project filter."""
-        result = iss.cmd_tools(populated_cache, session_id="session-abc", project_id="-Test-Project")
+    def test_traverse_output_includes_cost_fields(self, populated_cache: iss.CacheManager) -> None:
+        """cmd_traverse results carry cost fields from DB."""
+        result = iss.cmd_traverse(populated_cache, session_id="session-abc", uuid="uuid-001")
         assert len(result) > 0
+        for event in result:
+            assert "token_rate" in event
+            assert "billable_tokens" in event
+            assert "total_cost_usd" in event
 
 
 class TestSearchCommand:
@@ -771,7 +856,16 @@ class TestSearchCommand:
     def test_cmd_search_special_chars_no_crash(self, populated_cache: iss.CacheManager) -> None:
         """Test search with FTS5-reserved characters doesn't raise."""
         # These would all cause 'syntax error near ...' without escaping
-        for pattern in ["common.cpp", "foo:bar", "a*b", "NOT", "a AND b", "(parens)", "a+b", 'with"quote']:
+        for pattern in [
+            "common.cpp",
+            "foo:bar",
+            "a*b",
+            "NOT",
+            "a AND b",
+            "(parens)",
+            "a+b",
+            'with"quote',
+        ]:
             result = iss.cmd_search(populated_cache, pattern=pattern)
             assert isinstance(result, list)
 
@@ -816,32 +910,6 @@ class TestEscapeFts5Query:
         assert iss._escape_fts5_query("(group)") == '"(group)"'
 
 
-class TestSummaryCommand:
-    """Tests for the cmd_summary function."""
-
-    def test_cmd_summary_basic(self, populated_cache: iss.CacheManager) -> None:
-        """Test basic summary."""
-        result = iss.cmd_summary(populated_cache, session_id="session-abc")
-
-        assert result["session_id"] == "session-abc"
-        assert result["project_id"] == "-Test-Project"
-        assert result["total_events"] == 6
-        assert "user_messages" in result
-        assert "assistant_messages" in result
-        assert "models_used" in result
-        assert "total_cost_usd" in result
-
-    def test_cmd_summary_not_found(self, populated_cache: iss.CacheManager) -> None:
-        """Test summary for non-existent session."""
-        result = iss.cmd_summary(populated_cache, session_id="nonexistent")
-        assert "error" in result
-
-    def test_cmd_summary_with_project(self, populated_cache: iss.CacheManager) -> None:
-        """Test summary with project filter."""
-        result = iss.cmd_summary(populated_cache, session_id="session-abc", project_id="-Test-Project")
-        assert result["session_id"] == "session-abc"
-
-
 class TestModelFamilyFromId:
     """Tests for the model_family_from_id helper function."""
 
@@ -872,89 +940,6 @@ class TestModelFamilyFromId:
         assert iss.model_family_from_id(None) == "unknown"
 
 
-class TestCostCommand:
-    """Tests for the cmd_cost function."""
-
-    def test_cmd_cost_auto_detect(self, populated_cache: iss.CacheManager) -> None:
-        """Test cost estimation with auto-detected model family."""
-        result = iss.cmd_cost(populated_cache, session_id="session-abc")
-
-        assert result["session_id"] == "session-abc"
-        # Auto-detection should find sonnet from the test fixture model IDs
-        assert result["model"] == "sonnet"
-        assert "input_tokens" in result
-        assert "output_tokens" in result
-        assert "total_cost_usd" in result
-
-    def test_cmd_cost_opus(self, populated_cache: iss.CacheManager) -> None:
-        """Test cost estimation with explicit Opus pricing override."""
-        result = iss.cmd_cost(populated_cache, session_id="session-abc", model="opus")
-
-        assert result["session_id"] == "session-abc"
-        assert result["model"] == "opus"
-        assert "input_tokens" in result
-        assert "output_tokens" in result
-        assert "total_cost_usd" in result
-
-    def test_cmd_cost_sonnet(self, populated_cache: iss.CacheManager) -> None:
-        """Test cost estimation with Sonnet pricing."""
-        result = iss.cmd_cost(populated_cache, session_id="session-abc", model="sonnet")
-        assert result["model"] == "sonnet"
-
-    def test_cmd_cost_haiku(self, populated_cache: iss.CacheManager) -> None:
-        """Test cost estimation with Haiku pricing."""
-        result = iss.cmd_cost(populated_cache, session_id="session-abc", model="haiku")
-        assert result["model"] == "haiku"
-
-    def test_cmd_cost_different_pricing(self, populated_cache: iss.CacheManager) -> None:
-        """Test that different model families produce different costs."""
-        opus_result = iss.cmd_cost(populated_cache, session_id="session-abc", model="opus")
-        sonnet_result = iss.cmd_cost(populated_cache, session_id="session-abc", model="sonnet")
-        haiku_result = iss.cmd_cost(populated_cache, session_id="session-abc", model="haiku")
-
-        # Opus should be most expensive, haiku cheapest
-        assert opus_result["total_cost_usd"] > sonnet_result["total_cost_usd"]
-        assert sonnet_result["total_cost_usd"] > haiku_result["total_cost_usd"]
-
-    def test_cmd_cost_not_found(self, populated_cache: iss.CacheManager) -> None:
-        """Test cost for non-existent session."""
-        result = iss.cmd_cost(populated_cache, session_id="nonexistent")
-        assert "error" in result
-
-
-class TestMessagesCommand:
-    """Tests for the cmd_messages function."""
-
-    def test_cmd_messages_all(self, populated_cache: iss.CacheManager) -> None:
-        """Test extracting all messages."""
-        result = iss.cmd_messages(populated_cache, session_id="session-abc")
-
-        assert len(result) > 0
-        for msg in result:
-            assert "role" in msg
-            assert "timestamp" in msg
-            assert "content" in msg
-
-    def test_cmd_messages_user_only(self, populated_cache: iss.CacheManager) -> None:
-        """Test extracting user messages only."""
-        result = iss.cmd_messages(populated_cache, session_id="session-abc", role="user")
-
-        for msg in result:
-            assert msg["role"] == "user"
-
-    def test_cmd_messages_assistant_only(self, populated_cache: iss.CacheManager) -> None:
-        """Test extracting assistant messages only."""
-        result = iss.cmd_messages(populated_cache, session_id="session-abc", role="assistant")
-
-        for msg in result:
-            assert msg["role"] == "assistant"
-
-    def test_cmd_messages_with_limit(self, populated_cache: iss.CacheManager) -> None:
-        """Test messages with limit."""
-        result = iss.cmd_messages(populated_cache, session_id="session-abc", limit=2)
-        assert len(result) <= 2
-
-
 class TestAgentsCommand:
     """Tests for the cmd_agents function."""
 
@@ -971,7 +956,9 @@ class TestAgentsCommand:
 
     def test_cmd_agents_with_project(self, populated_cache: iss.CacheManager) -> None:
         """Test agents with project filter."""
-        result = iss.cmd_agents(populated_cache, session_id="session-abc", project_id="-Test-Project")
+        result = iss.cmd_agents(
+            populated_cache, session_id="session-abc", project_id="-Test-Project"
+        )
         assert isinstance(result, list)
 
 
@@ -1007,7 +994,9 @@ class TestTraverseCommand:
 
     def test_cmd_traverse_both(self, populated_cache: iss.CacheManager) -> None:
         """Test traversing ancestors and descendants."""
-        result = iss.cmd_traverse(populated_cache, session_id="session-abc", uuid="uuid-003", direction="both")
+        result = iss.cmd_traverse(
+            populated_cache, session_id="session-abc", uuid="uuid-003", direction="both"
+        )
 
         uuids = {r["uuid"] for r in result}
         assert "uuid-003" in uuids  # The target
@@ -1051,51 +1040,82 @@ class TestTraverseCommand:
         )
         assert len(result) > 0
 
+    def test_cmd_traverse_defaults_to_most_recent_uuid(
+        self, populated_cache: iss.CacheManager
+    ) -> None:
+        """When uuid is omitted, traverse starts from the most recent event."""
+        result = iss.cmd_traverse(populated_cache, session_id="session-abc")
+        assert len(result) > 0
+        # Most recent event in populated_cache is uuid-003 (latest timestamp)
+        uuids = {r["uuid"] for r in result}
+        assert "uuid-003" in uuids
 
-class TestTrajectoryCommand:
-    """Tests for the cmd_trajectory function."""
+    def test_cmd_traverse_no_uuid_empty_session_returns_empty(
+        self, temp_cache: iss.CacheManager
+    ) -> None:
+        """When session has no events, omitting uuid returns empty list."""
+        result = iss.cmd_traverse(temp_cache, session_id="nonexistent-session")
+        assert result == []
 
-    def test_cmd_trajectory_basic(self, populated_cache: iss.CacheManager) -> None:
-        """Test basic trajectory."""
-        result = iss.cmd_trajectory(populated_cache, session_id="session-abc")
 
-        assert len(result) == 6
-        # Should be sorted by timestamp
-        timestamps = [r.get("timestamp") for r in result]
-        assert timestamps == sorted(timestamps)
+class TestInferProjectId:
+    """Tests for infer_project_id — CWD-based project inference."""
 
-    def test_cmd_trajectory_with_event_types(self, populated_cache: iss.CacheManager) -> None:
-        """Test trajectory filtered by event types."""
-        result = iss.cmd_trajectory(populated_cache, session_id="session-abc", event_types=["user"])
+    def _seed_project(self, cache: iss.CacheManager, project_id: str) -> None:
+        """Insert a minimal project row directly so inference can find it."""
+        cache.conn.execute(
+            "INSERT OR IGNORE INTO projects (project_id, session_count, event_count) VALUES (?, 1, 1)",
+            (project_id,),
+        )
+        cache.conn.commit()
 
-        for event in result:
-            assert event["event_type"] == "user"
+    def test_match_when_cwd_maps_to_known_project(self, temp_cache: iss.CacheManager) -> None:
+        """Returns project_id when CWD encodes to a known project."""
+        fake_cwd = Path("/Users/test/my-project")
+        expected_id = "-Users-test-my-project"
+        self._seed_project(temp_cache, expected_id)
 
-    def test_cmd_trajectory_with_role(self, populated_cache: iss.CacheManager) -> None:
-        """Test trajectory filtered by role."""
-        result = iss.cmd_trajectory(populated_cache, session_id="session-abc", role="user")
+        result = iss.infer_project_id(temp_cache, cwd=fake_cwd)
 
-        for event in result:
-            assert event["message_role"] == "user"
+        assert result == expected_id
 
-    def test_cmd_trajectory_with_uuid_range(self, populated_cache: iss.CacheManager) -> None:
-        """Test trajectory with UUID range."""
-        result = iss.cmd_trajectory(
-            populated_cache,
-            session_id="session-abc",
-            start_uuid="uuid-002",
-            end_uuid="uuid-004",
+    def test_returns_none_when_no_match(self, temp_cache: iss.CacheManager) -> None:
+        """Returns None when CWD has no matching project in the cache."""
+        fake_cwd = Path("/nonexistent/path/nowhere")
+        result = iss.infer_project_id(temp_cache, cwd=fake_cwd)
+        assert result is None
+
+    def test_main_infers_project_and_logs(
+        self, temp_dir: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """main() sets args.project from CWD inference and logs at INFO."""
+        import logging
+
+        fake_cwd = Path("/Users/test/inferred-project")
+        expected_id = "-Users-test-inferred-project"
+
+        db_path = temp_dir / "cache.db"
+        cache = iss.CacheManager(db_path=db_path)
+        cache.init_schema()
+        cache.conn.execute(
+            "INSERT OR IGNORE INTO projects (project_id, session_count, event_count) VALUES (?, 1, 1)",
+            (expected_id,),
+        )
+        cache.conn.commit()
+
+        args = Namespace(
+            command="projects",
+            format="json",
+            cache_frozen=True,
+            cache_rebuild=False,
+            project=None,
         )
 
-        uuids = [r["uuid"] for r in result]
-        assert "uuid-001" not in uuids  # Before start
-        assert "uuid-002" in uuids  # Start
-        assert "uuid-004" in uuids  # End
+        with caplog.at_level(logging.INFO):
+            iss.main(args, cache=cache, projects_path=temp_dir, _cwd=fake_cwd)
 
-    def test_cmd_trajectory_with_limit(self, populated_cache: iss.CacheManager) -> None:
-        """Test trajectory with limit."""
-        result = iss.cmd_trajectory(populated_cache, session_id="session-abc", limit=3)
-        assert len(result) == 3
+        assert args.project == expected_id
+        assert any(expected_id in r.message for r in caplog.records)
 
 
 class TestReflectCommand:
@@ -1370,7 +1390,9 @@ class TestDiscoverFilesEdgeCases:
 class TestIngestEdgeCases:
     """Tests for edge cases in file ingestion."""
 
-    def _make_file_info(self, filepath: str, project_id: str, session_id: str | None, file_type: str) -> dict[str, Any]:
+    def _make_file_info(
+        self, filepath: str, project_id: str, session_id: str | None, file_type: str
+    ) -> dict[str, Any]:
         """Create a file_info dict for ingest_file."""
         import os
 
@@ -1400,7 +1422,9 @@ class TestIngestEdgeCases:
         session_file = project_dir / "session-001.jsonl"
         session_file.write_text("\n".join(lines) + "\n")
 
-        file_info = self._make_file_info(str(session_file), "test-project", "session-001", "main_session")
+        file_info = self._make_file_info(
+            str(session_file), "test-project", "session-001", "main_session"
+        )
         count = temp_cache.ingest_file(file_info)
         assert count == 2  # Both events ingested despite empty line
 
@@ -1420,11 +1444,15 @@ class TestIngestEdgeCases:
         session_file = project_dir / "session-001.jsonl"
         session_file.write_text("\n".join(lines) + "\n")
 
-        file_info = self._make_file_info(str(session_file), "test-project", "session-001", "main_session")
+        file_info = self._make_file_info(
+            str(session_file), "test-project", "session-001", "main_session"
+        )
         count = temp_cache.ingest_file(file_info)
         assert count == 2  # Only valid events ingested
 
-    def test_ingest_agent_root_extracts_session_id(self, temp_cache: iss.CacheManager, temp_dir: Path) -> None:
+    def test_ingest_agent_root_extracts_session_id(
+        self, temp_cache: iss.CacheManager, temp_dir: Path
+    ) -> None:
         """Test that agent_root files extract sessionId from content."""
         projects_dir = temp_dir / "projects"
         projects_dir.mkdir()
@@ -1440,18 +1468,24 @@ class TestIngestEdgeCases:
         count = temp_cache.ingest_file(file_info)
         assert count == 1
 
-    def test_ingest_handles_file_not_found(self, temp_cache: iss.CacheManager, temp_dir: Path) -> None:
+    def test_ingest_handles_file_not_found(
+        self, temp_cache: iss.CacheManager, temp_dir: Path
+    ) -> None:
         """Test that FileNotFoundError is handled gracefully."""
         # Create file first so we can get mtime/size, then delete it
         fake_file = temp_dir / "fake.jsonl"
         fake_file.write_text("{}")
-        file_info = self._make_file_info(str(fake_file), "test-project", "session-001", "main_session")
+        file_info = self._make_file_info(
+            str(fake_file), "test-project", "session-001", "main_session"
+        )
         fake_file.unlink()  # Now delete it
 
         count = temp_cache.ingest_file(file_info)
         assert count == 0
 
-    def test_ingest_skips_file_history_snapshot(self, temp_cache: iss.CacheManager, temp_dir: Path) -> None:
+    def test_ingest_skips_file_history_snapshot(
+        self, temp_cache: iss.CacheManager, temp_dir: Path
+    ) -> None:
         """Test that file-history-snapshot events are skipped."""
         projects_dir = temp_dir / "projects"
         projects_dir.mkdir()
@@ -1472,11 +1506,15 @@ class TestIngestEdgeCases:
         session_file = project_dir / "session-001.jsonl"
         session_file.write_text("\n".join(lines) + "\n")
 
-        file_info = self._make_file_info(str(session_file), "test-project", "session-001", "main_session")
+        file_info = self._make_file_info(
+            str(session_file), "test-project", "session-001", "main_session"
+        )
         count = temp_cache.ingest_file(file_info)
         assert count == 2  # file-history-snapshot skipped
 
-    def test_ingest_handles_invalid_timestamp(self, temp_cache: iss.CacheManager, temp_dir: Path) -> None:
+    def test_ingest_handles_invalid_timestamp(
+        self, temp_cache: iss.CacheManager, temp_dir: Path
+    ) -> None:
         """Test that invalid timestamps don't crash ingestion."""
         projects_dir = temp_dir / "projects"
         projects_dir.mkdir()
@@ -1487,7 +1525,9 @@ class TestIngestEdgeCases:
         session_file = project_dir / "session-001.jsonl"
         session_file.write_text(content)
 
-        file_info = self._make_file_info(str(session_file), "test-project", "session-001", "main_session")
+        file_info = self._make_file_info(
+            str(session_file), "test-project", "session-001", "main_session"
+        )
         count = temp_cache.ingest_file(file_info)
         assert count == 1  # Event still ingested with null timestamp_local
 
@@ -1516,7 +1556,9 @@ class TestCmdTurnsEdgeCases:
         for turn in turns:
             assert turn["timestamp"] <= until
 
-    def test_cmd_turns_json_content_decode_error(self, temp_cache: iss.CacheManager, temp_dir: Path) -> None:
+    def test_cmd_turns_json_content_decode_error(
+        self, temp_cache: iss.CacheManager, temp_dir: Path
+    ) -> None:
         """Test that invalid JSON content falls back to text content."""
         projects_dir = temp_dir / "projects"
         projects_dir.mkdir()
@@ -1531,110 +1573,15 @@ class TestCmdTurnsEdgeCases:
         temp_cache.update(projects_dir)
 
         # Manually corrupt the message_content_json
-        temp_cache.conn.execute("UPDATE events SET message_content_json = 'invalid json' WHERE uuid = '001'")
+        temp_cache.conn.execute(
+            "UPDATE events SET message_content_json = 'invalid json' WHERE uuid = '001'"
+        )
         temp_cache.conn.commit()
 
         turns = iss.cmd_turns(temp_cache, "session-001", include_content=True)
         assert len(turns) == 1
         # Falls back to message_content
         assert turns[0]["content"] == "plain text"
-
-
-class TestCmdToolsEdgeCases:
-    """Tests for edge cases in cmd_tools."""
-
-    def test_cmd_tools_non_list_content(self, temp_cache: iss.CacheManager, temp_dir: Path) -> None:
-        """Test that non-list content is skipped in tool extraction."""
-        projects_dir = temp_dir / "projects"
-        projects_dir.mkdir()
-        project_dir = projects_dir / "test-project"
-        project_dir.mkdir()
-
-        # Content is a string, not a list
-        content = make_event("assistant", "001", content="just text") + "\n"
-        session_file = project_dir / "session-001.jsonl"
-        session_file.write_text(content)
-
-        temp_cache.update(projects_dir)
-
-        tools = iss.cmd_tools(temp_cache, "session-001")
-        assert tools == []  # No tools found
-
-    def test_cmd_tools_json_decode_error(self, temp_cache: iss.CacheManager, temp_dir: Path) -> None:
-        """Test that JSON decode error is handled gracefully."""
-        projects_dir = temp_dir / "projects"
-        projects_dir.mkdir()
-        project_dir = projects_dir / "test-project"
-        project_dir.mkdir()
-
-        tool_content = [{"type": "tool_use", "name": "Read", "id": "t1", "input": {}}]
-        event = {
-            "type": "assistant",
-            "uuid": "001",
-            "timestamp": "2026-01-01T00:00:00Z",
-            "message": {"role": "assistant", "content": tool_content},
-        }
-        content = json.dumps(event) + "\n"
-        session_file = project_dir / "session-001.jsonl"
-        session_file.write_text(content)
-
-        temp_cache.update(projects_dir)
-
-        # Corrupt the JSON
-        temp_cache.conn.execute("UPDATE events SET message_content_json = 'invalid' WHERE uuid = '001'")
-        temp_cache.conn.commit()
-
-        tools = iss.cmd_tools(temp_cache, "session-001")
-        assert tools == []  # Skipped due to JSON error
-
-
-class TestCmdMessagesEdgeCases:
-    """Tests for edge cases in cmd_messages."""
-
-    def test_cmd_messages_with_project_filter(self, temp_cache: iss.CacheManager, temp_dir: Path) -> None:
-        """Test cmd_messages with project_id filter."""
-        projects_dir = temp_dir / "projects"
-        projects_dir.mkdir()
-        project_dir = projects_dir / "my-project"
-        project_dir.mkdir()
-
-        lines = [
-            make_event("user", "001"),
-            make_event("assistant", "002", timestamp="2026-01-01T00:00:01Z", content="hi"),
-        ]
-        session_file = project_dir / "session-xyz.jsonl"
-        session_file.write_text("\n".join(lines) + "\n")
-
-        temp_cache.update(projects_dir)
-
-        messages = iss.cmd_messages(temp_cache, "session-xyz", project_id="my-project")
-        assert len(messages) == 2
-
-    def test_cmd_messages_with_agent_filter(self, temp_cache: iss.CacheManager, temp_dir: Path) -> None:
-        """Test cmd_messages with agent_id filter."""
-        projects_dir = temp_dir / "projects"
-        projects_dir.mkdir()
-        project_dir = projects_dir / "my-project"
-        project_dir.mkdir()
-
-        lines = [
-            make_event("user", "001", agent_id="agent-abc"),
-            make_event(
-                "assistant",
-                "002",
-                timestamp="2026-01-01T00:00:01Z",
-                content="hi",
-                agent_id="agent-xyz",
-            ),
-        ]
-        session_file = project_dir / "session-xyz.jsonl"
-        session_file.write_text("\n".join(lines) + "\n")
-
-        temp_cache.update(projects_dir)
-
-        messages = iss.cmd_messages(temp_cache, "session-xyz", agent_id="agent-abc")
-        assert len(messages) == 1
-        assert messages[0]["content"] == "hello"
 
 
 class TestExtractTextContent:
@@ -1695,7 +1642,9 @@ class TestCmdTurnsNoContentJson:
 class TestCmdTraverseRawJsonError:
     """Tests for cmd_traverse JSON decode errors."""
 
-    def test_cmd_traverse_raw_json_decode_error(self, temp_cache: iss.CacheManager, temp_dir: Path) -> None:
+    def test_cmd_traverse_raw_json_decode_error(
+        self, temp_cache: iss.CacheManager, temp_dir: Path
+    ) -> None:
         """Test cmd_traverse with corrupted raw_json."""
         projects_dir = temp_dir / "projects"
         projects_dir.mkdir()
@@ -1726,52 +1675,12 @@ class TestCmdTraverseRawJsonError:
         assert len(result) >= 1
 
 
-class TestCmdTrajectoryEdgeCases:
-    """Tests for cmd_trajectory edge cases."""
-
-    def test_cmd_trajectory_with_project_id(self, temp_cache: iss.CacheManager, temp_dir: Path) -> None:
-        """Test cmd_trajectory with project_id filter."""
-        projects_dir = temp_dir / "projects"
-        projects_dir.mkdir()
-        project_dir = projects_dir / "my-project"
-        project_dir.mkdir()
-
-        content = make_event("user", "001") + "\n"
-        session_file = project_dir / "session-001.jsonl"
-        session_file.write_text(content)
-
-        temp_cache.update(projects_dir)
-
-        events = iss.cmd_trajectory(temp_cache, "session-001", project_id="my-project")
-        assert len(events) == 1
-
-    def test_cmd_trajectory_raw_json_decode_error(self, temp_cache: iss.CacheManager, temp_dir: Path) -> None:
-        """Test cmd_trajectory with corrupted raw_json."""
-        projects_dir = temp_dir / "projects"
-        projects_dir.mkdir()
-        project_dir = projects_dir / "test-project"
-        project_dir.mkdir()
-
-        content = make_event("user", "001") + "\n"
-        session_file = project_dir / "session-001.jsonl"
-        session_file.write_text(content)
-
-        temp_cache.update(projects_dir)
-
-        # Corrupt raw_json
-        temp_cache.conn.execute("UPDATE events SET raw_json = 'corrupted' WHERE uuid = '001'")
-        temp_cache.conn.commit()
-
-        events = iss.cmd_trajectory(temp_cache, "session-001")
-        assert len(events) == 1
-        # message_json should be None due to decode error
-        assert events[0].get("message_json") is None
-
-
 class TestCmdReflectEdgeCases:
     """Tests for cmd_reflect edge cases - runs real claude subprocess."""
 
-    def test_cmd_reflect_empty_content_skipped(self, temp_cache: iss.CacheManager, temp_dir: Path) -> None:
+    def test_cmd_reflect_empty_content_skipped(
+        self, temp_cache: iss.CacheManager, temp_dir: Path
+    ) -> None:
         """Test cmd_reflect skips events with empty content."""
         projects_dir = temp_dir / "projects"
         projects_dir.mkdir()
@@ -1797,11 +1706,13 @@ class TestCmdReflectEdgeCases:
         assert results[0]["uuid"] == "001"
 
 
-class TestCmdEventEdgeCases:
-    """Tests for edge cases in cmd_event."""
+class TestTraverseDetailFull:
+    """Tests for cmd_traverse with --detail full (replaces removed event subcommand)."""
 
-    def test_cmd_event_json_decode_error_content(self, temp_cache: iss.CacheManager, temp_dir: Path) -> None:
-        """Test that invalid message_content_json is handled."""
+    def test_traverse_detail_full_returns_raw_json(
+        self, temp_cache: iss.CacheManager, temp_dir: Path
+    ) -> None:
+        """detail=full returns raw_json and message_json on each event."""
         projects_dir = temp_dir / "projects"
         projects_dir.mkdir()
         project_dir = projects_dir / "test-project"
@@ -1810,18 +1721,75 @@ class TestCmdEventEdgeCases:
         content = make_event("assistant", "001", content="text") + "\n"
         session_file = project_dir / "session-001.jsonl"
         session_file.write_text(content)
-
         temp_cache.update(projects_dir)
 
-        # Corrupt the JSON fields
+        result = iss.cmd_traverse(temp_cache, "session-001", "001", detail="full")
+        assert len(result) >= 1
+        assert result[0]["uuid"] == "001"
+        assert "raw_json" in result[0]
+        assert "message_json" in result[0]
+
+    def test_traverse_detail_full_handles_corrupt_json(
+        self, temp_cache: iss.CacheManager, temp_dir: Path
+    ) -> None:
+        """detail=full handles corrupted raw_json gracefully."""
+        projects_dir = temp_dir / "projects"
+        projects_dir.mkdir()
+        project_dir = projects_dir / "test-project"
+        project_dir.mkdir()
+
+        content = make_event("assistant", "001", content="text") + "\n"
+        session_file = project_dir / "session-001.jsonl"
+        session_file.write_text(content)
+        temp_cache.update(projects_dir)
+
+        # Corrupt raw_json
         temp_cache.conn.execute(
-            "UPDATE events SET message_content_json = 'invalid', raw_json = 'also invalid' WHERE uuid = '001'"
+            "UPDATE events SET raw_json = 'also invalid' WHERE uuid = '001'"
         )
         temp_cache.conn.commit()
 
-        event = iss.cmd_event(temp_cache, "session-001", "001")
-        # Should handle gracefully without crashing
-        assert event["uuid"] == "001"
+        result = iss.cmd_traverse(temp_cache, "session-001", "001", detail="full")
+        assert len(result) >= 1
+        assert result[0]["uuid"] == "001"
+        assert result[0]["message_json"] is None
+
+    def test_traverse_detail_normal_excludes_raw_json(
+        self, populated_cache: iss.CacheManager
+    ) -> None:
+        """detail=normal (default) does not include raw_json or message_content_json."""
+        result = iss.cmd_traverse(populated_cache, session_id="session-abc", uuid="uuid-001")
+        assert len(result) > 0
+        assert "raw_json" not in result[0]
+        assert "message_content_json" not in result[0]
+        assert "content" in result[0]
+
+    def test_traverse_type_filter(self, populated_cache: iss.CacheManager) -> None:
+        """event_types filter limits results to matching msg_kind values."""
+        result = iss.cmd_traverse(
+            populated_cache,
+            session_id="session-abc",
+            uuid="uuid-001",
+            depth_limit=0,
+            event_types=["human"],
+        )
+        for event in result:
+            assert event["msg_kind"] == "human"
+
+    def test_traverse_result_limit(self, populated_cache: iss.CacheManager) -> None:
+        """result_limit caps the number of returned events."""
+        unlimited = iss.cmd_traverse(
+            populated_cache, session_id="session-abc", uuid="uuid-001", depth_limit=0
+        )
+        limited = iss.cmd_traverse(
+            populated_cache,
+            session_id="session-abc",
+            uuid="uuid-001",
+            depth_limit=0,
+            result_limit=1,
+        )
+        assert len(limited) == 1
+        assert len(unlimited) >= len(limited)
 
 
 # ============================================================================
@@ -1843,8 +1811,8 @@ class TestMainDispatch:
             "cache_command": None,
             "format": "json",
             "project": None,
-            "verbose": False,
-            "quiet": False,
+            "verbose": None,
+            "quiet": None,
             "cache_frozen": False,
             "cache_rebuild": False,
         }
@@ -1913,7 +1881,9 @@ class TestMainDispatch:
         captured = capsys.readouterr()
         assert "db_path" in captured.out or "status" in captured.out
 
-    def test_main_cache_frozen_skips_update(self, temp_dir: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_main_cache_frozen_skips_update(
+        self, temp_dir: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """Test that --cache-frozen skips automatic cache update."""
         db_path = temp_dir / "cache.db"
         cache = iss.CacheManager(db_path=db_path)
@@ -1934,7 +1904,9 @@ class TestMainDispatch:
         # Should return empty because cache wasn't updated
         assert captured.out.strip() == "[]"
 
-    def test_main_cache_rebuild_wipes_and_rebuilds(self, temp_dir: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_main_cache_rebuild_wipes_and_rebuilds(
+        self, temp_dir: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """Test that --cache-rebuild wipes and rebuilds cache before query."""
         db_path = temp_dir / "cache.db"
         cache = iss.CacheManager(db_path=db_path)
@@ -2006,23 +1978,6 @@ class TestMainDispatch:
         captured = capsys.readouterr()
         assert captured.out.strip() == "[]" or "turn" in captured.out
 
-    def test_main_tools(self, temp_dir: Path, capsys: pytest.CaptureFixture[str]) -> None:
-        """Test main() with tools command."""
-        db_path = temp_dir / "cache.db"
-        cache = iss.CacheManager(db_path=db_path)
-        cache.init_schema()
-
-        args = self._make_args(
-            command="tools",
-            session_id="session-123",
-            tool=None,
-            detail=False,
-        )
-        iss.main(args, cache=cache, projects_path=temp_dir)
-
-        captured = capsys.readouterr()
-        assert captured.out.strip() == "[]" or "tool" in captured.out
-
     def test_main_search(self, temp_dir: Path, capsys: pytest.CaptureFixture[str]) -> None:
         """Test main() with search command."""
         db_path = temp_dir / "cache.db"
@@ -2040,49 +1995,6 @@ class TestMainDispatch:
         captured = capsys.readouterr()
         assert captured.out.strip() == "[]" or "search" in captured.out
 
-    def test_main_summary(self, temp_dir: Path, capsys: pytest.CaptureFixture[str]) -> None:
-        """Test main() with summary command."""
-        db_path = temp_dir / "cache.db"
-        cache = iss.CacheManager(db_path=db_path)
-        cache.init_schema()
-
-        args = self._make_args(command="summary", session_id="session-123")
-        iss.main(args, cache=cache, projects_path=temp_dir)
-
-        captured = capsys.readouterr()
-        # Empty result or "not found" message
-        assert captured.out.strip() or "not found" in captured.out.lower()
-
-    def test_main_cost(self, temp_dir: Path, capsys: pytest.CaptureFixture[str]) -> None:
-        """Test main() with cost command."""
-        db_path = temp_dir / "cache.db"
-        cache = iss.CacheManager(db_path=db_path)
-        cache.init_schema()
-
-        args = self._make_args(command="cost", session_id="session-123", model=None)
-        iss.main(args, cache=cache, projects_path=temp_dir)
-
-        captured = capsys.readouterr()
-        assert captured.out.strip() or "cost" in captured.out.lower()
-
-    def test_main_messages(self, temp_dir: Path, capsys: pytest.CaptureFixture[str]) -> None:
-        """Test main() with messages command."""
-        db_path = temp_dir / "cache.db"
-        cache = iss.CacheManager(db_path=db_path)
-        cache.init_schema()
-
-        args = self._make_args(
-            command="messages",
-            session_id="session-123",
-            role=None,
-            limit=100,
-            agent=None,
-        )
-        iss.main(args, cache=cache, projects_path=temp_dir)
-
-        captured = capsys.readouterr()
-        assert captured.out.strip() == "[]" or "message" in captured.out
-
     def test_main_agents(self, temp_dir: Path, capsys: pytest.CaptureFixture[str]) -> None:
         """Test main() with agents command."""
         db_path = temp_dir / "cache.db"
@@ -2095,19 +2007,6 @@ class TestMainDispatch:
         captured = capsys.readouterr()
         assert captured.out.strip() == "[]" or "agent" in captured.out
 
-    def test_main_event(self, temp_dir: Path, capsys: pytest.CaptureFixture[str]) -> None:
-        """Test main() with event command."""
-        db_path = temp_dir / "cache.db"
-        cache = iss.CacheManager(db_path=db_path)
-        cache.init_schema()
-
-        args = self._make_args(command="event", session_id="session-123", uuid="uuid-001")
-        iss.main(args, cache=cache, projects_path=temp_dir)
-
-        captured = capsys.readouterr()
-        # Should output "not found" or event data
-        assert captured.out.strip()
-
     def test_main_traverse(self, temp_dir: Path, capsys: pytest.CaptureFixture[str]) -> None:
         """Test main() with traverse command."""
         db_path = temp_dir / "cache.db"
@@ -2119,33 +2018,17 @@ class TestMainDispatch:
             session_id="session-123",
             uuid="uuid-001",
             direction="both",
-            limit=3,
-        )
-        iss.main(args, cache=cache, projects_path=temp_dir)
-
-        captured = capsys.readouterr()
-        # Output could be empty or have ancestors/descendants
-        assert captured.out.strip() is not None
-
-    def test_main_trajectory(self, temp_dir: Path, capsys: pytest.CaptureFixture[str]) -> None:
-        """Test main() with trajectory command."""
-        db_path = temp_dir / "cache.db"
-        cache = iss.CacheManager(db_path=db_path)
-        cache.init_schema()
-
-        args = self._make_args(
-            command="trajectory",
-            session_id="session-123",
-            start=None,
-            end=None,
+            depth=3,
             types=None,
-            role=None,
+            since=None,
+            until=None,
             limit=None,
+            detail="normal",
         )
         iss.main(args, cache=cache, projects_path=temp_dir)
 
         captured = capsys.readouterr()
-        assert captured.out.strip() == "[]" or "trajectory" in captured.out
+        assert captured.out.strip() is not None
 
     def test_main_reflect_with_prompt(
         self, temp_dir: Path, sample_jsonl_file: Path, capsys: pytest.CaptureFixture[str]
@@ -2289,7 +2172,9 @@ class TestEventEdges:
         ).fetchone()
         assert row[0] == 0
 
-    def test_edges_cleaned_on_reingest(self, temp_dir: Path, rich_sample_events: list[dict[str, Any]]) -> None:
+    def test_edges_cleaned_on_reingest(
+        self, temp_dir: Path, rich_sample_events: list[dict[str, Any]]
+    ) -> None:
         """Test that event_edges are cleaned up when a file is re-ingested."""
         # Create initial JSONL file
         projects_dir = temp_dir / "projects" / "-Test-Project"
@@ -2481,7 +2366,9 @@ class TestSchemaMigration:
         db_path = temp_dir / "test_cache.db"
         cache = iss.CacheManager(db_path=db_path)
         # Create a bare DB with cache_metadata but no version
-        cache.conn.execute("CREATE TABLE IF NOT EXISTS cache_metadata (key TEXT PRIMARY KEY, value TEXT)")
+        cache.conn.execute(
+            "CREATE TABLE IF NOT EXISTS cache_metadata (key TEXT PRIMARY KEY, value TEXT)"
+        )
         cache.conn.commit()
         assert cache.needs_rebuild() is True
 
@@ -2506,7 +2393,9 @@ class TestSchemaMigration:
 
         # After rebuild, version should be current
         assert cache.needs_rebuild() is False
-        row = cache.conn.execute("SELECT value FROM cache_metadata WHERE key = 'schema_version'").fetchone()
+        row = cache.conn.execute(
+            "SELECT value FROM cache_metadata WHERE key = 'schema_version'"
+        ).fetchone()
         assert row[0] == iss.SCHEMA_VERSION
 
 
@@ -2533,8 +2422,12 @@ class TestCompositeIndexes:
             "idx_events_session_type",
             "idx_events_session_uuid",
             "idx_source_files_project_session",
+            # msg_kind index
+            "idx_events_msg_kind",
         }
-        assert expected_new_indexes.issubset(indexes), f"Missing indexes: {expected_new_indexes - indexes}"
+        assert expected_new_indexes.issubset(indexes), (
+            f"Missing indexes: {expected_new_indexes - indexes}"
+        )
 
 
 class TestMainDispatchNewTables:
@@ -2546,15 +2439,17 @@ class TestMainDispatchNewTables:
             "cache_command": None,
             "format": "json",
             "project": None,
-            "verbose": False,
-            "quiet": False,
+            "verbose": None,
+            "quiet": None,
             "cache_frozen": False,
             "cache_rebuild": False,
         }
         defaults.update(kwargs)
         return Namespace(**defaults)
 
-    def test_cache_frozen_and_rebuild_with_new_tables(self, temp_dir: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_cache_frozen_and_rebuild_with_new_tables(
+        self, temp_dir: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """Test that --cache-rebuild properly creates new tables."""
         projects_dir = temp_dir / "projects"
         projects_dir.mkdir()
@@ -2704,7 +2599,6 @@ class TestReflectMLSentiment:
             populated_cache,
             session_id="session-abc",
             engine="sentiment",
-            role="user",
             limit=2,
         )
         assert len(result) >= 1
@@ -2824,7 +2718,11 @@ class TestMainParseArgs:
             timeout=10,
         )
         # Should print help (usage) and exit 0
-        assert "usage:" in result.stdout.lower() or "usage:" in result.stderr.lower() or result.returncode == 0
+        assert (
+            "usage:" in result.stdout.lower()
+            or "usage:" in result.stderr.lower()
+            or result.returncode == 0
+        )
 
     def test_argparse_help(self) -> None:
         """Test that --help works."""
@@ -2836,6 +2734,193 @@ class TestMainParseArgs:
         )
         assert result.returncode == 0
         assert "introspect_sessions" in result.stdout.lower() or "usage" in result.stdout.lower()
+
+
+# ============================================================================
+# Message Kind Classification Tests
+# ============================================================================
+
+
+class TestFirstContentBlockType:
+    """Tests for the _first_content_block_type helper."""
+
+    def test_none_content_returns_none(self) -> None:
+        assert iss._first_content_block_type(None) is None
+
+    def test_empty_list_returns_none(self) -> None:
+        assert iss._first_content_block_type([]) is None
+
+    def test_string_content_returns_string(self) -> None:
+        assert iss._first_content_block_type("hello") == "string"
+
+    def test_text_block_returns_text(self) -> None:
+        assert iss._first_content_block_type([{"type": "text", "text": "hi"}]) == "text"
+
+    def test_thinking_block_returns_thinking(self) -> None:
+        assert (
+            iss._first_content_block_type([{"type": "thinking", "thinking": "..."}]) == "thinking"
+        )
+
+    def test_tool_use_block_returns_tool_use(self) -> None:
+        assert iss._first_content_block_type([{"type": "tool_use", "name": "Bash"}]) == "tool_use"
+
+    def test_tool_result_block_returns_tool_result(self) -> None:
+        assert (
+            iss._first_content_block_type([{"type": "tool_result", "content": "ok"}])
+            == "tool_result"
+        )
+
+    def test_uses_first_block_only(self) -> None:
+        blocks = [{"type": "thinking", "thinking": "..."}, {"type": "text", "text": "hi"}]
+        assert iss._first_content_block_type(blocks) == "thinking"
+
+
+class TestMessageKind:
+    """Tests for the _message_kind classifier — covers all 9 kinds."""
+
+    @pytest.mark.parametrize(
+        "event_type,is_meta,content,expected",
+        [
+            # human: user + not meta + string
+            ("user", False, "what is the weather?", "human"),
+            # task_notification: user + not meta + string starting with <task-notification>
+            (
+                "user",
+                False,
+                "<task-notification>task done</task-notification>",
+                "task_notification",
+            ),
+            # meta: user + isMeta=true (content type doesn't matter)
+            ("user", True, "some system context", "meta"),
+            ("user", True, [{"type": "text", "text": "ctx"}], "meta"),
+            # tool_result: user + not meta + tool_result list
+            ("user", False, [{"type": "tool_result", "content": "output"}], "tool_result"),
+            # user_text: user + not meta + text/other list
+            ("user", False, [{"type": "text", "text": "hi"}], "user_text"),
+            # assistant_text: assistant + text list
+            ("assistant", False, [{"type": "text", "text": "response"}], "assistant_text"),
+            # thinking: assistant + thinking list
+            ("assistant", False, [{"type": "thinking", "thinking": "hmm"}], "thinking"),
+            # tool_use: assistant + tool_use list
+            ("assistant", False, [{"type": "tool_use", "name": "Bash", "input": {}}], "tool_use"),
+            # other: non user/assistant event type
+            ("system", False, "progress info", "other"),
+            ("queue-operation", False, None, "other"),
+        ],
+    )
+    def test_classification(
+        self,
+        event_type: str,
+        is_meta: bool,
+        content: Any,
+        expected: str,
+    ) -> None:
+        assert iss._message_kind(event_type, is_meta, content) == expected
+
+
+class TestMsgKindStorage:
+    """Tests that msg_kind is stored in the events table and thinking signatures are stripped."""
+
+    def test_msg_kind_populated_on_ingest(self, temp_dir: Path) -> None:
+        """Test that ingesting events stores correct msg_kind values."""
+        projects_dir = temp_dir / "projects" / "-Test"
+        projects_dir.mkdir(parents=True)
+        events = [
+            {
+                "type": "user",
+                "uuid": "u1",
+                "parentUuid": None,
+                "timestamp": "2026-01-01T00:00:00Z",
+                "sessionId": "sess-1",
+                "message": {"role": "user", "content": "hello from user"},
+            },
+            {
+                "type": "assistant",
+                "uuid": "u2",
+                "parentUuid": "u1",
+                "timestamp": "2026-01-01T00:00:01Z",
+                "sessionId": "sess-1",
+                "message": {
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": "hello back"}],
+                    "model": "claude-sonnet-4-6",
+                    "usage": {"input_tokens": 10, "output_tokens": 5},
+                },
+            },
+            {
+                "type": "assistant",
+                "uuid": "u3",
+                "parentUuid": "u2",
+                "timestamp": "2026-01-01T00:00:02Z",
+                "sessionId": "sess-1",
+                "message": {
+                    "role": "assistant",
+                    "content": [
+                        {
+                            "type": "thinking",
+                            "thinking": "let me think",
+                            "signature": "HUGE_BASE64_BLOB",
+                        }
+                    ],
+                    "model": "claude-opus-4-6",
+                    "usage": {"input_tokens": 20, "output_tokens": 10},
+                },
+            },
+        ]
+        jsonl_path = projects_dir / "sess-1.jsonl"
+        with open(jsonl_path, "w") as f:
+            for ev in events:
+                f.write(json.dumps(ev) + "\n")
+
+        db_path = temp_dir / "test.db"
+        cache = iss.CacheManager(db_path=db_path)
+        cache.init_schema()
+        cache.update(temp_dir / "projects")
+
+        rows = cache.conn.execute("SELECT uuid, msg_kind FROM events ORDER BY uuid").fetchall()
+        kinds = {row[0]: row[1] for row in rows}
+
+        assert kinds["u1"] == "human"
+        assert kinds["u2"] == "assistant_text"
+        assert kinds["u3"] == "thinking"
+
+    def test_thinking_signature_stripped_from_stored_json(self, temp_dir: Path) -> None:
+        """Test that signature field is removed from thinking blocks before storage."""
+        projects_dir = temp_dir / "projects" / "-Test"
+        projects_dir.mkdir(parents=True)
+        event = {
+            "type": "assistant",
+            "uuid": "t1",
+            "parentUuid": None,
+            "timestamp": "2026-01-01T00:00:00Z",
+            "sessionId": "sess-2",
+            "message": {
+                "role": "assistant",
+                "content": [
+                    {"type": "thinking", "thinking": "thoughts", "signature": "HUGE_BASE64_BLOB"}
+                ],
+                "model": "claude-opus-4-6",
+                "usage": {"input_tokens": 10, "output_tokens": 5},
+            },
+        }
+        jsonl_path = projects_dir / "sess-2.jsonl"
+        with open(jsonl_path, "w") as f:
+            f.write(json.dumps(event) + "\n")
+
+        db_path = temp_dir / "test_sig.db"
+        cache = iss.CacheManager(db_path=db_path)
+        cache.init_schema()
+        cache.update(temp_dir / "projects")
+
+        row = cache.conn.execute(
+            "SELECT message_content_json FROM events WHERE uuid = 't1'"
+        ).fetchone()
+        assert row is not None
+        stored_content = json.loads(row[0])
+        assert isinstance(stored_content, list)
+        block = stored_content[0]
+        assert "signature" not in block
+        assert block["thinking"] == "thoughts"
 
 
 # ============================================================================

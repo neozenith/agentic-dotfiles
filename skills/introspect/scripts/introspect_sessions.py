@@ -59,7 +59,7 @@ CACHE_DB_PATH = CACHE_DIR / "introspect_sessions.db"
 # Logging setup
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = "2"
+SCHEMA_VERSION = "4"
 
 # ML Analysis Configuration (used by reflect --engine)
 ML_DEFAULT_MODELS: dict[str, str] = {
@@ -114,6 +114,100 @@ def model_family_from_id(model_id: str | None) -> str:
         if family in model_lower:
             return family
     return "unknown"
+
+
+def _compute_event_costs(
+    model_id: str | None,
+    input_tokens: int,
+    output_tokens: int,
+    cache_read_tokens: int,
+    cache_creation_tokens: int,
+) -> tuple[float, float, float]:
+    """Compute (token_rate, billable_tokens, total_cost_usd) for an event.
+
+    Returns:
+        token_rate       — input $/Mtok for this event's model (0.0 if unknown)
+        billable_tokens  — weighted input-equivalent:
+                           input + output*5 + cache_read*0.1 + cache_write*1.25
+        total_cost_usd   — billable_tokens * token_rate / 1_000_000
+
+    All model families share the same relative multipliers (output 5×, cache_read 0.1×,
+    cache_write 1.25×), so token_rate alone is sufficient to reconstruct the full cost.
+    Events with an unknown model (no model_id) return (0.0, 0.0, 0.0).
+    """
+    family = model_family_from_id(model_id)
+    pricing = PRICING.get(family)
+
+    if pricing is None:
+        return 0.0, 0.0, 0.0
+
+    token_rate = pricing["input"]
+    output_mult = pricing["output"] / pricing["input"]  # always 5.0
+    cache_read_mult = pricing["cache_read_multiplier"]  # always 0.1
+    cache_write_mult = pricing["cache_write_multiplier"]  # always 1.25
+
+    billable = (
+        input_tokens
+        + output_tokens * output_mult
+        + cache_read_tokens * cache_read_mult
+        + cache_creation_tokens * cache_write_mult
+    )
+    return token_rate, round(billable, 4), round(billable * token_rate / 1_000_000, 8)
+
+
+def _first_content_block_type(content: Any) -> str | None:
+    """Return the shape of a message's content field.
+
+    Returns:
+        'string'      — raw string (human-typed prompt)
+        'text'        — list whose first block has type='text'
+        'tool_use'    — list whose first block has type='tool_use'
+        'tool_result' — list whose first block has type='tool_result'
+        'thinking'    — list whose first block has type='thinking'
+        other str     — first block's type (catch-all)
+        None          — content is None or empty list
+    """
+    if content is None:
+        return None
+    if isinstance(content, str):
+        return "string"
+    if isinstance(content, list) and content and isinstance(content[0], dict):
+        return content[0].get("type")
+    return None
+
+
+def _message_kind(event_type: str, is_meta: bool, content: Any) -> str:
+    """Classify an event into one of 9 fine-grained message kinds.
+
+    Kinds:
+        human              — user, not meta, string content (actual typed prompts)
+        task_notification  — user, not meta, string starting with <task-notification>
+        tool_result        — user, not meta, tool_result list
+        user_text          — user, not meta, text/other list
+        meta               — user, isMeta=true (system-injected context)
+        assistant_text     — assistant, text list
+        thinking           — assistant, thinking list
+        tool_use           — assistant, tool_use list
+        other              — progress / system / queue-operation / etc.
+    """
+    fct = _first_content_block_type(content)
+    if event_type == "user":
+        if is_meta:
+            return "meta"
+        if fct == "string":
+            if isinstance(content, str) and content.lstrip().startswith("<task-notification>"):
+                return "task_notification"
+            return "human"
+        if fct == "tool_result":
+            return "tool_result"
+        return "user_text"
+    if event_type == "assistant":
+        if fct == "thinking":
+            return "thinking"
+        if fct == "tool_use":
+            return "tool_use"
+        return "assistant_text"
+    return "other"
 
 
 # ============================================================================
@@ -176,6 +270,7 @@ CREATE TABLE IF NOT EXISTS events (
     uuid TEXT,
     parent_uuid TEXT,
     event_type TEXT NOT NULL,
+    msg_kind TEXT,
     timestamp TEXT,
     timestamp_local TEXT,
     session_id TEXT,
@@ -192,6 +287,9 @@ CREATE TABLE IF NOT EXISTS events (
     cache_read_tokens INTEGER DEFAULT 0,
     cache_creation_tokens INTEGER DEFAULT 0,
     cache_5m_tokens INTEGER DEFAULT 0,
+    token_rate REAL DEFAULT 0.0,
+    billable_tokens REAL DEFAULT 0.0,
+    total_cost_usd REAL DEFAULT 0.0,
     source_file_id INTEGER NOT NULL REFERENCES source_files(id) ON DELETE CASCADE,
     line_number INTEGER NOT NULL,
     raw_json TEXT NOT NULL
@@ -202,6 +300,7 @@ CREATE INDEX IF NOT EXISTS idx_events_parent_uuid ON events(parent_uuid);
 CREATE INDEX IF NOT EXISTS idx_events_session ON events(session_id);
 CREATE INDEX IF NOT EXISTS idx_events_project ON events(project_id);
 CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type);
+CREATE INDEX IF NOT EXISTS idx_events_msg_kind ON events(msg_kind);
 CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp);
 CREATE INDEX IF NOT EXISTS idx_events_source_file ON events(source_file_id);
 
@@ -345,13 +444,28 @@ class CacheManager:
     def needs_rebuild(self) -> bool:
         """Check if the schema version requires a rebuild."""
         try:
-            row = self.conn.execute("SELECT value FROM cache_metadata WHERE key = 'schema_version'").fetchone()
+            row = self.conn.execute(
+                "SELECT value FROM cache_metadata WHERE key = 'schema_version'"
+            ).fetchone()
             if row is None:
                 return True
             return bool(row[0] != SCHEMA_VERSION)
         except sqlite3.OperationalError:
             # cache_metadata table doesn't exist yet
             return True
+
+    def reset(self) -> None:
+        """Wipe the database file entirely and reinitialize the schema.
+
+        Use this for schema migrations. DELETE FROM leaves the table structure
+        intact, so CREATE TABLE IF NOT EXISTS becomes a no-op and new columns
+        never appear. Deleting the file guarantees a clean slate.
+        """
+        log.info("Resetting cache database...")
+        self.close()
+        if self.db_path.exists():
+            self.db_path.unlink()
+        self.init_schema()
 
     def clear(self) -> None:
         """Clear all cached data. Safe to call even if tables don't exist."""
@@ -402,13 +516,19 @@ class CacheManager:
         try:
             edge_count = cursor.execute("SELECT COUNT(*) FROM event_edges").fetchone()[0]
             reflection_count = cursor.execute("SELECT COUNT(*) FROM reflections").fetchone()[0]
-            annotation_count = cursor.execute("SELECT COUNT(*) FROM event_annotations").fetchone()[0]
+            annotation_count = cursor.execute("SELECT COUNT(*) FROM event_annotations").fetchone()[
+                0
+            ]
         except sqlite3.OperationalError:
             pass  # Tables may not exist in older schema
 
         # Get metadata
-        created_at = cursor.execute("SELECT value FROM cache_metadata WHERE key = 'created_at'").fetchone()
-        last_update = cursor.execute("SELECT value FROM cache_metadata WHERE key = 'last_update_at'").fetchone()
+        created_at = cursor.execute(
+            "SELECT value FROM cache_metadata WHERE key = 'created_at'"
+        ).fetchone()
+        last_update = cursor.execute(
+            "SELECT value FROM cache_metadata WHERE key = 'last_update_at'"
+        ).fetchone()
 
         # Get database file size
         db_size = self.db_path.stat().st_size if self.db_path.exists() else 0
@@ -531,7 +651,9 @@ class CacheManager:
         cursor = self.conn.cursor()
 
         # Delete existing data for this file (if re-ingesting)
-        existing = cursor.execute("SELECT id FROM source_files WHERE filepath = ?", (filepath,)).fetchone()
+        existing = cursor.execute(
+            "SELECT id FROM source_files WHERE filepath = ?", (filepath,)
+        ).fetchone()
         if existing:
             cursor.execute("DELETE FROM event_edges WHERE source_file_id = ?", (existing[0],))
             cursor.execute("DELETE FROM events WHERE source_file_id = ?", (existing[0],))
@@ -559,7 +681,9 @@ class CacheManager:
                     if file_type == "agent_root" and detected_session_id is None:
                         detected_session_id = raw.get("sessionId")
 
-                    event = self._parse_event_for_cache(raw, project_id, detected_session_id, filepath, line_num)
+                    event = self._parse_event_for_cache(
+                        raw, project_id, detected_session_id, filepath, line_num
+                    )
                     if event:
                         events_data.append(event)
 
@@ -590,17 +714,19 @@ class CacheManager:
         for event in events_data:
             cursor.execute(
                 """INSERT INTO events
-                   (uuid, parent_uuid, event_type, timestamp, timestamp_local,
+                   (uuid, parent_uuid, event_type, msg_kind, timestamp, timestamp_local,
                     session_id, project_id, is_sidechain, agent_id, agent_slug,
                     message_role, message_content, message_content_json, model_id,
                     input_tokens, output_tokens, cache_read_tokens,
                     cache_creation_tokens, cache_5m_tokens,
+                    token_rate, billable_tokens, total_cost_usd,
                     source_file_id, line_number, raw_json)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     event["uuid"],
                     event["parent_uuid"],
                     event["event_type"],
+                    event["msg_kind"],
                     event["timestamp"],
                     event["timestamp_local"],
                     detected_session_id,
@@ -617,6 +743,9 @@ class CacheManager:
                     event["cache_read_tokens"],
                     event["cache_creation_tokens"],
                     event["cache_5m_tokens"],
+                    event["token_rate"],
+                    event["billable_tokens"],
+                    event["total_cost_usd"],
                     source_file_id,
                     event["line_number"],
                     event["raw_json"],
@@ -665,10 +794,25 @@ class CacheManager:
         agent_slug = raw.get("slug")
 
         # Extract message info
+        is_meta = raw.get("isMeta", False)
         message = raw.get("message", {}) or {}
         message_role = message.get("role") if isinstance(message, dict) else None
         message_content_raw = message.get("content") if isinstance(message, dict) else None
         model_id = message.get("model") if isinstance(message, dict) else None
+
+        # Sanitize: drop `signature` from thinking blocks (large base64 token, useless for analytics)
+        if isinstance(message_content_raw, list):
+            message_content_raw = [
+                {k: v for k, v in block.items() if k != "signature"}
+                if isinstance(block, dict)
+                and block.get("type") == "thinking"
+                and "signature" in block
+                else block
+                for block in message_content_raw
+            ]
+
+        # Classify into one of the 9 fine-grained message kinds
+        msg_kind = _message_kind(event_type, bool(is_meta), message_content_raw)
 
         # Extract plain text for FTS
         message_content_text = self._extract_text_content(message_content_raw)
@@ -681,6 +825,11 @@ class CacheManager:
         cache_creation_tokens = usage.get("cache_creation_input_tokens", 0) or 0
         cache_creation = usage.get("cache_creation", {}) or {}
         cache_5m_tokens = cache_creation.get("ephemeral_5m_input_tokens", 0) or 0
+
+        # Compute cost fields at ingestion time so they are stored in the DB
+        token_rate, billable_tokens, total_cost_usd = _compute_event_costs(
+            model_id, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens
+        )
 
         # Compute local timestamp
         timestamp_local = None
@@ -696,6 +845,7 @@ class CacheManager:
             "uuid": uuid,
             "parent_uuid": parent_uuid,
             "event_type": event_type,
+            "msg_kind": msg_kind,
             "timestamp": timestamp,
             "timestamp_local": timestamp_local,
             "is_sidechain": 1 if is_sidechain else 0,
@@ -703,13 +853,18 @@ class CacheManager:
             "agent_slug": agent_slug,
             "message_role": message_role,
             "message_content": message_content_text,
-            "message_content_json": json.dumps(message_content_raw) if message_content_raw else None,
+            "message_content_json": json.dumps(message_content_raw)
+            if message_content_raw
+            else None,
             "model_id": model_id,
             "input_tokens": input_tokens,
             "output_tokens": output_tokens,
             "cache_read_tokens": cache_read_tokens,
             "cache_creation_tokens": cache_creation_tokens,
             "cache_5m_tokens": cache_5m_tokens,
+            "token_rate": token_rate,
+            "billable_tokens": billable_tokens,
+            "total_cost_usd": total_cost_usd,
             "line_number": line_number,
             "raw_json": json.dumps(raw),
         }
@@ -845,7 +1000,9 @@ class CacheManager:
         for file_info in files_to_update:
             events_added = self.ingest_file(file_info)
             total_events += events_added
-            log.debug(f"  {file_info['filepath']}: {events_added} events ({file_info.get('reason', 'new')})")
+            log.debug(
+                f"  {file_info['filepath']}: {events_added} events ({file_info.get('reason', 'new')})"
+            )
 
         self.conn.commit()
 
@@ -926,6 +1083,22 @@ class SessionEvent:
 # ============================================================================
 
 
+def infer_project_id(cache: CacheManager, cwd: Path | None = None) -> str | None:
+    """Infer the project_id from the current working directory.
+
+    Converts the CWD to Claude Code's project ID format (each '/' replaced with '-')
+    and checks whether it exists in the projects table.  Returns the matching
+    project_id, or None if no match is found.
+    """
+    candidate = str(cwd or Path.cwd()).replace("/", "-")
+    cursor = cache.conn.cursor()
+    row = cursor.execute(
+        "SELECT project_id FROM projects WHERE project_id = ? LIMIT 1",
+        (candidate,),
+    ).fetchone()
+    return str(row["project_id"]) if row else None
+
+
 def ensure_cache(cache: CacheManager, projects_path: Path | None = None) -> None:
     """Ensure cache exists and is initialized."""
     if projects_path is None:
@@ -936,8 +1109,7 @@ def ensure_cache(cache: CacheManager, projects_path: Path | None = None) -> None
         cache.update(projects_path)
     elif cache.needs_rebuild():
         log.info("Schema version mismatch, rebuilding cache...")
-        cache.init_schema()
-        cache.clear()
+        cache.reset()
         cache.update(projects_path)
 
 
@@ -983,8 +1155,7 @@ def cmd_cache_rebuild(cache: CacheManager, projects_path: Path | None = None) ->
     """Full rebuild of the cache."""
     if projects_path is None:
         projects_path = PROJECTS_PATH
-    cache.init_schema()  # Ensure schema exists before clearing
-    cache.clear()
+    cache.reset()
     result = cache.update(projects_path)
     result["status"] = "rebuilt"
     return result
@@ -1073,10 +1244,11 @@ def cmd_turns(
 
     query = """
         SELECT
-            e.uuid, e.parent_uuid, e.event_type, e.timestamp, e.timestamp_local,
+            e.uuid, e.parent_uuid, e.event_type, e.msg_kind, e.timestamp, e.timestamp_local,
             e.message_role, e.message_content, e.message_content_json, e.model_id,
-            e.input_tokens, e.output_tokens, e.agent_id, e.agent_slug,
-            sf.filepath, e.line_number
+            e.input_tokens, e.output_tokens, e.cache_read_tokens, e.cache_creation_tokens,
+            e.token_rate, e.billable_tokens, e.total_cost_usd,
+            e.agent_id, e.agent_slug, sf.filepath, e.line_number
         FROM events e
         JOIN source_files sf ON e.source_file_id = sf.id
         WHERE e.session_id = ?
@@ -1089,7 +1261,7 @@ def cmd_turns(
 
     if event_types:
         placeholders = ",".join("?" * len(event_types))
-        query += f" AND e.event_type IN ({placeholders})"
+        query += f" AND e.msg_kind IN ({placeholders})"
         params.extend(event_types)
 
     if since:
@@ -1114,10 +1286,16 @@ def cmd_turns(
         turn = {
             "turn_num": i,
             "type": row["event_type"],
+            "msg_kind": row["msg_kind"],
             "timestamp": row["timestamp"],
-            "model": row["model_id"],
+            "model_id": row["model_id"],
             "input_tokens": row["input_tokens"],
             "output_tokens": row["output_tokens"],
+            "cache_read_tokens": row["cache_read_tokens"],
+            "cache_creation_tokens": row["cache_creation_tokens"],
+            "token_rate": row["token_rate"],
+            "billable_tokens": row["billable_tokens"],
+            "total_cost_usd": row["total_cost_usd"],
             "uuid": row["uuid"],
             "parent_uuid": row["parent_uuid"],
             "filepath": row["filepath"],
@@ -1137,79 +1315,6 @@ def cmd_turns(
         turns.append(turn)
 
     return turns
-
-
-def cmd_tools(
-    cache: CacheManager,
-    session_id: str,
-    project_id: str | None = None,
-    tool_name: str | None = None,
-    detail: bool = False,
-) -> list[dict[str, Any]]:
-    """Get tool usage details for a session."""
-    ensure_cache(cache)
-    cursor = cache.conn.cursor()
-
-    # Get assistant events with message content
-    query = """
-        SELECT e.timestamp, e.message_content_json
-        FROM events e
-        WHERE e.session_id = ? AND e.event_type = 'assistant'
-        AND e.message_content_json IS NOT NULL
-    """
-    params: list[Any] = [session_id]
-
-    if project_id:
-        query += " AND e.project_id = ?"
-        params.append(project_id)
-
-    query += " ORDER BY e.timestamp"
-    results = cursor.execute(query, params).fetchall()
-
-    # Extract tool calls
-    tool_calls: list[dict[str, Any]] = []
-
-    for row in results:
-        try:
-            content = json.loads(row["message_content_json"])
-            if not isinstance(content, list):
-                continue
-
-            for block in content:
-                if isinstance(block, dict) and block.get("type") == "tool_use":
-                    name = block.get("name", "")
-                    if tool_name and tool_name.lower() not in name.lower():
-                        continue
-
-                    tool_calls.append(
-                        {
-                            "timestamp": row["timestamp"],
-                            "tool_name": name,
-                            "tool_call_id": block.get("id"),
-                            "tool_input": block.get("input"),
-                        }
-                    )
-        except json.JSONDecodeError:
-            continue
-
-    if detail:
-        return tool_calls
-
-    # Summary mode
-    summary: dict[str, dict[str, Any]] = {}
-    for call in tool_calls:
-        name = call["tool_name"]
-        if name not in summary:
-            summary[name] = {
-                "tool_name": name,
-                "call_count": 0,
-                "first_used": call["timestamp"],
-                "last_used": call["timestamp"],
-            }
-        summary[name]["call_count"] += 1
-        summary[name]["last_used"] = call["timestamp"]
-
-    return sorted(summary.values(), key=lambda x: x["call_count"], reverse=True)
 
 
 def _escape_fts5_query(pattern: str) -> str:
@@ -1235,7 +1340,7 @@ def _escape_fts5_query(pattern: str) -> str:
     # Split on whitespace, wrap each token in double-quotes.
     # Internal double-quotes are escaped by doubling them (FTS5 convention).
     tokens = stripped.split()
-    escaped = " ".join(f'"{tok.replace(chr(34), chr(34)+chr(34))}"' for tok in tokens)
+    escaped = " ".join(f'"{tok.replace(chr(34), chr(34) + chr(34))}"' for tok in tokens)
     return escaped
 
 
@@ -1246,7 +1351,6 @@ def cmd_search(
     event_types: list[str] | None = None,
     limit: int = 50,
     since: str | None = None,
-    role: str | None = None,
 ) -> list[dict[str, Any]]:
     """Full-text search across sessions using FTS5."""
     ensure_cache(cache)
@@ -1274,12 +1378,8 @@ def cmd_search(
 
     if event_types:
         placeholders = ",".join("?" * len(event_types))
-        query += f" AND e.event_type IN ({placeholders})"
+        query += f" AND e.msg_kind IN ({placeholders})"
         params.extend(event_types)
-
-    if role:
-        query += " AND e.message_role = ?"
-        params.append(role)
 
     if since:
         since_dt = parse_time_filter(since)
@@ -1292,225 +1392,6 @@ def cmd_search(
 
     results = cursor.execute(query, params).fetchall()
     return [dict(row) for row in results]
-
-
-def cmd_summary(
-    cache: CacheManager,
-    session_id: str,
-    project_id: str | None = None,
-) -> dict[str, Any]:
-    """Get a comprehensive summary of a session."""
-    ensure_cache(cache)
-    cursor = cache.conn.cursor()
-
-    # Get session info
-    query = """
-        SELECT * FROM sessions WHERE session_id = ?
-    """
-    params: list[Any] = [session_id]
-    if project_id:
-        query += " AND project_id = ?"
-        params.append(project_id)
-
-    session = cursor.execute(query, params).fetchone()
-    if not session:
-        return {"error": f"Session not found: {session_id}"}
-
-    # Get event type counts
-    type_counts = cursor.execute(
-        """
-        SELECT event_type, COUNT(*) as count
-        FROM events
-        WHERE session_id = ?
-        GROUP BY event_type
-    """,
-        (session_id,),
-    ).fetchall()
-
-    # Get model list
-    models = cursor.execute(
-        """
-        SELECT DISTINCT model_id
-        FROM events
-        WHERE session_id = ? AND model_id IS NOT NULL
-    """,
-        (session_id,),
-    ).fetchall()
-
-    # Get tool call count
-    tool_count = cursor.execute(
-        """
-        SELECT COUNT(*) as count
-        FROM events
-        WHERE session_id = ? AND event_type = 'assistant'
-        AND message_content LIKE '%[tool:%'
-    """,
-        (session_id,),
-    ).fetchone()
-
-    return {
-        "session_id": session["session_id"],
-        "project_id": session["project_id"],
-        "total_events": session["event_count"],
-        "user_messages": sum(t["count"] for t in type_counts if t["event_type"] == "user"),
-        "assistant_messages": sum(t["count"] for t in type_counts if t["event_type"] == "assistant"),
-        "tool_calls": tool_count["count"] if tool_count else 0,
-        "started_at": session["first_timestamp"],
-        "ended_at": session["last_timestamp"],
-        "models_used": [m["model_id"] for m in models],
-        "input_tokens": session["total_input_tokens"],
-        "output_tokens": session["total_output_tokens"],
-        "cache_read_tokens": session["total_cache_read_tokens"],
-        "cache_creation_tokens": session["total_cache_creation_tokens"],
-        "total_cost_usd": session["total_cost_usd"],
-    }
-
-
-def cmd_cost(
-    cache: CacheManager,
-    session_id: str,
-    project_id: str | None = None,
-    model: str | None = None,
-) -> dict[str, Any]:
-    """Estimate cost for a session based on token usage.
-
-    When model is None, auto-detects the dominant model family from the session's
-    models_used list. Falls back to 'opus' if no models are detected.
-    """
-    summary = cmd_summary(cache, session_id, project_id)
-    if "error" in summary:
-        return summary
-
-    # Auto-detect model family from session if not explicitly provided
-    if model is None:
-        models_used = summary.get("models_used", [])
-        families = [model_family_from_id(m) for m in models_used]
-        known = [f for f in families if f != "unknown"]
-        model = known[0] if known else "opus"
-
-    pricing = PRICING.get(model.lower(), PRICING["opus"])
-
-    input_tokens = summary["input_tokens"]
-    output_tokens = summary["output_tokens"]
-    cache_read = summary["cache_read_tokens"]
-    cache_creation = summary["cache_creation_tokens"]
-
-    input_cost = (input_tokens / 1_000_000) * pricing["input"]
-    output_cost = (output_tokens / 1_000_000) * pricing["output"]
-    cache_read_cost = (cache_read / 1_000_000) * pricing["input"] * pricing["cache_read_multiplier"]
-    cache_write_cost = (cache_creation / 1_000_000) * pricing["input"] * pricing["cache_write_multiplier"]
-
-    total_cost = input_cost + output_cost + cache_read_cost + cache_write_cost
-
-    return {
-        "session_id": session_id,
-        "model": model,
-        "input_tokens": input_tokens,
-        "output_tokens": output_tokens,
-        "cache_read_tokens": cache_read,
-        "cache_creation_tokens": cache_creation,
-        "input_cost_usd": round(input_cost, 4),
-        "output_cost_usd": round(output_cost, 4),
-        "cache_read_cost_usd": round(cache_read_cost, 4),
-        "cache_write_cost_usd": round(cache_write_cost, 4),
-        "total_cost_usd": round(total_cost, 4),
-    }
-
-
-def cmd_messages(
-    cache: CacheManager,
-    session_id: str | None = None,
-    project_id: str | None = None,
-    role: str | None = None,
-    limit: int = 100,
-    agent_id: str | None = None,
-    since: str | None = None,
-    exclude_system: bool = False,
-) -> list[dict[str, Any]]:
-    """Extract user and/or assistant messages from a session (or all sessions).
-
-    When session_id is None, searches across all sessions in the project.
-    When exclude_system is True, filters out system-injected messages
-    (tool approvals, bash output, compaction artifacts) to show only
-    human-typed messages.
-    """
-    ensure_cache(cache)
-    cursor = cache.conn.cursor()
-
-    # Resolve project_id from session_id when not explicitly provided
-    if session_id and not project_id:
-        project_id = resolve_project_id(cache, session_id)
-
-    query = """
-        SELECT event_type, timestamp, session_id, message_content
-        FROM events
-        WHERE 1=1
-    """
-    params: list[Any] = []
-
-    if session_id:
-        query += " AND session_id = ?"
-        params.append(session_id)
-
-    if project_id:
-        query += " AND project_id = ?"
-        params.append(project_id)
-
-    if role == "user":
-        query += " AND event_type = 'user'"
-    elif role == "assistant":
-        query += " AND event_type = 'assistant'"
-    else:
-        query += " AND event_type IN ('user', 'assistant')"
-
-    if agent_id:
-        query += " AND agent_id = ?"
-        params.append(agent_id)
-
-    if since:
-        since_dt = parse_time_filter(since)
-        if since_dt:
-            query += " AND timestamp >= ?"
-            params.append(since_dt.strftime("%Y-%m-%dT%H:%M:%S"))
-
-    # Exclude system-injected messages that masquerade as user events
-    # (tool approvals, bash output, compaction artifacts, skill injections)
-    _system_prefixes = (
-        "<bash-",
-        "<local-command",
-        "<task-notification",
-        "[Request interrupted",
-        "Your task is to create a detailed summary",
-        "This session is being continued",
-        "Base directory for this skill",
-        "<command-",
-    )
-    if exclude_system:
-        for prefix in _system_prefixes:
-            query += " AND message_content NOT LIKE ?"
-            params.append(prefix + "%")
-        query += " AND message_content IS NOT NULL AND length(message_content) > 0"
-
-    query += " ORDER BY timestamp LIMIT ?"
-    params.append(limit)
-
-    results = cursor.execute(query, params).fetchall()
-
-    messages = []
-    for row in results:
-        content = row["message_content"]
-        if not content or not content.strip():
-            continue
-        msg = {
-            "role": row["event_type"],
-            "timestamp": row["timestamp"],
-            "content": content[:2000],
-        }
-        if not session_id:
-            msg["session_id"] = row["session_id"]
-        messages.append(msg)
-
-    return messages
 
 
 def cmd_agents(
@@ -1550,7 +1431,9 @@ def cmd_agents(
     agents = []
     for row in results:
         agent = dict(row)
-        agent["total_billable_tokens"] = agent["input_tokens"] + agent["output_tokens"] + agent["cache_creation_tokens"]
+        agent["total_billable_tokens"] = (
+            agent["input_tokens"] + agent["output_tokens"] + agent["cache_creation_tokens"]
+        )
         agents.append(agent)
 
     return agents
@@ -1605,19 +1488,42 @@ def cmd_event(
 def cmd_traverse(
     cache: CacheManager,
     session_id: str,
-    uuid: str,
+    uuid: str | None = None,
     direction: Literal["ancestors", "descendants", "both"] = "both",
     project_id: str | None = None,
     depth_limit: int = 3,
+    event_types: list[str] | None = None,
+    since: str | None = None,
+    until: str | None = None,
+    result_limit: int | None = None,
+    detail: Literal["normal", "full"] = "normal",
 ) -> list[dict[str, Any]]:
     """Traverse the event tree from a specific UUID using recursive CTEs on event_edges.
 
+    When uuid is omitted, defaults to the most recent event in the session, so
+    traversal walks backwards through recent history (ancestors direction is typical).
+
     Args:
-        depth_limit: Max hops from the starting UUID. 0 means unlimited (traverse to all leaves).
-                     Default is 3, suitable for "looking around" before narrowing focus.
+        uuid: Starting event UUID. Defaults to the most recent event in the session.
+        depth_limit: Max hops from the starting UUID. 0 means unlimited. Default 3.
+        event_types: Filter results by msg_kind (applied after traversal).
+        since / until: ISO or relative time bounds (applied after traversal).
+        result_limit: Cap the number of events returned.
+        detail: "normal" returns key fields only (like turns); "full" adds raw_json/message_json.
     """
     ensure_cache(cache)
     cursor = cache.conn.cursor()
+
+    # Resolve UUID — default to most recent event in this session
+    if uuid is None:
+        row = cursor.execute(
+            "SELECT uuid FROM events WHERE session_id = ? ORDER BY timestamp DESC LIMIT 1",
+            (session_id,),
+        ).fetchone()
+        if row is None:
+            return []
+        uuid = str(row["uuid"])
+        log.info("traverse: defaulting to most recent event %s", uuid)
 
     result_uuids: set[str] = {uuid}
     depth_clause = f"AND aw.depth < {depth_limit}" if depth_limit > 0 else ""
@@ -1661,7 +1567,7 @@ def cmd_traverse(
     if not result_uuids:
         return []
 
-    # Fetch full event rows for all collected UUIDs
+    # Fetch event rows for all collected UUIDs, applying optional filters
     placeholders = ",".join("?" * len(result_uuids))
     fetch_query = f"""
         SELECT e.*, sf.filepath
@@ -1671,21 +1577,70 @@ def cmd_traverse(
           AND e.session_id = ?
     """
     fetch_params: list[Any] = list(result_uuids) + [session_id]
+
     if project_id:
         fetch_query += " AND e.project_id = ?"
         fetch_params.append(project_id)
+    if event_types:
+        et_placeholders = ",".join("?" * len(event_types))
+        fetch_query += f" AND e.msg_kind IN ({et_placeholders})"
+        fetch_params.extend(event_types)
+    if since:
+        since_dt = parse_time_filter(since)
+        if since_dt:
+            fetch_query += " AND e.timestamp >= ?"
+            fetch_params.append(since_dt.isoformat())
+    if until:
+        until_dt = parse_time_filter(until)
+        if until_dt:
+            fetch_query += " AND e.timestamp <= ?"
+            fetch_params.append(until_dt.isoformat())
+
     fetch_query += " ORDER BY e.timestamp"
+    if result_limit is not None:
+        fetch_query += f" LIMIT {result_limit}"
 
     event_rows = cursor.execute(fetch_query, fetch_params).fetchall()
 
     results: list[dict[str, Any]] = []
     for row in event_rows:
-        event = dict(row)
-        if event.get("raw_json"):
-            try:
-                event["message_json"] = json.loads(event["raw_json"])
-            except json.JSONDecodeError:
-                event["message_json"] = None
+        if detail == "full":
+            event: dict[str, Any] = dict(row)
+            if event.get("raw_json"):
+                try:
+                    event["message_json"] = json.loads(event["raw_json"])
+                except json.JSONDecodeError:
+                    event["message_json"] = None
+        else:
+            # "normal": return key fields only — no raw_json, no message_content_json
+            r = row
+            content: Any = r["message_content"]
+            if r["message_content_json"]:
+                try:
+                    content = json.loads(r["message_content_json"])
+                except json.JSONDecodeError:
+                    pass
+            event = {
+                "uuid": r["uuid"],
+                "parent_uuid": r["parent_uuid"],
+                "event_type": r["event_type"],
+                "msg_kind": r["msg_kind"],
+                "timestamp": r["timestamp"],
+                "model_id": r["model_id"],
+                "input_tokens": r["input_tokens"],
+                "output_tokens": r["output_tokens"],
+                "cache_read_tokens": r["cache_read_tokens"],
+                "cache_creation_tokens": r["cache_creation_tokens"],
+                "token_rate": r["token_rate"],
+                "billable_tokens": r["billable_tokens"],
+                "total_cost_usd": r["total_cost_usd"],
+                "role": r["message_role"],
+                "content": content,
+                "agent_id": r["agent_id"],
+                "agent_slug": r["agent_slug"],
+                "filepath": r["filepath"],
+                "line_number": r["line_number"],
+            }
         results.append(event)
 
     return results
@@ -1698,7 +1653,6 @@ def cmd_trajectory(
     start_uuid: str | None = None,
     end_uuid: str | None = None,
     event_types: list[str] | None = None,
-    role: str | None = None,
     limit: int | None = None,
 ) -> list[dict[str, Any]]:
     """Iterate through a session's event trajectory."""
@@ -1719,12 +1673,8 @@ def cmd_trajectory(
 
     if event_types:
         placeholders = ",".join("?" * len(event_types))
-        query += f" AND e.event_type IN ({placeholders})"
+        query += f" AND e.msg_kind IN ({placeholders})"
         params.extend(event_types)
-
-    if role:
-        query += " AND e.message_role = ?"
-        params.append(role)
 
     query += " ORDER BY e.timestamp"
 
@@ -1737,13 +1687,15 @@ def cmd_trajectory(
         events = events[start_idx:]
 
     if end_uuid:
-        end_idx = next((i for i, e in enumerate(events) if e.get("uuid") == end_uuid), len(events) - 1)
+        end_idx = next(
+            (i for i, e in enumerate(events) if e.get("uuid") == end_uuid), len(events) - 1
+        )
         events = events[: end_idx + 1]
 
     if limit:
         events = events[:limit]
 
-    # Parse message JSON
+    # Parse message JSON and enrich with cost fields
     for event in events:
         if event.get("raw_json"):
             try:
@@ -1760,7 +1712,6 @@ def cmd_reflect(
     meta_prompt: str,
     project_id: str | None = None,
     event_types: list[str] | None = None,
-    role: str | None = None,
     start_uuid: str | None = None,
     end_uuid: str | None = None,
     limit: int | None = None,
@@ -1777,7 +1728,6 @@ def cmd_reflect(
         start_uuid=start_uuid,
         end_uuid=end_uuid,
         event_types=event_types,
-        role=role,
         limit=limit,
     )
 
@@ -1922,7 +1872,7 @@ def load_pipeline(task: str, model: str, device: str = "cpu") -> Any:
     from transformers import pipeline  # noqa: E402 — deferred import for heavy ML deps
 
     log.info("Loading pipeline: task=%s model=%s device=%s", task, model, device)
-    return pipeline(task, model=model, device=device)  # type: ignore[call-overload]
+    return pipeline(task, model=model, device=device)
 
 
 def analyze_sentiment(
@@ -2018,7 +1968,9 @@ def analyze_zero_shot(
                 enriched["analysis"] = {
                     "task": "zero-shot",
                     "model": effective_model,
-                    "labels": dict(zip(pred["labels"], [round(s, 4) for s in pred["scores"]], strict=True)),
+                    "labels": dict(
+                        zip(pred["labels"], [round(s, 4) for s in pred["scores"]], strict=True)
+                    ),
                     "top_label": pred["labels"][0],
                     "top_score": round(pred["scores"][0], 4),
                 }
@@ -2120,7 +2072,9 @@ def analyze_summarize(
     pipe = load_pipeline(ML_TASK_NAMES["summarize"], effective_model)
 
     if concatenate:
-        combined_text = "\n\n".join(m.get("content", "") for m in messages if m.get("content", "").strip())
+        combined_text = "\n\n".join(
+            m.get("content", "") for m in messages if m.get("content", "").strip()
+        )
         combined_text = truncate_content(combined_text, max_chars)
 
         if combined_text.strip():
@@ -2132,7 +2086,9 @@ def analyze_summarize(
         return [
             {
                 "role": "summary",
-                "content": combined_text[:200] + "..." if len(combined_text) > 200 else combined_text,
+                "content": combined_text[:200] + "..."
+                if len(combined_text) > 200
+                else combined_text,
                 "message_count": len(messages),
                 "analysis": {
                     "task": "summarize",
@@ -2173,7 +2129,6 @@ def cmd_reflect_ml(
     session_id: str,
     engine: str,
     project_id: str | None = None,
-    role: str | None = None,
     limit: int | None = None,
     model: str | None = None,
     batch_size: int = 8,
@@ -2191,7 +2146,6 @@ def cmd_reflect_ml(
         session_id: Session UUID.
         engine: ML engine name (sentiment, zero-shot, ner, summarize).
         project_id: Optional project filter.
-        role: Optional role filter (user/assistant).
         limit: Max messages to process.
         model: Override default HuggingFace model.
         batch_size: Batch size for ML processing.
@@ -2207,7 +2161,6 @@ def cmd_reflect_ml(
         cache,
         session_id=session_id,
         project_id=project_id,
-        role=role,
         limit=limit,
     )
 
@@ -2232,7 +2185,9 @@ def cmd_reflect_ml(
 
     # Run the appropriate analysis
     if engine == "sentiment":
-        analyzed = analyze_sentiment(messages, model=model, batch_size=batch_size, max_chars=max_chars)
+        analyzed = analyze_sentiment(
+            messages, model=model, batch_size=batch_size, max_chars=max_chars
+        )
     elif engine == "zero-shot":
         analyzed = analyze_zero_shot(
             messages, labels=labels or [], model=model, batch_size=batch_size, max_chars=max_chars
@@ -2412,6 +2367,7 @@ def main(
     args: argparse.Namespace,
     cache: CacheManager | None = None,
     projects_path: Path | None = None,
+    _cwd: Path | None = None,
 ) -> None:
     """Main entry point.
 
@@ -2419,6 +2375,7 @@ def main(
         args: Parsed command line arguments.
         cache: Optional CacheManager instance for dependency injection (used in testing).
         projects_path: Optional projects path override (used in testing).
+        _cwd: Override for current working directory (used in testing).
     """
     owns_cache = cache is None
     if owns_cache:
@@ -2455,6 +2412,14 @@ def main(
                     )
             # If cache_frozen, skip all cache updates
 
+        # Infer --project from CWD when not explicitly specified.
+        # Skip for cache commands: they manage the schema itself and don't filter by project.
+        if args.command != "cache" and not getattr(args, "project", None):
+            inferred = infer_project_id(cache, cwd=_cwd)
+            if inferred:
+                log.info("Inferred project_id from CWD: %s", inferred)
+                args.project = inferred
+
         # Cache commands
         if args.command == "cache":
             if args.cache_command == "init":
@@ -2476,9 +2441,16 @@ def main(
             result = cmd_project_id(cache, args.session_id)
 
         elif args.command == "sessions":
+            sessions_project_id = args.project_id or args.project
+            if not sessions_project_id:
+                log.error(
+                    "sessions requires a project_id. "
+                    "Provide it as a positional argument or run from the project directory."
+                )
+                raise SystemExit(1)
             result = cmd_sessions(
                 cache,
-                args.project_id,
+                sessions_project_id,
                 limit=args.limit,
                 since=args.since,
             )
@@ -2496,15 +2468,6 @@ def main(
                 include_content=not args.no_content,
             )
 
-        elif args.command == "tools":
-            result = cmd_tools(
-                cache,
-                args.session_id,
-                project_id=args.project,
-                tool_name=args.tool,
-                detail=args.detail,
-            )
-
         elif args.command == "search":
             result = cmd_search(
                 cache,
@@ -2513,48 +2476,12 @@ def main(
                 event_types=args.types,
                 limit=args.limit,
                 since=getattr(args, "since", None),
-                role=getattr(args, "role", None),
-            )
-
-        elif args.command == "summary":
-            result = cmd_summary(
-                cache,
-                args.session_id,
-                project_id=args.project,
-            )
-
-        elif args.command == "cost":
-            result = cmd_cost(
-                cache,
-                args.session_id,
-                project_id=args.project,
-                model=args.model,
-            )
-
-        elif args.command == "messages":
-            result = cmd_messages(
-                cache,
-                session_id=args.session_id,
-                project_id=args.project,
-                role=args.role,
-                limit=args.limit,
-                agent_id=getattr(args, "agent", None),
-                since=getattr(args, "since", None),
-                exclude_system=getattr(args, "exclude_system", False),
             )
 
         elif args.command == "agents":
             result = cmd_agents(
                 cache,
                 args.session_id,
-                project_id=args.project,
-            )
-
-        elif args.command == "event":
-            result = cmd_event(
-                cache,
-                args.session_id,
-                args.uuid,
                 project_id=args.project,
             )
 
@@ -2565,19 +2492,12 @@ def main(
                 args.uuid,
                 direction=args.direction,
                 project_id=args.project,
-                depth_limit=args.limit,
-            )
-
-        elif args.command == "trajectory":
-            result = cmd_trajectory(
-                cache,
-                args.session_id,
-                project_id=args.project,
-                start_uuid=args.start,
-                end_uuid=args.end,
-                event_types=args.types,
-                role=args.role,
-                limit=args.limit,
+                depth_limit=args.depth,
+                event_types=getattr(args, "types", None),
+                since=getattr(args, "since", None),
+                until=getattr(args, "until", None),
+                result_limit=args.limit,
+                detail=args.detail,
             )
 
         elif args.command == "reflect":
@@ -2596,7 +2516,6 @@ def main(
                     args.session_id,
                     engine=engine,
                     project_id=args.project,
-                    role=args.role,
                     limit=args.limit,
                     model=getattr(args, "ml_model", None),
                     batch_size=getattr(args, "batch_size", 8),
@@ -2622,7 +2541,6 @@ def main(
                     meta_prompt,
                     project_id=args.project,
                     event_types=args.types,
-                    role=args.role,
                     start_uuid=args.start,
                     end_uuid=args.end,
                     limit=args.limit,
@@ -2668,8 +2586,20 @@ if __name__ == "__main__":  # pragma: no cover
     )
 
     # Global options
-    parser.add_argument("-q", "--quiet", action="store_true", help="Show only errors")
-    parser.add_argument("-v", "--verbose", action="store_true", help="Enable debug logging")
+    parser.add_argument(
+        "-q",
+        "--quiet",
+        action="count",
+        default=None,
+        help="Reduce verbosity (-q ERROR, -qq CRITICAL/silent)",
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="count",
+        default=None,
+        help="Increase verbosity (-v INFO, -vv DEBUG)",
+    )
     parser.add_argument(
         "-f",
         "--format",
@@ -2716,94 +2646,128 @@ if __name__ == "__main__":  # pragma: no cover
 
     # sessions command
     sessions_parser = subparsers.add_parser("sessions", help="List sessions for a project")
-    sessions_parser.add_argument("project_id", help="Project ID (kebab-cased path)")
+    sessions_parser.add_argument(
+        "project_id",
+        nargs="?",
+        default=None,
+        help="Project ID (kebab-cased path). Inferred from CWD when omitted.",
+    )
     sessions_parser.add_argument("-n", "--limit", type=int, default=20, help="Max sessions")
     sessions_parser.add_argument("--since", help="Filter since timestamp (ISO or relative)")
 
     # turns command
     turns_parser = subparsers.add_parser("turns", help="Show turns in a session")
     turns_parser.add_argument("session_id", help="Session UUID")
-    turns_parser.add_argument("-t", "--types", nargs="+", help="Filter event types")
-    turns_parser.add_argument("--since", help="Filter events since timestamp")
-    turns_parser.add_argument("--until", help="Filter events until timestamp")
+    turns_parser.add_argument(
+        "-t",
+        "--types",
+        nargs="+",
+        metavar="MSG_KIND",
+        help=(
+            "Filter by msg_kind. Valid values: "
+            "human task_notification tool_result user_text meta "
+            "assistant_text thinking tool_use other"
+        ),
+    )
+    turns_parser.add_argument(
+        "--since", help="Filter events since timestamp (ISO or relative: 30m, 2h, 1d)"
+    )
+    turns_parser.add_argument(
+        "--until", help="Filter events until timestamp (ISO or relative: 30m, 2h, 1d)"
+    )
     turns_parser.add_argument("-n", "--limit", type=int, default=100, help="Max turns")
     turns_parser.add_argument("--offset", type=int, default=0, help="Skip first N turns")
     turns_parser.add_argument("--no-content", action="store_true", help="Exclude content")
 
-    # tools command
-    tools_parser = subparsers.add_parser("tools", help="Show tool usage in a session")
-    tools_parser.add_argument("session_id", help="Session UUID")
-    tools_parser.add_argument("--detail", action="store_true", help="Show all tool calls")
-    tools_parser.add_argument("--tool", help="Filter to specific tool name")
-
     # search command
     search_parser = subparsers.add_parser("search", help="Full-text search across sessions")
     search_parser.add_argument("pattern", help="Search pattern (FTS5 syntax)")
-    search_parser.add_argument("-t", "--types", nargs="+", help="Filter event types")
+    search_parser.add_argument(
+        "-t",
+        "--types",
+        nargs="+",
+        metavar="MSG_KIND",
+        help=(
+            "Filter by msg_kind. Valid values: "
+            "human task_notification tool_result user_text meta "
+            "assistant_text thinking tool_use other"
+        ),
+    )
     search_parser.add_argument("-n", "--limit", type=int, default=50, help="Max results")
-    search_parser.add_argument("--since", help="Filter since timestamp (ISO or relative like '30m', '1h')")
-    search_parser.add_argument("--role", choices=["user", "assistant"], help="Filter by message role")
+    search_parser.add_argument(
+        "--since", help="Filter since timestamp (ISO or relative like '30m', '1h')"
+    )
 
     # summary command
-    summary_parser = subparsers.add_parser("summary", help="Get session summary")
-    summary_parser.add_argument("session_id", help="Session UUID")
-
-    # cost command
-    cost_parser = subparsers.add_parser("cost", help="Estimate session cost")
-    cost_parser.add_argument("session_id", help="Session UUID")
-    cost_parser.add_argument("--model", choices=["opus", "sonnet", "haiku"], default=None)
-
-    # messages command
-    messages_parser = subparsers.add_parser("messages", help="Extract messages")
-    messages_parser.add_argument(
-        "session_id", nargs="?", default=None, help="Session UUID (omit to search all sessions)"
-    )
-    messages_parser.add_argument("--role", choices=["user", "assistant"])
-    messages_parser.add_argument("-n", "--limit", type=int, default=100)
-    messages_parser.add_argument("--agent", help="Filter to specific agent ID")
-    messages_parser.add_argument("--since", help="Filter since timestamp (ISO or relative like '30m', '1h')")
-    messages_parser.add_argument(
-        "--exclude-system",
-        action="store_true",
-        help="Exclude system-injected messages (tool approvals, bash output, compaction artifacts)",
-    )
-
     # agents command
     agents_parser = subparsers.add_parser("agents", help="List subagents")
     agents_parser.add_argument("session_id", help="Session UUID")
 
-    # event command
-    event_parser = subparsers.add_parser("event", help="Get event by UUID")
-    event_parser.add_argument("session_id", help="Session UUID")
-    event_parser.add_argument("uuid", help="Event UUID")
-
     # traverse command
-    traverse_parser = subparsers.add_parser("traverse", help="Traverse event tree")
+    traverse_parser = subparsers.add_parser("traverse", help="Traverse event tree from a UUID")
     traverse_parser.add_argument("session_id", help="Session UUID")
-    traverse_parser.add_argument("uuid", help="Starting event UUID")
-    traverse_parser.add_argument("--direction", choices=["ancestors", "descendants", "both"], default="both")
     traverse_parser.add_argument(
-        "-n", "--limit", type=int, default=3, help="Max traversal depth (hops). 0 = unlimited. Default: 3"
+        "uuid",
+        nargs="?",
+        default=None,
+        help="Starting event UUID (default: most recent event in session)",
+    )
+    traverse_parser.add_argument(
+        "--direction", choices=["ancestors", "descendants", "both"], default="both"
+    )
+    traverse_parser.add_argument(
+        "--depth",
+        type=int,
+        default=3,
+        help="Max traversal depth (hops). 0 = unlimited. Default: 3",
+    )
+    traverse_parser.add_argument(
+        "-t",
+        "--types",
+        nargs="+",
+        metavar="MSG_KIND",
+        help=(
+            "Filter results by msg_kind: "
+            "human task_notification tool_result user_text meta "
+            "assistant_text thinking tool_use other"
+        ),
+    )
+    traverse_parser.add_argument("--since", help="Only events after TIME (ISO or relative: 1h, 30m)")
+    traverse_parser.add_argument("--until", help="Only events before TIME")
+    traverse_parser.add_argument(
+        "-n",
+        "--limit",
+        type=int,
+        default=None,
+        help="Max events to return (default: all)",
+    )
+    traverse_parser.add_argument(
+        "--detail",
+        choices=["normal", "full"],
+        default="normal",
+        help="normal=key fields only (default); full=includes raw_json and message_json",
     )
 
-    # trajectory command
-    trajectory_parser = subparsers.add_parser("trajectory", help="Get event trajectory")
-    trajectory_parser.add_argument("session_id", help="Session UUID")
-    trajectory_parser.add_argument("--start", help="Start UUID")
-    trajectory_parser.add_argument("--end", help="End UUID")
-    trajectory_parser.add_argument("-t", "--types", nargs="+")
-    trajectory_parser.add_argument("--role", choices=["user", "assistant"])
-    trajectory_parser.add_argument("-n", "--limit", type=int)
-
     # reflect command
-    reflect_parser = subparsers.add_parser("reflect", help="Meta-prompt evaluation or local ML analysis")
+    reflect_parser = subparsers.add_parser(
+        "reflect", help="Meta-prompt evaluation or local ML analysis"
+    )
     reflect_parser.add_argument("session_id", help="Session UUID")
     reflect_parser.add_argument("--prompt", help="Meta-prompt (use {{content}} placeholder)")
     reflect_parser.add_argument("--prompt-file", help="Read prompt from file")
     reflect_parser.add_argument("--start", help="Start UUID")
     reflect_parser.add_argument("--end", help="End UUID")
-    reflect_parser.add_argument("-t", "--types", nargs="+")
-    reflect_parser.add_argument("--role", choices=["user", "assistant"])
+    reflect_parser.add_argument(
+        "-t",
+        "--types",
+        nargs="+",
+        metavar="MSG_KIND",
+        help=(
+            "Filter by msg_kind. Valid values: "
+            "human task_notification tool_result user_text meta "
+            "assistant_text thinking tool_use other"
+        ),
+    )
     reflect_parser.add_argument("-n", "--limit", type=int)
     reflect_parser.add_argument("--schema", help="Expected JSON output schema")
     # ML engine options
@@ -2840,8 +2804,20 @@ if __name__ == "__main__":  # pragma: no cover
 
     args = parser.parse_args()
 
+    _net = (args.verbose or 0) - (args.quiet or 0)
+    _level = (
+        logging.DEBUG
+        if _net >= 2
+        else logging.INFO
+        if _net == 1
+        else logging.WARNING
+        if _net == 0
+        else logging.ERROR
+        if _net == -1
+        else logging.CRITICAL
+    )
     logging.basicConfig(
-        level=logging.DEBUG if args.verbose else logging.ERROR if args.quiet else logging.INFO,
+        level=_level,
         format="%(asctime)s|%(name)s|%(levelname)s|%(filename)s:%(lineno)d - %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )

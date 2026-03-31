@@ -11,7 +11,7 @@ UV = uv run --no-project
 # Shared pytest args to isolate from root pyproject.toml config
 PYTEST_ARGS = -v --rootdir . -o 'addopts='
 
-.PHONY: all test test-cov format format-check lint lint-fix typecheck check fix smoke clean help debug
+.PHONY: all test test-cov format format-check lint lint-fix typecheck check fix smoke clean help debug ci
 
 debug:
 	@echo "Makefile dir (PWD):  $(PWD)"
@@ -19,6 +19,7 @@ debug:
 
 # Default target
 all: format lint typecheck test
+ci: all
 
 # Run tests via PEP-723 entry point (deps declared in test file)
 test:
