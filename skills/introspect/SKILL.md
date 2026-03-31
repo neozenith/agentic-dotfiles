@@ -20,13 +20,16 @@ ${CLAUDE_SESSION_ID}
 # Most recently updated session for this project (infers project from CWD)
 .claude/skills/introspect/scripts/introspect_sessions.sh sessions -n 1
 
-# Recent turns in the current session
-.claude/skills/introspect/scripts/introspect_sessions.sh turns ${CLAUDE_SESSION_ID} -n 20
+# All events in the current session, flat chronological order
+.claude/skills/introspect/scripts/introspect_sessions.sh traverse ${CLAUDE_SESSION_ID} --all -n 20
 
-# Tool usage turns only
-.claude/skills/introspect/scripts/introspect_sessions.sh turns ${CLAUDE_SESSION_ID} -t tool_use
+# Tool usage events only
+.claude/skills/introspect/scripts/introspect_sessions.sh traverse ${CLAUDE_SESSION_ID} --all -t tool_use
 
-# Traverse backwards from most recent event (no UUID needed)
+# Per-agent summary (costs, token totals, event counts — includes subagents)
+.claude/skills/introspect/scripts/introspect_sessions.sh traverse ${CLAUDE_SESSION_ID} --summary
+
+# Traverse backwards from most recent event (graph mode, no UUID needed)
 .claude/skills/introspect/scripts/introspect_sessions.sh traverse ${CLAUDE_SESSION_ID}
 
 # Traverse ancestors of a specific event
@@ -107,11 +110,11 @@ sqlite3 ~/.claude/cache/introspect_sessions.db \
 
 | Command | Description |
 |---|---|
-| `turns SESSION` | Ordered turns with content and filtering (`-t MSG_KIND` to filter) |
-| `agents SESSION` | List subagents with token attribution |
+| `traverse SESSION --all` | Flat chronological event list with filtering (`-t`, `--since`, `-n`, `--offset`, `--no-content`) |
+| `traverse SESSION --summary` | Per-agent aggregated stats (costs, tokens, event counts — includes subagents) |
+| `traverse SESSION [UUID]` | Ancestor/descendant graph walk; `--detail full` for single-event detail |
 | `sessions -- PROJECT` | List sessions for a project |
 | `search "pattern"` | FTS5 cross-session search |
-| `traverse SESSION UUID` | Ancestor/descendant tree; `-t`/`--since`/`-n`/`--detail full` for single-event detail |
 | `project-id SESSION` | Resolve project ID from session ID |
 | `reflect SESSION` | Run meta-prompt or ML engine on events |
 | `cache {init,status,update,rebuild,clear}` | Manual cache management |
@@ -130,12 +133,15 @@ Default is JSON. Override with `-f/--format`:
 
 Common jq patterns:
 ```bash
-introspect_sessions.sh turns ${CLAUDE_SESSION_ID} -t tool_use | jq '.[] | .content'
+introspect_sessions.sh traverse ${CLAUDE_SESSION_ID} --all -t tool_use | jq '.[] | .content'
 introspect_sessions.sh sessions -- PROJECT_ID | jq '.[0].session_id'
 
 # Cost queries (every event has token_rate, billable_tokens, total_cost_usd)
-introspect_sessions.sh turns ${CLAUDE_SESSION_ID} | jq '[.[].total_cost_usd] | add'
-introspect_sessions.sh turns ${CLAUDE_SESSION_ID} | jq 'sort_by(-.total_cost_usd) | .[:5]'
+introspect_sessions.sh traverse ${CLAUDE_SESSION_ID} --all | jq '[.[].total_cost_usd] | add'
+introspect_sessions.sh traverse ${CLAUDE_SESSION_ID} --all | jq 'sort_by(-.total_cost_usd) | .[:5]'
+
+# Per-agent cost breakdown
+introspect_sessions.sh traverse ${CLAUDE_SESSION_ID} --summary | jq 'sort_by(-.total_cost_usd)'
 ```
 
 ## Reflect

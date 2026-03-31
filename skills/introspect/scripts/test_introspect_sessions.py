@@ -685,31 +685,33 @@ class TestQueryCommands:
         assert len(result) >= 0  # May be empty if test events are old
 
 
-class TestTurnsCommand:
-    """Tests for the cmd_turns function."""
+class TestTraverseAllMode:
+    """Tests for cmd_traverse with all_events=True (replaces turns)."""
 
-    def test_cmd_turns_basic(self, populated_cache: iss.CacheManager) -> None:
-        """Test basic turns retrieval."""
-        result = iss.cmd_turns(populated_cache, session_id="session-abc")
+    def test_traverse_all_basic(self, populated_cache: iss.CacheManager) -> None:
+        """Flat all-events listing returns all session events in order."""
+        result = iss.cmd_traverse(populated_cache, session_id="session-abc", all_events=True)
 
         assert len(result) == 6
         assert result[0]["type"] in ["user", "assistant"]
         assert "turn_num" in result[0]
         assert "content" in result[0]
 
-    def test_cmd_turns_with_msg_kind_filter(self, populated_cache: iss.CacheManager) -> None:
-        """Test turns filtered by msg_kind (the 9-kind classification, not raw event_type)."""
+    def test_traverse_all_msg_kind_filter(self, populated_cache: iss.CacheManager) -> None:
+        """Filter by msg_kind in all-events mode."""
         # fixture: uuid-001 (human), uuid-005 (human) → 2 results
-        result = iss.cmd_turns(populated_cache, session_id="session-abc", event_types=["human"])
+        result = iss.cmd_traverse(
+            populated_cache, session_id="session-abc", all_events=True, event_types=["human"]
+        )
 
         assert len(result) == 2
         for turn in result:
             assert turn["msg_kind"] == "human"
-            assert turn["type"] == "user"  # raw event_type still present
+            assert turn["type"] == "user"
 
-    def test_cmd_turns_includes_msg_kind_in_output(self, populated_cache: iss.CacheManager) -> None:
-        """Test that msg_kind field is present in turn output."""
-        result = iss.cmd_turns(populated_cache, session_id="session-abc")
+    def test_traverse_all_includes_msg_kind(self, populated_cache: iss.CacheManager) -> None:
+        """msg_kind field is present and valid in every all-events result."""
+        result = iss.cmd_traverse(populated_cache, session_id="session-abc", all_events=True)
 
         assert len(result) == 6
         for turn in result:
@@ -726,36 +728,54 @@ class TestTurnsCommand:
                 "other",
             }
 
-    def test_cmd_turns_with_limit_and_offset(self, populated_cache: iss.CacheManager) -> None:
-        """Test turns with pagination."""
-        result = iss.cmd_turns(populated_cache, session_id="session-abc", limit=2, offset=1)
+    def test_traverse_all_pagination(self, populated_cache: iss.CacheManager) -> None:
+        """Pagination via result_limit + offset works in all-events mode."""
+        result = iss.cmd_traverse(
+            populated_cache, session_id="session-abc", all_events=True, result_limit=2, offset=1
+        )
 
         assert len(result) == 2
         assert result[0]["turn_num"] == 2
 
-    def test_cmd_turns_without_content(self, populated_cache: iss.CacheManager) -> None:
-        """Test turns without content (no-content mode)."""
-        result = iss.cmd_turns(populated_cache, session_id="session-abc", include_content=False)
+    def test_traverse_all_no_content(self, populated_cache: iss.CacheManager) -> None:
+        """include_content=False omits content and role fields."""
+        result = iss.cmd_traverse(
+            populated_cache, session_id="session-abc", all_events=True, include_content=False
+        )
 
         assert len(result) > 0
         assert "content" not in result[0]
         assert "role" not in result[0]
 
-    def test_cmd_turns_with_project_filter(self, populated_cache: iss.CacheManager) -> None:
-        """Test turns with project filter."""
-        result = iss.cmd_turns(
-            populated_cache, session_id="session-abc", project_id="-Test-Project"
+    def test_traverse_all_project_filter(self, populated_cache: iss.CacheManager) -> None:
+        """Project filter is applied in all-events mode."""
+        result = iss.cmd_traverse(
+            populated_cache,
+            session_id="session-abc",
+            all_events=True,
+            project_id="-Test-Project",
         )
 
         assert len(result) == 6
 
-    def test_cmd_turns_with_time_filter(self, populated_cache: iss.CacheManager) -> None:
-        """Test turns with time filters."""
-        # This should return all events since they're in the future (2026)
-        result = iss.cmd_turns(
-            populated_cache, session_id="session-abc", since="2026-01-01T00:00:00"
+    def test_traverse_all_time_filter(self, populated_cache: iss.CacheManager) -> None:
+        """Time filter is applied in all-events mode."""
+        result = iss.cmd_traverse(
+            populated_cache,
+            session_id="session-abc",
+            all_events=True,
+            since="2026-01-01T00:00:00",
         )
         assert len(result) == 6
+
+    def test_traverse_all_detail_full(self, populated_cache: iss.CacheManager) -> None:
+        """detail='full' returns raw_json and message_json in all-events mode."""
+        result = iss.cmd_traverse(
+            populated_cache, session_id="session-abc", all_events=True, detail="full"
+        )
+        assert len(result) > 0
+        # Full detail includes raw database row fields
+        assert "raw_json" in result[0]
 
 
 class TestComputeEventCosts:
@@ -800,9 +820,11 @@ class TestComputeEventCosts:
         assert billable == 0.0
         assert cost == 0.0
 
-    def test_turns_output_includes_cost_fields(self, populated_cache: iss.CacheManager) -> None:
-        """cmd_turns results carry token_rate, billable_tokens, total_cost_usd from DB."""
-        result = iss.cmd_turns(populated_cache, session_id="session-abc")
+    def test_traverse_all_output_includes_cost_fields(
+        self, populated_cache: iss.CacheManager
+    ) -> None:
+        """traverse --all results carry token_rate, billable_tokens, total_cost_usd from DB."""
+        result = iss.cmd_traverse(populated_cache, session_id="session-abc", all_events=True)
         assert len(result) > 0
         for turn in result:
             assert "token_rate" in turn
@@ -940,24 +962,31 @@ class TestModelFamilyFromId:
         assert iss.model_family_from_id(None) == "unknown"
 
 
-class TestAgentsCommand:
-    """Tests for the cmd_agents function."""
+class TestTraverseSummaryMode:
+    """Tests for cmd_traverse with summary=True (replaces agents)."""
 
-    def test_cmd_agents_basic(self, populated_cache: iss.CacheManager) -> None:
-        """Test listing agents."""
-        result = iss.cmd_agents(populated_cache, session_id="session-abc")
+    def test_traverse_summary_basic(self, populated_cache: iss.CacheManager) -> None:
+        """Summary mode returns per-agent rows with correct cost fields."""
+        result = iss.cmd_traverse(populated_cache, session_id="session-abc", summary=True)
 
-        # Should find at least the main agent and subagent
+        # Fixture has at least the main session events
         assert len(result) >= 1
-        for agent in result:
-            assert "agent_id" in agent
-            assert "event_count" in agent
-            assert "total_billable_tokens" in agent
+        for row in result:
+            assert "agent_id" in row
+            assert "event_count" in row
+            assert "total_billable_tokens" in row
+            assert "total_cost_usd" in row
+            # Accurate cost: SUM(billable_tokens) not the old buggy formula
+            assert row["total_billable_tokens"] >= 0
+            assert row["total_cost_usd"] >= 0
 
-    def test_cmd_agents_with_project(self, populated_cache: iss.CacheManager) -> None:
-        """Test agents with project filter."""
-        result = iss.cmd_agents(
-            populated_cache, session_id="session-abc", project_id="-Test-Project"
+    def test_traverse_summary_with_project(self, populated_cache: iss.CacheManager) -> None:
+        """Summary mode respects project filter."""
+        result = iss.cmd_traverse(
+            populated_cache,
+            session_id="session-abc",
+            summary=True,
+            project_id="-Test-Project",
         )
         assert isinstance(result, list)
 
@@ -1542,45 +1571,42 @@ class TestGetFilesNeedingUpdateEdgeCases:
         assert result == []  # File skipped due to OSError
 
 
-class TestCmdTurnsEdgeCases:
-    """Tests for edge cases in cmd_turns."""
+class TestTraverseAllEdgeCases:
+    """Tests for edge cases in traverse --all mode."""
 
-    def test_cmd_turns_with_until_filter(self, populated_cache: iss.CacheManager) -> None:
-        """Test cmd_turns with until time filter."""
-        # Set until to a time before some events
+    def test_traverse_all_with_until_filter(self, populated_cache: iss.CacheManager) -> None:
+        """until filter is applied in all-events mode."""
         until = (datetime(2026, 1, 15, 10, 0, 10, tzinfo=UTC)).isoformat()
-        turns = iss.cmd_turns(populated_cache, "session-abc", until=until, limit=100)
+        turns = iss.cmd_traverse(
+            populated_cache, "session-abc", all_events=True, until=until, result_limit=100
+        )
 
-        # Should get events up to that time
         assert len(turns) >= 1
         for turn in turns:
             assert turn["timestamp"] <= until
 
-    def test_cmd_turns_json_content_decode_error(
+    def test_traverse_all_json_content_decode_error(
         self, temp_cache: iss.CacheManager, temp_dir: Path
     ) -> None:
-        """Test that invalid JSON content falls back to text content."""
+        """Invalid message_content_json falls back to plain text in all-events mode."""
         projects_dir = temp_dir / "projects"
         projects_dir.mkdir()
         project_dir = projects_dir / "test-project"
         project_dir.mkdir()
 
-        # Create event with invalid JSON in message_content_json
         content = make_event("assistant", "001", content="plain text") + "\n"
         session_file = project_dir / "session-001.jsonl"
         session_file.write_text(content)
 
         temp_cache.update(projects_dir)
 
-        # Manually corrupt the message_content_json
         temp_cache.conn.execute(
             "UPDATE events SET message_content_json = 'invalid json' WHERE uuid = '001'"
         )
         temp_cache.conn.commit()
 
-        turns = iss.cmd_turns(temp_cache, "session-001", include_content=True)
+        turns = iss.cmd_traverse(temp_cache, "session-001", all_events=True, include_content=True)
         assert len(turns) == 1
-        # Falls back to message_content
         assert turns[0]["content"] == "plain text"
 
 
@@ -1614,11 +1640,13 @@ class TestParseTimeFilterEdgeCases:
         assert result is None
 
 
-class TestCmdTurnsNoContentJson:
-    """Tests for cmd_turns when message_content_json is missing."""
+class TestTraverseAllNoContentJson:
+    """Tests for traverse --all when message_content_json is missing."""
 
-    def test_cmd_turns_no_content_json(self, temp_cache: iss.CacheManager, temp_dir: Path) -> None:
-        """Test cmd_turns with content only in message_content, not message_content_json."""
+    def test_traverse_all_no_content_json(
+        self, temp_cache: iss.CacheManager, temp_dir: Path
+    ) -> None:
+        """Null message_content_json falls back to plain text in all-events mode."""
         projects_dir = temp_dir / "projects"
         projects_dir.mkdir()
         project_dir = projects_dir / "test-project"
@@ -1630,11 +1658,10 @@ class TestCmdTurnsNoContentJson:
 
         temp_cache.update(projects_dir)
 
-        # Clear message_content_json to test fallback path (line 941)
         temp_cache.conn.execute("UPDATE events SET message_content_json = NULL WHERE uuid = '001'")
         temp_cache.conn.commit()
 
-        turns = iss.cmd_turns(temp_cache, "session-001", include_content=True)
+        turns = iss.cmd_traverse(temp_cache, "session-001", all_events=True, include_content=True)
         assert len(turns) == 1
         assert turns[0]["content"] == "plain text"
 
@@ -1957,19 +1984,25 @@ class TestMainDispatch:
         captured = capsys.readouterr()
         assert captured.out.strip() == "[]" or "session" in captured.out
 
-    def test_main_turns(self, temp_dir: Path, capsys: pytest.CaptureFixture[str]) -> None:
-        """Test main() with turns command."""
+    def test_main_traverse_all(self, temp_dir: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        """Test main() with traverse --all (replaces turns)."""
         db_path = temp_dir / "cache.db"
         cache = iss.CacheManager(db_path=db_path)
         cache.init_schema()
 
         args = self._make_args(
-            command="turns",
+            command="traverse",
             session_id="session-123",
+            uuid=None,
+            direction="both",
+            depth=3,
             types=None,
             since=None,
             until=None,
             limit=100,
+            detail="normal",
+            all=True,
+            summary=False,
             offset=0,
             no_content=False,
         )
@@ -1995,13 +2028,30 @@ class TestMainDispatch:
         captured = capsys.readouterr()
         assert captured.out.strip() == "[]" or "search" in captured.out
 
-    def test_main_agents(self, temp_dir: Path, capsys: pytest.CaptureFixture[str]) -> None:
-        """Test main() with agents command."""
+    def test_main_traverse_summary(
+        self, temp_dir: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test main() with traverse --summary (replaces agents)."""
         db_path = temp_dir / "cache.db"
         cache = iss.CacheManager(db_path=db_path)
         cache.init_schema()
 
-        args = self._make_args(command="agents", session_id="session-123")
+        args = self._make_args(
+            command="traverse",
+            session_id="session-123",
+            uuid=None,
+            direction="both",
+            depth=3,
+            types=None,
+            since=None,
+            until=None,
+            limit=None,
+            detail="normal",
+            all=False,
+            summary=True,
+            offset=0,
+            no_content=False,
+        )
         iss.main(args, cache=cache, projects_path=temp_dir)
 
         captured = capsys.readouterr()
@@ -2024,6 +2074,10 @@ class TestMainDispatch:
             until=None,
             limit=None,
             detail="normal",
+            all=False,
+            summary=False,
+            offset=0,
+            no_content=False,
         )
         iss.main(args, cache=cache, projects_path=temp_dir)
 

@@ -1227,94 +1227,6 @@ def cmd_sessions(
     return [dict(row) for row in results]
 
 
-def cmd_turns(
-    cache: CacheManager,
-    session_id: str,
-    project_id: str | None = None,
-    event_types: list[str] | None = None,
-    since: str | None = None,
-    until: str | None = None,
-    limit: int = 100,
-    offset: int = 0,
-    include_content: bool = True,
-) -> list[dict[str, Any]]:
-    """Get turns (events) for a session with filtering options."""
-    ensure_cache(cache)
-    cursor = cache.conn.cursor()
-
-    query = """
-        SELECT
-            e.uuid, e.parent_uuid, e.event_type, e.msg_kind, e.timestamp, e.timestamp_local,
-            e.message_role, e.message_content, e.message_content_json, e.model_id,
-            e.input_tokens, e.output_tokens, e.cache_read_tokens, e.cache_creation_tokens,
-            e.token_rate, e.billable_tokens, e.total_cost_usd,
-            e.agent_id, e.agent_slug, sf.filepath, e.line_number
-        FROM events e
-        JOIN source_files sf ON e.source_file_id = sf.id
-        WHERE e.session_id = ?
-    """
-    params: list[Any] = [session_id]
-
-    if project_id:
-        query += " AND e.project_id = ?"
-        params.append(project_id)
-
-    if event_types:
-        placeholders = ",".join("?" * len(event_types))
-        query += f" AND e.msg_kind IN ({placeholders})"
-        params.extend(event_types)
-
-    if since:
-        since_dt = parse_time_filter(since)
-        if since_dt:
-            query += " AND e.timestamp >= ?"
-            params.append(since_dt.isoformat())
-
-    if until:
-        until_dt = parse_time_filter(until)
-        if until_dt:
-            query += " AND e.timestamp <= ?"
-            params.append(until_dt.isoformat())
-
-    query += " ORDER BY e.timestamp LIMIT ? OFFSET ?"
-    params.extend([limit, offset])
-
-    results = cursor.execute(query, params).fetchall()
-
-    turns = []
-    for i, row in enumerate(results, start=offset + 1):
-        turn = {
-            "turn_num": i,
-            "type": row["event_type"],
-            "msg_kind": row["msg_kind"],
-            "timestamp": row["timestamp"],
-            "model_id": row["model_id"],
-            "input_tokens": row["input_tokens"],
-            "output_tokens": row["output_tokens"],
-            "cache_read_tokens": row["cache_read_tokens"],
-            "cache_creation_tokens": row["cache_creation_tokens"],
-            "token_rate": row["token_rate"],
-            "billable_tokens": row["billable_tokens"],
-            "total_cost_usd": row["total_cost_usd"],
-            "uuid": row["uuid"],
-            "parent_uuid": row["parent_uuid"],
-            "filepath": row["filepath"],
-            "line_number": row["line_number"],
-        }
-        if include_content:
-            # Use JSON content if available, else plain text
-            if row["message_content_json"]:
-                try:
-                    turn["content"] = json.loads(row["message_content_json"])
-                except json.JSONDecodeError:
-                    turn["content"] = row["message_content"]
-            else:
-                turn["content"] = row["message_content"]
-            turn["role"] = row["message_role"]
-
-        turns.append(turn)
-
-    return turns
 
 
 def _escape_fts5_query(pattern: str) -> str:
@@ -1394,49 +1306,6 @@ def cmd_search(
     return [dict(row) for row in results]
 
 
-def cmd_agents(
-    cache: CacheManager,
-    session_id: str,
-    project_id: str | None = None,
-) -> list[dict[str, Any]]:
-    """List all subagents (sidechains) within a session."""
-    ensure_cache(cache)
-    cursor = cache.conn.cursor()
-
-    query = """
-        SELECT
-            agent_id,
-            agent_slug,
-            MAX(is_sidechain) as is_sidechain,
-            MIN(timestamp) as first_event,
-            MAX(timestamp) as last_event,
-            COUNT(*) as event_count,
-            SUM(input_tokens) as input_tokens,
-            SUM(output_tokens) as output_tokens,
-            SUM(cache_read_tokens) as cache_read_tokens,
-            SUM(cache_creation_tokens) as cache_creation_tokens
-        FROM events
-        WHERE session_id = ? AND agent_id IS NOT NULL
-    """
-    params: list[Any] = [session_id]
-
-    if project_id:
-        query += " AND project_id = ?"
-        params.append(project_id)
-
-    query += " GROUP BY agent_id ORDER BY first_event"
-
-    results = cursor.execute(query, params).fetchall()
-
-    agents = []
-    for row in results:
-        agent = dict(row)
-        agent["total_billable_tokens"] = (
-            agent["input_tokens"] + agent["output_tokens"] + agent["cache_creation_tokens"]
-        )
-        agents.append(agent)
-
-    return agents
 
 
 def cmd_event(
@@ -1497,23 +1366,144 @@ def cmd_traverse(
     until: str | None = None,
     result_limit: int | None = None,
     detail: Literal["normal", "full"] = "normal",
+    all_events: bool = False,
+    summary: bool = False,
+    offset: int = 0,
+    include_content: bool = True,
 ) -> list[dict[str, Any]]:
-    """Traverse the event tree from a specific UUID using recursive CTEs on event_edges.
+    """Retrieve and traverse session events.
 
-    When uuid is omitted, defaults to the most recent event in the session, so
-    traversal walks backwards through recent history (ancestors direction is typical).
+    Three modes of operation:
+    - **summary** (``summary=True``): Per-agent/subagent aggregated stats — event counts,
+      token totals, and accurate costs via ``SUM(billable_tokens)`` / ``SUM(total_cost_usd)``.
+      Includes both the main session (``agent_id=NULL``) and all subagents.
+    - **all** (``all_events=True``): Flat chronological listing of all events in the session,
+      including subagent events.  Supports ``offset``, ``result_limit``, ``event_types``,
+      ``since``/``until``, ``detail``, and ``include_content``.
+    - **graph traversal** (default): Walk the ``event_edges`` ancestor/descendant tree from a
+      starting UUID.  When ``uuid`` is omitted, defaults to the most recent event so traversal
+      walks backwards through recent history.
 
     Args:
-        uuid: Starting event UUID. Defaults to the most recent event in the session.
-        depth_limit: Max hops from the starting UUID. 0 means unlimited. Default 3.
-        event_types: Filter results by msg_kind (applied after traversal).
-        since / until: ISO or relative time bounds (applied after traversal).
+        uuid: Starting UUID for graph traversal. Defaults to most-recent event when omitted.
+        depth_limit: Max hops from starting UUID. 0 = unlimited. Default 3.
+        event_types: Filter results by msg_kind (applied after traversal or in WHERE clause).
+        since / until: ISO or relative time bounds.
         result_limit: Cap the number of events returned.
-        detail: "normal" returns key fields only (like turns); "full" adds raw_json/message_json.
+        detail: "normal" returns key fields only; "full" adds raw_json and message_json.
+        all_events: Bypass graph traversal; return all session events chronologically.
+        summary: Return per-agent aggregated stats instead of individual events.
+        offset: Skip first N events (used with all_events mode).
+        include_content: Include message content and role in all_events normal-detail output.
     """
     ensure_cache(cache)
     cursor = cache.conn.cursor()
 
+    # --- SUMMARY MODE: per-agent aggregated stats ---
+    if summary:
+        agg_query = """
+            SELECT
+                agent_id,
+                agent_slug,
+                MAX(is_sidechain) as is_sidechain,
+                MIN(timestamp) as first_event,
+                MAX(timestamp) as last_event,
+                COUNT(*) as event_count,
+                SUM(input_tokens) as input_tokens,
+                SUM(output_tokens) as output_tokens,
+                SUM(cache_read_tokens) as cache_read_tokens,
+                SUM(cache_creation_tokens) as cache_creation_tokens,
+                SUM(billable_tokens) as total_billable_tokens,
+                SUM(total_cost_usd) as total_cost_usd
+            FROM events
+            WHERE session_id = ?
+        """
+        agg_params: list[Any] = [session_id]
+        if project_id:
+            agg_query += " AND project_id = ?"
+            agg_params.append(project_id)
+        agg_query += " GROUP BY agent_id ORDER BY first_event"
+        return [dict(row) for row in cursor.execute(agg_query, agg_params).fetchall()]
+
+    # --- ALL-EVENTS MODE: flat chronological listing ---
+    if all_events:
+        flat_query = """
+            SELECT
+                e.uuid, e.parent_uuid, e.event_type, e.msg_kind, e.timestamp, e.timestamp_local,
+                e.message_role, e.message_content, e.message_content_json, e.model_id,
+                e.input_tokens, e.output_tokens, e.cache_read_tokens, e.cache_creation_tokens,
+                e.token_rate, e.billable_tokens, e.total_cost_usd,
+                e.agent_id, e.agent_slug, sf.filepath, e.line_number, e.raw_json
+            FROM events e
+            JOIN source_files sf ON e.source_file_id = sf.id
+            WHERE e.session_id = ?
+        """
+        flat_params: list[Any] = [session_id]
+        if project_id:
+            flat_query += " AND e.project_id = ?"
+            flat_params.append(project_id)
+        if event_types:
+            placeholders = ",".join("?" * len(event_types))
+            flat_query += f" AND e.msg_kind IN ({placeholders})"
+            flat_params.extend(event_types)
+        if since:
+            since_dt = parse_time_filter(since)
+            if since_dt:
+                flat_query += " AND e.timestamp >= ?"
+                flat_params.append(since_dt.isoformat())
+        if until:
+            until_dt = parse_time_filter(until)
+            if until_dt:
+                flat_query += " AND e.timestamp <= ?"
+                flat_params.append(until_dt.isoformat())
+        limit_val = result_limit if result_limit is not None else -1
+        flat_query += f" ORDER BY e.timestamp LIMIT {limit_val} OFFSET {offset}"
+        flat_rows = cursor.execute(flat_query, flat_params).fetchall()
+
+        turns: list[dict[str, Any]] = []
+        for i, row in enumerate(flat_rows, start=offset + 1):
+            if detail == "full":
+                ev: dict[str, Any] = dict(row)
+                if ev.get("raw_json"):
+                    try:
+                        ev["message_json"] = json.loads(ev["raw_json"])
+                    except json.JSONDecodeError:
+                        ev["message_json"] = None
+                turns.append(ev)
+            else:
+                turn: dict[str, Any] = {
+                    "turn_num": i,
+                    "type": row["event_type"],
+                    "msg_kind": row["msg_kind"],
+                    "timestamp": row["timestamp"],
+                    "model_id": row["model_id"],
+                    "input_tokens": row["input_tokens"],
+                    "output_tokens": row["output_tokens"],
+                    "cache_read_tokens": row["cache_read_tokens"],
+                    "cache_creation_tokens": row["cache_creation_tokens"],
+                    "token_rate": row["token_rate"],
+                    "billable_tokens": row["billable_tokens"],
+                    "total_cost_usd": row["total_cost_usd"],
+                    "uuid": row["uuid"],
+                    "parent_uuid": row["parent_uuid"],
+                    "agent_id": row["agent_id"],
+                    "agent_slug": row["agent_slug"],
+                    "filepath": row["filepath"],
+                    "line_number": row["line_number"],
+                }
+                if include_content:
+                    if row["message_content_json"]:
+                        try:
+                            turn["content"] = json.loads(row["message_content_json"])
+                        except json.JSONDecodeError:
+                            turn["content"] = row["message_content"]
+                    else:
+                        turn["content"] = row["message_content"]
+                    turn["role"] = row["message_role"]
+                turns.append(turn)
+        return turns
+
+    # --- GRAPH TRAVERSAL MODE ---
     # Resolve UUID — default to most recent event in this session
     if uuid is None:
         row = cursor.execute(
@@ -2455,19 +2445,6 @@ def main(
                 since=args.since,
             )
 
-        elif args.command == "turns":
-            result = cmd_turns(
-                cache,
-                args.session_id,
-                project_id=args.project,
-                event_types=args.types,
-                since=args.since,
-                until=args.until,
-                limit=args.limit,
-                offset=args.offset,
-                include_content=not args.no_content,
-            )
-
         elif args.command == "search":
             result = cmd_search(
                 cache,
@@ -2478,18 +2455,11 @@ def main(
                 since=getattr(args, "since", None),
             )
 
-        elif args.command == "agents":
-            result = cmd_agents(
-                cache,
-                args.session_id,
-                project_id=args.project,
-            )
-
         elif args.command == "traverse":
             result = cmd_traverse(
                 cache,
                 args.session_id,
-                args.uuid,
+                getattr(args, "uuid", None),
                 direction=args.direction,
                 project_id=args.project,
                 depth_limit=args.depth,
@@ -2498,6 +2468,10 @@ def main(
                 until=getattr(args, "until", None),
                 result_limit=args.limit,
                 detail=args.detail,
+                all_events=args.all,
+                summary=args.summary,
+                offset=getattr(args, "offset", 0),
+                include_content=not getattr(args, "no_content", False),
             )
 
         elif args.command == "reflect":
@@ -2655,30 +2629,6 @@ if __name__ == "__main__":  # pragma: no cover
     sessions_parser.add_argument("-n", "--limit", type=int, default=20, help="Max sessions")
     sessions_parser.add_argument("--since", help="Filter since timestamp (ISO or relative)")
 
-    # turns command
-    turns_parser = subparsers.add_parser("turns", help="Show turns in a session")
-    turns_parser.add_argument("session_id", help="Session UUID")
-    turns_parser.add_argument(
-        "-t",
-        "--types",
-        nargs="+",
-        metavar="MSG_KIND",
-        help=(
-            "Filter by msg_kind. Valid values: "
-            "human task_notification tool_result user_text meta "
-            "assistant_text thinking tool_use other"
-        ),
-    )
-    turns_parser.add_argument(
-        "--since", help="Filter events since timestamp (ISO or relative: 30m, 2h, 1d)"
-    )
-    turns_parser.add_argument(
-        "--until", help="Filter events until timestamp (ISO or relative: 30m, 2h, 1d)"
-    )
-    turns_parser.add_argument("-n", "--limit", type=int, default=100, help="Max turns")
-    turns_parser.add_argument("--offset", type=int, default=0, help="Skip first N turns")
-    turns_parser.add_argument("--no-content", action="store_true", help="Exclude content")
-
     # search command
     search_parser = subparsers.add_parser("search", help="Full-text search across sessions")
     search_parser.add_argument("pattern", help="Search pattern (FTS5 syntax)")
@@ -2697,11 +2647,6 @@ if __name__ == "__main__":  # pragma: no cover
     search_parser.add_argument(
         "--since", help="Filter since timestamp (ISO or relative like '30m', '1h')"
     )
-
-    # summary command
-    # agents command
-    agents_parser = subparsers.add_parser("agents", help="List subagents")
-    agents_parser.add_argument("session_id", help="Session UUID")
 
     # traverse command
     traverse_parser = subparsers.add_parser("traverse", help="Traverse event tree from a UUID")
@@ -2746,6 +2691,36 @@ if __name__ == "__main__":  # pragma: no cover
         choices=["normal", "full"],
         default="normal",
         help="normal=key fields only (default); full=includes raw_json and message_json",
+    )
+    traverse_parser.add_argument(
+        "--all",
+        action="store_true",
+        default=False,
+        help=(
+            "Return all events in the session chronologically (bypasses graph traversal). "
+            "Includes subagent events. Supports --types, --since, --until, -n, --offset, "
+            "--detail, and --no-content."
+        ),
+    )
+    traverse_parser.add_argument(
+        "--summary",
+        action="store_true",
+        default=False,
+        help=(
+            "Return per-agent aggregated stats (event counts, token totals, accurate costs). "
+            "Includes the main session (agent_id=null) and all subagents."
+        ),
+    )
+    traverse_parser.add_argument(
+        "--offset",
+        type=int,
+        default=0,
+        help="Skip first N events (used with --all, default: 0)",
+    )
+    traverse_parser.add_argument(
+        "--no-content",
+        action="store_true",
+        help="Exclude message content and role from --all output",
     )
 
     # reflect command
