@@ -132,31 +132,9 @@ ${OUTPUT_BASE}/
     └── ...
 ```
 
-## Rendering Standalone `.mmd` Files
-
-For individual `.mmd` files (e.g. extracted from markdown or managed separately):
-
-```bash
-OUTPUT_FORMAT="png"
-THEME=dark
-BGCOLOR=transparent
-VARIANT="${THEME}_${BGCOLOR}_${OUTPUT_FORMAT}"
-OUTPUT_BASE="docs/diagrams"
-OUTPUT_TARGET="${OUTPUT_BASE}/${VARIANT}/"
-OUTPUT="${OUTPUT_BASE}/${VARIANT}/diagram.${OUTPUT_FORMAT}"
-
-npx -p @mermaid-js/mermaid-cli mmdc \
-  -i "${OUTPUT_BASE}/diagram.mmd" \
-  -a "${OUTPUT_TARGET}" \
-  -o "${OUTPUT}" \
-  --scale 4 -e "${OUTPUT_FORMAT}" -t "${THEME}" -b "${BGCOLOR}"
-```
-
 ## Using as Verification
 
-This pattern can be used standalone or as a **verification step within the managed
-`.mmd` workflow** (Pattern: Managed `.mmd` Files). After creating or updating diagrams,
-render from the source markdown to verify all fences are valid:
+Render from a markdown file to verify all mermaid fences are valid:
 
 ```bash
 INPUT="path/to/document.md"

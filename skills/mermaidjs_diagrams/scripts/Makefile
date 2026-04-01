@@ -2,7 +2,7 @@
 # Run from repo root: make -C .claude/skills/mermaidjs_diagrams/scripts <target>
 
 # Public scripts: referenced in SKILL.md, used during skill execution
-SCRIPTS = setup_diagrams mermaid_complexity
+SCRIPTS = mermaid_complexity
 
 # Private scripts: maintenance helpers for the skill itself, NOT in SKILL.md
 PRIVATE_SCRIPTS = _update_examples_readme
@@ -38,14 +38,11 @@ all: format lint typecheck test-cov
 
 # Run all test suites via PEP-723 entry points
 test:
-	$(UV) test_setup_diagrams.py $(PYTEST_ARGS)
 	$(UV) test_mermaid_complexity.py $(PYTEST_ARGS)
 	$(UV) test__update_examples_readme.py $(PYTEST_ARGS)
 
 # Run tests with coverage
 test-cov:
-	$(UV) test_setup_diagrams.py $(PYTEST_ARGS) \
-		--cov=setup_diagrams --cov-report=term-missing --cov-fail-under=90
 	$(UV) test_mermaid_complexity.py $(PYTEST_ARGS) \
 		--cov=mermaid_complexity --cov-report=term-missing --cov-fail-under=90
 	$(UV) test__update_examples_readme.py $(PYTEST_ARGS) \
@@ -84,7 +81,6 @@ fix: format lint-fix
 
 # Quick CLI smoke test (no .sh wrappers — invoke via uv run directly)
 smoke:
-	$(UV) setup_diagrams.py --help
 	$(UV) mermaid_complexity.py --help
 	$(UV) _update_examples_readme.py --help
 

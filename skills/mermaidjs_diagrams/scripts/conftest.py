@@ -11,13 +11,11 @@ import importlib
 
 import _update_examples_readme
 import mermaid_complexity
-import setup_diagrams
 import pytest
 
 
 @pytest.fixture(autouse=True, scope="session")
 def _reload_for_coverage() -> None:
     """Reload modules under test so pytest-cov captures module-level code."""
-    importlib.reload(setup_diagrams)
     importlib.reload(mermaid_complexity)
     importlib.reload(_update_examples_readme)

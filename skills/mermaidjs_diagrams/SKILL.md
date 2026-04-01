@@ -1,7 +1,7 @@
 ---
 name: mermaidjs_diagrams
-description: "Update Mermaid.JS diagrams with complexity analysis. Analyzes visual complexity, manages dual-density diagrams, and validates against cognitive load research. Use when creating or updating architecture diagrams, analyzing diagram complexity, or improving documentation clarity."
-argument-hint: "[diagram-directory]"
+description: "Render and analyze Mermaid.JS diagrams embedded in markdown files. Enforces visual complexity limits via automated analysis. Use when creating or updating architecture diagrams, analyzing diagram complexity, or improving documentation clarity."
+argument-hint: "[markdown-file]"
 user-invocable: true
 ---
 
@@ -9,31 +9,30 @@ user-invocable: true
 
 Render and maintain Mermaid.JS diagrams with **visual clarity enforcement**.
 Works for ANY project. Cognitive load research (Huang et al., 2020) shows 50 nodes
-is the difficulty threshold -- this skill enforces limits via automated complexity analysis.
+is the difficulty threshold — this skill enforces limits via automated complexity analysis.
 
-# Workflow
+Diagrams live as ` ```mermaid ` code fences inside `.md` files.
 
-Two usage patterns. Choose based on where your diagrams live:
+# Rendering
 
-| Pattern | When to Use | Setup |
-|---------|-------------|-------|
-| **Render from Markdown** | Diagrams are ` ```mermaid ` fences in `.md` files | None |
-| **Managed `.mmd` Files** | Standalone `.mmd` files in a dedicated directory | One-time |
+## Quick render (recommended)
 
-These patterns can be combined: use "Managed `.mmd`" for your diagram collection,
-then "Render from Markdown" as a verification step on documentation files.
+Use the bundled script to render both standard variants (dark+transparent and default+white PNGs) in one command:
 
----
+```bash
+bash .claude/skills/mermaidjs_diagrams/scripts/render_mermaid.sh path/to/document.md
+```
 
-## Pattern 1: Render from Markdown
+Output lands in `.mmdc_cache/{variant}/path/to/document-*.png`.
 
-> Full documentation: `resources/pattern_render_markdown.md`
+`mmdc` reads the markdown file, extracts every mermaid fence, and renders each as a
+numbered image artefact. Exit code 0 = all fences valid. Non-zero = render failure
+(see stderr for the offending fence).
 
-Render mermaid fences from any `.md` file using `mmdc`'s markdown input mode.
+## Custom variants
 
-### Rendering Variants
-
-Three parameters form a **variant tuple** that determines the output folder name:
+For formats beyond the two defaults, use `mmdc` directly. Three parameters form a
+**variant tuple** that determines the output folder name:
 
 | Parameter | Flag | Values | Default |
 |-----------|------|--------|---------|
@@ -43,10 +42,6 @@ Three parameters form a **variant tuple** that determines the output folder name
 
 Output folder: `{theme}_{backgroundColor}_{format}` (e.g. `dark_transparent_png`)
 
-### Render a single variant
-
-The `VARIANT` tuple is computed from `THEME`, `BGCOLOR`, and `OUTPUT_FORMAT`:
-
 ```bash
 INPUT="path/to/document.md"
 INPUT_PATH="path/to/"
@@ -65,61 +60,9 @@ npx -p @mermaid-js/mermaid-cli mmdc \
   --scale 4 -e "${OUTPUT_FORMAT}" -t "${THEME}" -b "${BGCOLOR}"
 ```
 
-### Render multiple variants (common use case)
+> Full variant documentation: `resources/pattern_render_markdown.md`
 
-```bash
-INPUT="path/to/document.md"
-INPUT_PATH="path/to/"
-OUTPUT_BASE=".mmdc_cache"
-
-# Variant 1: dark + transparent + PNG (default)
-OUTPUT_FORMAT="png"
-THEME=dark
-BGCOLOR=transparent
-VARIANT="${THEME}_${BGCOLOR}_${OUTPUT_FORMAT}"
-OUTPUT_TARGET="${OUTPUT_BASE}/${VARIANT}/${INPUT_PATH}/"
-OUTPUT="${OUTPUT_BASE}/${VARIANT}/${INPUT}"
-npx -p @mermaid-js/mermaid-cli mmdc \
-  -i "${INPUT}" \
-  -a "${OUTPUT_TARGET}" \
-  -o "${OUTPUT}" \
-  --scale 4 -e "${OUTPUT_FORMAT}" -t "${THEME}" -b "${BGCOLOR}"
-
-# Variant 2: default + white + PNG (for README, light-mode docs)
-OUTPUT_FORMAT="png"
-THEME=default
-BGCOLOR=white
-VARIANT="${THEME}_${BGCOLOR}_${OUTPUT_FORMAT}"
-OUTPUT_TARGET="${OUTPUT_BASE}/${VARIANT}/${INPUT_PATH}/"
-OUTPUT="${OUTPUT_BASE}/${VARIANT}/${INPUT}"
-npx -p @mermaid-js/mermaid-cli mmdc \
-  -i "${INPUT}" \
-  -a "${OUTPUT_TARGET}" \
-  -o "${OUTPUT}" \
-  --scale 4 -e "${OUTPUT_FORMAT}" -t "${THEME}" -b "${BGCOLOR}"
-```
-
-### Verification use
-
-mmdc exits non-zero if any fence fails. Use as a validation step:
-```bash
-INPUT="document.md"
-OUTPUT_FORMAT="png"
-THEME=dark
-BGCOLOR=transparent
-VARIANT="${THEME}_${BGCOLOR}_${OUTPUT_FORMAT}"
-OUTPUT_BASE="tmp/mmdc-verify"
-OUTPUT_TARGET="${OUTPUT_BASE}/${VARIANT}/"
-OUTPUT="${OUTPUT_BASE}/${VARIANT}/${INPUT}"
-
-npx -p @mermaid-js/mermaid-cli mmdc \
-  -i "${INPUT}" \
-  -a "${OUTPUT_TARGET}" \
-  -o "${OUTPUT}" \
-  --scale 4 -e "${OUTPUT_FORMAT}" -t "${THEME}" -b "${BGCOLOR}"
-```
-
-### Icon packs
+## Icon packs
 
 ```bash
 # Iconify icons (architecture-beta diagrams)
@@ -133,67 +76,54 @@ Flowchart diagrams with Font Awesome (`fa:fa-icon`) need no `--iconPacks` flag.
 
 ---
 
-## Pattern 2: Managed `.mmd` Files
+# Complexity Analysis
 
-> Full documentation: `resources/pattern_managed_mmd.md`
+Analyze diagrams to ensure they stay within cognitive load thresholds.
 
-For maintaining a dedicated diagram collection with complexity analysis,
-dual-density management, and Makefile-based batch rendering.
-
-### Setup (one-time)
-
-```bash
-uv run .claude/skills/mermaidjs_diagrams/scripts/setup_diagrams.py
-# Or target a custom directory:
-uv run .claude/skills/mermaidjs_diagrams/scripts/setup_diagrams.py --target-folder path/to/diagrams
-```
-
-### File naming convention
-
-```
-{lens}--[{subsystem}--]{scope}.mmd
-
-Lenses: architecture, data-flow, deployment, security, sequence, state
-Scopes: overview (low-density), detail (high-density)
-```
-
-### Complexity analysis
+> **Note:** The complexity analyzer currently operates on `.mmd` files. A future
+> update will add support for extracting and analyzing individual mermaid code fences
+> from markdown files directly.
 
 ```bash
-uv run .claude/skills/mermaidjs_diagrams/scripts/mermaid_complexity.py docs/diagrams/
-uv run .claude/skills/mermaidjs_diagrams/scripts/mermaid_complexity.py docs/diagrams/ --show-working
-uv run .claude/skills/mermaidjs_diagrams/scripts/mermaid_complexity.py docs/diagrams/*--overview.mmd -p low
-uv run .claude/skills/mermaidjs_diagrams/scripts/mermaid_complexity.py docs/diagrams/*--detail.mmd -p high
+uv run .claude/skills/mermaidjs_diagrams/scripts/mermaid_complexity.py path/to/diagrams/
+uv run .claude/skills/mermaidjs_diagrams/scripts/mermaid_complexity.py path/to/diagrams/ --show-working
+uv run .claude/skills/mermaidjs_diagrams/scripts/mermaid_complexity.py path/to/diagram.mmd --preset low
 ```
 
-### Density targets
+## Density presets
 
-| Density | Nodes | VCS | Typical Use |
-|---------|-------|-----|-------------|
-| Low | <=12 | <=25 | Overview diagrams |
-| Medium | <=20 | <=40 | README diagrams |
-| High | <=35 | <=60 | Detail diagrams |
+| Preset | Nodes | VCS | Typical Use |
+|--------|-------|-----|-------------|
+| Low (`low` / `l`) | <=12 | <=25 | Overview diagrams |
+| Medium (`med` / `m`) | <=20 | <=40 | README diagrams |
+| High (`high` / `h`) | <=35 | <=60 | Detail diagrams (default) |
 
-### Batch rendering
+## Complexity formula
 
-```bash
-make -C docs/diagrams
-make -C docs/diagrams ICON_PACKS="@iconify-json/logos @iconify-json/mdi"
+```
+VCS = (nodes + edges*0.5 + subgraphs*3) * (1 + depth*0.1)
 ```
 
-### Workflow summary
+Ratings: **ideal** / **acceptable** / **complex** / **critical**
 
-1. **B1** Setup infrastructure (one-time)
-2. **B2** Identify diagram lenses
-3. **B3** Analyze complexity (`--show-working`)
-4. **B4** Subdivide complex diagrams into dual-density versions
-5. **B5** Update each diagram (parallel Task agents)
-6. **B6** Validate complexity post-update
-7. **B7** Generate PNG images
-8. **B8** Sync README with diagram links
+When a diagram is rated **complex** or **critical**, split it into simplified and
+detailed versions. See `resources/diagram_organization.md` for the dual-density
+approach and naming conventions.
 
-See `resources/pattern_managed_mmd.md` for full step details, agent prompt templates,
-and subdivision examples.
+---
+
+# Diagram Organization
+
+For projects with multiple architectural diagrams, use lenses (perspectives) and
+dual-density versions to keep diagrams focused and navigable.
+
+> Full documentation: `resources/diagram_organization.md`
+
+Key concepts:
+- **Lenses**: architecture, data-flow, deployment, security, sequence, state
+- **Density levels**: overview (simplified, <=12 nodes) vs detail (comprehensive, <=35 nodes)
+- **Naming convention**: `{lens}--[{subsystem}--]{scope}.md`
+- **README sync**: Link rendered diagrams from project README
 
 ---
 
@@ -201,7 +131,7 @@ and subdivision examples.
 
 ## Multiline Text in Node Labels
 
-**`\n` does NOT work** in flowchart node labels -- renders as garbled characters.
+**`\n` does NOT work** in flowchart node labels — renders as garbled characters.
 Use `<br/>` instead:
 
 ```mermaid
@@ -224,8 +154,8 @@ flowchart LR
 
 ### Where `<br/>` does NOT work
 
-- **Subgraph labels** -- use short single-line titles
-- **erDiagram** -- uses different syntax
+- **Subgraph labels** — use short single-line titles
+- **erDiagram** — uses different syntax
 
 ## Avoid Unicode in Node Labels
 
@@ -235,11 +165,6 @@ when they display in browser previews. Stick to **ASCII-only text** in node labe
 ---
 
 # Quick Reference
-
-## Complexity Formula
-```
-VCS = (nodes + edges*0.5 + subgraphs*3) * (1 + depth*0.1)
-```
 
 ## Variant Tuples
 
@@ -262,11 +187,11 @@ VCS = (nodes + edges*0.5 + subgraphs*3) * (1 + depth*0.1)
 | File | Content |
 |------|---------|
 | `resources/color_theming.md` | Color palettes, HSL encoding, dark/light mode safety, subgraph coloring |
+| `resources/diagram_organization.md` | Lens naming, dual-density approach, README sync |
 | `resources/pattern_render_markdown.md` | Full render-from-markdown documentation |
-| `resources/pattern_managed_mmd.md` | Full managed `.mmd` workflow documentation |
 | `resources/examples/` | Sample `.mmd` files and rendered PNG output |
 | `resources/iconify_setup.md` | Iconify icon pack setup guide |
 | `resources/iconify_logos.md` | Available Iconify logo icons |
 | `resources/iconify_mdi.md` | Available Material Design icons |
-| `scripts/setup_diagrams.py` | Infrastructure setup script |
+| `scripts/render_mermaid.sh` | Render both default variants for a markdown file |
 | `scripts/mermaid_complexity.py` | Complexity analyzer script |
