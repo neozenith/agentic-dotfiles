@@ -7,6 +7,7 @@ allowed-tools:
   - Glob
   - Bash(.claude/skills/dbt-snowflake/scripts/explore_dbt_artifacts.sh *)
   - Bash(.claude/skills/dbt-snowflake/scripts/explore_snowflake.sh *)
+  - Bash(.claude/skills/dbt-snowflake/scripts/dbt_cloud_run.sh *)
 user-invocable: true
 ---
 
@@ -204,6 +205,75 @@ When in doubt about Snowflake CLI capabilities:
 ```bash
 uvx --from snowflake-cli snow --help
 uvx --from snowflake-cli snow sql --help
+```
+
+## dbt Cloud Run Status
+
+Inspect dbt Cloud CI/CD run results, step logs, and artifacts. Accepts a dbt Cloud run URL directly — extracts account, project, and run IDs from the URL path.
+
+### Prerequisites
+
+The user must have `DBT_PAT` (personal access token) set in their environment.
+
+### Quick Start
+
+```bash
+# From a dbt Cloud run URL (copy-paste from browser)
+.claude/skills/dbt-snowflake/scripts/dbt_cloud_run.sh https://<host>/deploy/<account>/projects/<project>/runs/<run_id>/
+
+# From the current PR's dbt Cloud check (via gh cli)
+.claude/skills/dbt-snowflake/scripts/dbt_cloud_run.sh "$(gh pr checks --json link \
+  --jq '.[] | select(.link | test("dbt.com.*/runs/")) | .link' | head -1)"
+```
+
+### Available Commands
+
+```bash
+# Run summary with all steps (default)
+.claude/skills/dbt-snowflake/scripts/dbt_cloud_run.sh <URL>
+
+# Show only error/failure details
+.claude/skills/dbt-snowflake/scripts/dbt_cloud_run.sh <URL> --errors-only
+
+# Show logs for a specific step number
+.claude/skills/dbt-snowflake/scripts/dbt_cloud_run.sh <URL> --step 6
+
+# Show run_results.json summary (pass/fail/error counts)
+.claude/skills/dbt-snowflake/scripts/dbt_cloud_run.sh <URL> --results
+
+# List available artifacts
+.claude/skills/dbt-snowflake/scripts/dbt_cloud_run.sh <URL> --list-artifacts
+
+# Fetch a specific artifact as JSON
+.claude/skills/dbt-snowflake/scripts/dbt_cloud_run.sh <URL> --artifact run_results.json
+```
+
+### URL Format
+
+The script parses dbt Cloud run URLs matching:
+```
+https://{ui_host}/deploy/{account_id}/projects/{project_id}/runs/{run_id}/
+```
+
+### Environment Variables
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `DBT_PAT` | Yes | — | Personal access token |
+| `DBT_CLOUD_HOST` | No | — | API host (e.g. `us.dbt.com`, `au.dbt.com`, `emea.dbt.com`) |
+
+When not using a URL, these are also required: `DBT_ACCOUNT_ID`, `DBT_RUN_ID`, `DBT_PROJECT_ID`.
+
+### Technical Details
+
+```
+dbt_cloud_run.sh (bash wrapper)
+       │
+       └── uv run dbt_cloud_run.py (PEP-723 script)
+                    │
+                    └── requests → dbt Cloud API v2
+                         GET /api/v2/accounts/{id}/runs/{id}/?include_related=run_steps
+                         GET /api/v2/accounts/{id}/runs/{id}/artifacts/{path}
 ```
 
 ## dbt Commands
