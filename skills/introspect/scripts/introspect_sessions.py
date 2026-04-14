@@ -396,6 +396,93 @@ CREATE INDEX IF NOT EXISTS idx_events_project_session ON events(project_id, sess
 CREATE INDEX IF NOT EXISTS idx_events_session_type ON events(session_id, event_type);
 CREATE INDEX IF NOT EXISTS idx_events_session_uuid ON events(session_id, uuid);
 CREATE INDEX IF NOT EXISTS idx_source_files_project_session ON source_files(project_id, session_id);
+
+-- Covering index for analytical GROUP BY queries
+CREATE INDEX IF NOT EXISTS idx_events_covering ON events(
+    timestamp, project_id, session_id, model_id,
+    input_tokens, output_tokens,
+    cache_read_tokens, cache_creation_tokens, total_cost_usd
+);
+
+-- =====================================================================
+-- Dimensional aggregation tables (star schema)
+-- =====================================================================
+-- Pre-aggregated measures at hourly/daily/weekly/monthly granularity.
+-- Maintained incrementally via refresh_aggregates_for_range() after each
+-- ingest batch. See claude-code-sessions docs/engine-performance-analysis.md
+-- for the design rationale.
+-- Grain: (time_bucket, project_id, session_id, model_id)
+-- session_id / model_id use '' sentinel for NULL (SQLite PK treats NULLs
+-- as non-equal which would break uniqueness).
+-- =====================================================================
+
+CREATE TABLE IF NOT EXISTS agg_hourly (
+    time_bucket TEXT NOT NULL,
+    project_id TEXT NOT NULL,
+    session_id TEXT NOT NULL DEFAULT '',
+    model_id TEXT NOT NULL DEFAULT '',
+    event_count INTEGER NOT NULL DEFAULT 0,
+    input_tokens INTEGER NOT NULL DEFAULT 0,
+    output_tokens INTEGER NOT NULL DEFAULT 0,
+    cache_read_tokens INTEGER NOT NULL DEFAULT 0,
+    cache_creation_tokens INTEGER NOT NULL DEFAULT 0,
+    total_cost_usd REAL NOT NULL DEFAULT 0.0,
+    billable_tokens REAL NOT NULL DEFAULT 0.0,
+    PRIMARY KEY (time_bucket, project_id, session_id, model_id)
+);
+CREATE INDEX IF NOT EXISTS idx_agg_hourly_time ON agg_hourly(time_bucket);
+CREATE INDEX IF NOT EXISTS idx_agg_hourly_project_time ON agg_hourly(project_id, time_bucket);
+
+CREATE TABLE IF NOT EXISTS agg_daily (
+    time_bucket TEXT NOT NULL,
+    project_id TEXT NOT NULL,
+    session_id TEXT NOT NULL DEFAULT '',
+    model_id TEXT NOT NULL DEFAULT '',
+    event_count INTEGER NOT NULL DEFAULT 0,
+    input_tokens INTEGER NOT NULL DEFAULT 0,
+    output_tokens INTEGER NOT NULL DEFAULT 0,
+    cache_read_tokens INTEGER NOT NULL DEFAULT 0,
+    cache_creation_tokens INTEGER NOT NULL DEFAULT 0,
+    total_cost_usd REAL NOT NULL DEFAULT 0.0,
+    billable_tokens REAL NOT NULL DEFAULT 0.0,
+    PRIMARY KEY (time_bucket, project_id, session_id, model_id)
+);
+CREATE INDEX IF NOT EXISTS idx_agg_daily_time ON agg_daily(time_bucket);
+CREATE INDEX IF NOT EXISTS idx_agg_daily_project_time ON agg_daily(project_id, time_bucket);
+
+CREATE TABLE IF NOT EXISTS agg_weekly (
+    time_bucket TEXT NOT NULL,
+    project_id TEXT NOT NULL,
+    session_id TEXT NOT NULL DEFAULT '',
+    model_id TEXT NOT NULL DEFAULT '',
+    event_count INTEGER NOT NULL DEFAULT 0,
+    input_tokens INTEGER NOT NULL DEFAULT 0,
+    output_tokens INTEGER NOT NULL DEFAULT 0,
+    cache_read_tokens INTEGER NOT NULL DEFAULT 0,
+    cache_creation_tokens INTEGER NOT NULL DEFAULT 0,
+    total_cost_usd REAL NOT NULL DEFAULT 0.0,
+    billable_tokens REAL NOT NULL DEFAULT 0.0,
+    PRIMARY KEY (time_bucket, project_id, session_id, model_id)
+);
+CREATE INDEX IF NOT EXISTS idx_agg_weekly_time ON agg_weekly(time_bucket);
+CREATE INDEX IF NOT EXISTS idx_agg_weekly_project_time ON agg_weekly(project_id, time_bucket);
+
+CREATE TABLE IF NOT EXISTS agg_monthly (
+    time_bucket TEXT NOT NULL,
+    project_id TEXT NOT NULL,
+    session_id TEXT NOT NULL DEFAULT '',
+    model_id TEXT NOT NULL DEFAULT '',
+    event_count INTEGER NOT NULL DEFAULT 0,
+    input_tokens INTEGER NOT NULL DEFAULT 0,
+    output_tokens INTEGER NOT NULL DEFAULT 0,
+    cache_read_tokens INTEGER NOT NULL DEFAULT 0,
+    cache_creation_tokens INTEGER NOT NULL DEFAULT 0,
+    total_cost_usd REAL NOT NULL DEFAULT 0.0,
+    billable_tokens REAL NOT NULL DEFAULT 0.0,
+    PRIMARY KEY (time_bucket, project_id, session_id, model_id)
+);
+CREATE INDEX IF NOT EXISTS idx_agg_monthly_time ON agg_monthly(time_bucket);
+CREATE INDEX IF NOT EXISTS idx_agg_monthly_project_time ON agg_monthly(project_id, time_bucket);
 """
 
 
@@ -909,6 +996,74 @@ class CacheManager:
 
         return ""
 
+    # ------------------------------------------------------------------
+    # Dimensional aggregates (agg_{hourly,daily,weekly,monthly})
+    # ------------------------------------------------------------------
+    #
+    # These tables are pre-aggregated measures at four time granularities.
+    # Schema matches the sibling claude-code-sessions SQLite backend so both
+    # tools maintain a consistent view. Grain: (time_bucket, project_id,
+    # session_id, model_id). NULL session_id/model_id are stored as '' so
+    # the composite PRIMARY KEY enforces uniqueness correctly.
+
+    _AGG_BUCKET_EXPRS: dict[str, str] = {
+        "hourly":  "strftime('%Y-%m-%dT%H:00:00', timestamp)",
+        "daily":   "date(timestamp)",
+        "weekly":  "date(timestamp, 'weekday 0', '-6 days')",
+        "monthly": "strftime('%Y-%m-01', timestamp)",
+    }
+
+    def refresh_aggregates_for_range(
+        self,
+        start_bucket: str | None = None,
+        end_bucket: str | None = None,
+    ) -> dict[str, int]:
+        """Refresh all four agg_* tables in a time range (or fully)."""
+        cursor = self.conn.cursor()
+        counts: dict[str, int] = {}
+        for granularity, bucket_expr in self._AGG_BUCKET_EXPRS.items():
+            table = f"agg_{granularity}"
+            if start_bucket is None or end_bucket is None:
+                cursor.execute(f"DELETE FROM {table}")
+                range_clause, range_params = "", ()
+            else:
+                cursor.execute(
+                    f"DELETE FROM {table} WHERE time_bucket >= ? AND time_bucket <= ?",
+                    (start_bucket, end_bucket),
+                )
+                range_clause = f"AND {bucket_expr} BETWEEN ? AND ?"
+                range_params = (start_bucket, end_bucket)
+
+            cursor.execute(f"""
+                INSERT INTO {table} (
+                    time_bucket, project_id, session_id, model_id,
+                    event_count,
+                    input_tokens, output_tokens,
+                    cache_read_tokens, cache_creation_tokens,
+                    total_cost_usd, billable_tokens
+                )
+                SELECT
+                    {bucket_expr} AS time_bucket,
+                    project_id,
+                    COALESCE(session_id, ''),
+                    COALESCE(model_id, ''),
+                    COUNT(*),
+                    COALESCE(SUM(input_tokens), 0),
+                    COALESCE(SUM(output_tokens), 0),
+                    COALESCE(SUM(cache_read_tokens), 0),
+                    COALESCE(SUM(cache_creation_tokens), 0),
+                    COALESCE(SUM(total_cost_usd), 0.0),
+                    COALESCE(SUM(billable_tokens), 0.0)
+                FROM events
+                WHERE timestamp IS NOT NULL
+                  {range_clause}
+                GROUP BY {bucket_expr}, project_id,
+                         COALESCE(session_id, ''), COALESCE(model_id, '')
+            """, range_params)
+            counts[granularity] = cursor.rowcount
+        self.conn.commit()
+        return counts
+
     def rebuild_aggregates(self) -> None:
         """Rebuild projects and sessions tables from events."""
         log.info("Rebuilding aggregate tables...")
@@ -1123,8 +1278,33 @@ class CacheManager:
         if total_bridges:
             log.info(f"Created {total_bridges} cross-agent bridge edges")
 
-        # Rebuild aggregates
+        # Rebuild aggregates (projects + sessions — cheap)
         self.rebuild_aggregates()
+
+        # Dimensional agg_* tables — full rebuild when empty, otherwise
+        # incremental by the timestamp window of ingested sessions.
+        agg_empty = all(
+            self.conn.execute(f"SELECT COUNT(*) FROM agg_{g}").fetchone()[0] == 0
+            for g in ("hourly", "daily", "weekly", "monthly")
+        )
+        if agg_empty:
+            log.info("Dimensional aggregates empty — doing full cold rebuild")
+            self.refresh_aggregates_for_range()
+        elif affected_sessions:
+            # Scope the refresh to just the sessions we touched
+            session_ids = list(affected_sessions.keys())
+            placeholders = ",".join("?" * len(session_ids))
+            row = self.conn.execute(
+                f"""
+                SELECT MIN(timestamp), MAX(timestamp)
+                FROM events
+                WHERE timestamp IS NOT NULL
+                  AND session_id IN ({placeholders})
+                """,
+                tuple(session_ids),
+            ).fetchone()
+            if row and row[0]:
+                self.refresh_aggregates_for_range(str(row[0]), str(row[1]))
 
         # Update metadata
         self.conn.execute(
