@@ -871,7 +871,13 @@ class CacheManager:
             "billable_tokens": billable_tokens,
             "total_cost_usd": total_cost_usd,
             "line_number": line_number,
-            "raw_json": json.dumps(raw),
+            # raw_json is intentionally empty — the source-of-truth for the
+            # raw payload is the JSONL file on disk (see source_files.filepath
+            # + line_number). Storing a duplicate copy here was costing 2+ GB
+            # and leaking thinking-block signatures into the cache. Read paths
+            # that previously did `json.loads(row["raw_json"])` already handle
+            # JSONDecodeError by returning None.
+            "raw_json": "",
         }
 
     def _extract_text_content(self, content: Any) -> str:
