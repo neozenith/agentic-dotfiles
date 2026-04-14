@@ -59,5 +59,9 @@
     "frontend-design@claude-code-plugins": true,
     "feature-dev@claude-code-plugins": true
   },
-  "outputStyle": "Explanatory"
+  "outputStyle": "Explanatory",
+  "attribution": {
+    "commit": "",
+    "pr": ""
+  }
 }
