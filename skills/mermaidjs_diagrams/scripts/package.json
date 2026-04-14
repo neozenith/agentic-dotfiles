@@ -1,0 +1,14 @@
+{
+  "name": "mermaidjs-diagrams-scripts",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "@types/bun": "latest",
+    "happy-dom": "^20.9.0",
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@mermaid-js/parser": "^1.1.0",
+    "mermaid": "^11.14.0"
+  }
+}

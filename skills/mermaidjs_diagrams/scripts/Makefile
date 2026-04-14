@@ -7,6 +7,12 @@ SCRIPTS = mermaid_complexity
 # Private scripts: maintenance helpers for the skill itself, NOT in SKILL.md
 PRIVATE_SCRIPTS = _update_examples_readme
 
+# TypeScript scripts (parity ports + new tools). Python remains the scientific
+# baseline; TS versions use mermaid's canonical parsers for higher-fidelity
+# structural extraction. See .claude/rules/typescript/ for conventions.
+TS_SCRIPTS = mermaid_complexity find_mermaid_fences
+TS_SRC = $(addsuffix .ts,$(TS_SCRIPTS)) $(addsuffix .test.ts,$(TS_SCRIPTS))
+
 SRC = $(addsuffix .py,$(SCRIPTS)) $(addprefix test_,$(addsuffix .py,$(SCRIPTS))) \
       $(addsuffix .py,$(PRIVATE_SCRIPTS)) $(addprefix test_,$(addsuffix .py,$(PRIVATE_SCRIPTS)))
 
@@ -23,7 +29,8 @@ PYTEST_ARGS = -v --rootdir . -o 'addopts='
 
 .PHONY: all test test-cov format format-check \
         lint lint-fix typecheck docs \
-        ci fix clean help smoke debug
+        ci fix clean help smoke debug \
+        test-ts typecheck-ts smoke-ts install-ts parity
 
 debug:
 	echo $(MAKEFILE_LIST)
@@ -73,14 +80,50 @@ docs:
 	$(UV) _update_examples_readme.py
 	uvx --from md-toc md_toc --in-place github --header-levels 4 $(EXAMPLES_README)
 
+# ── TypeScript targets ─────────────────────────────────────────────────────
+
+# Install TS deps into this directory's node_modules
+install-ts:
+	bun install --cwd $(THIS_DIR)
+
+# Typecheck TS scripts (strict mode, no emit). We invoke the local tsc binary
+# directly rather than `bunx tsc`, because `bunx --cwd` has dependency-resolution
+# quirks when the current directory and the cwd differ.
+typecheck-ts:
+	$(THIS_DIR)node_modules/.bin/tsc --project $(THIS_DIR)tsconfig.json --noEmit
+
+# Run bun:test suites (pattern matches *.test.ts)
+test-ts:
+	bun test --cwd $(THIS_DIR)
+
+# Smoke test: --help on each public TS script
+smoke-ts:
+	bun run $(THIS_DIR)mermaid_complexity.ts --help
+	bun run $(THIS_DIR)find_mermaid_fences.ts --help
+
+# Cross-language parity check: run Python and TS on the same fixtures, compare
+# numeric metrics. Use this as a scientific regression gate when changing
+# either implementation.
+parity:
+	@echo "=== Python baseline (regex parser) ==="
+	@$(UV) mermaid_complexity.py $(EXAMPLES_DIR)/flowchart_fontawesome_icons.mmd --json --quiet | jq '.[0] | {nodes, edges, subgraphs, vcs: .visual_complexity_score, parser: "regex"}'
+	@echo "=== TypeScript port (canonical parser) ==="
+	@bun run $(THIS_DIR)mermaid_complexity.ts $(EXAMPLES_DIR)/flowchart_fontawesome_icons.mmd --json --quiet | jq '.[0] | {nodes, edges, subgraphs, vcs: .visual_complexity_score, parser: .parser_used, type: .diagram_type}'
+	@echo ""
+	@echo "=== Architecture-beta (where regex misses everything) ==="
+	@echo "Python:"
+	@$(UV) mermaid_complexity.py $(EXAMPLES_DIR)/architecture_beta_iconify_logos.mmd --json --quiet | jq '.[0] | {nodes, edges, subgraphs, vcs: .visual_complexity_score}'
+	@echo "TypeScript:"
+	@bun run $(THIS_DIR)mermaid_complexity.ts $(EXAMPLES_DIR)/architecture_beta_iconify_logos.mmd --json --quiet | jq '.[0] | {nodes, edges, subgraphs, vcs: .visual_complexity_score, parser: .parser_used}'
+
 # Run all checks with coverage enforcement, then regenerate docs (CI standard)
-ci: format-check lint typecheck test-cov docs
+ci: format-check lint typecheck test-cov typecheck-ts test-ts docs
 
 # Run all auto-fixers (local development)
 fix: format lint-fix
 
-# Quick CLI smoke test (no .sh wrappers — invoke via uv run directly)
-smoke:
+# Quick CLI smoke test (no .sh wrappers — invoke via uv run / bun run directly)
+smoke: smoke-ts
 	$(UV) mermaid_complexity.py --help
 	$(UV) _update_examples_readme.py --help
 
@@ -104,4 +147,12 @@ help:
 	@echo "  ci          - Run all checks + docs (CI standard)"
 	@echo "  fix         - Run all auto-fixers"
 	@echo "  smoke       - Quick CLI smoke test (--help on each script)"
+	@echo ""
+	@echo "TypeScript targets (parity ports + new tools):"
+	@echo "  install-ts   - bun install in the scripts directory"
+	@echo "  typecheck-ts - tsc --noEmit on all TS files"
+	@echo "  test-ts      - bun:test suites"
+	@echo "  smoke-ts     - --help on each TS script"
+	@echo "  parity       - Compare Python vs TS output on the same fixture"
+	@echo ""
 	@echo "  clean       - Remove temp files and caches"
