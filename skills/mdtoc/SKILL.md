@@ -42,7 +42,7 @@ NOTES:
 Run the following command to add or update the TOC in-place:
 
 ```sh
-uvx --from md-toc md_toc --in-place github --no-list-coherence --header-levels 4 $ARGUMENTS
+uvx --from md-toc md_toc --in-place --no-list-coherence github --header-levels 4 $ARGUMENTS
 ```
 
 # Examples
