@@ -82,6 +82,7 @@ erDiagram
         INTEGER id PK
         TEXT uuid
         TEXT parent_uuid
+        TEXT prompt_id "joins subagent first events to parent tool_result/tool_use"
         TEXT event_type "raw: user assistant system etc"
         TEXT msg_kind "human task_notification tool_result user_text meta assistant_text thinking tool_use other"
         TEXT timestamp
@@ -101,7 +102,7 @@ erDiagram
         REAL total_cost_usd "cost for this event in USD"
         INTEGER source_file_id FK
         INTEGER line_number
-        TEXT raw_json
+        TEXT raw_json "intentionally empty; source-of-truth is the JSONL file"
     }
 
     event_edges {
@@ -131,10 +132,26 @@ erDiagram
         TEXT created_at
     }
 
+    agg {
+        TEXT granularity PK "hourly daily weekly monthly"
+        TEXT time_bucket PK
+        TEXT project_id PK
+        TEXT session_id PK "'' for NULL"
+        TEXT model_id PK "'' for NULL"
+        INTEGER event_count
+        INTEGER input_tokens
+        INTEGER output_tokens
+        INTEGER cache_read_tokens
+        INTEGER cache_creation_tokens
+        REAL total_cost_usd
+        REAL billable_tokens
+    }
+
     source_files ||--o{ events : "contains"
     source_files ||--o{ event_edges : "tracks"
     events ||--o{ event_annotations : "annotated by"
     reflections ||--o{ event_annotations : "produces"
+    events ||--o{ agg : "rolled up into"
 ```
 
 **FTS5 virtual tables** (auto-synced via triggers):
@@ -146,6 +163,29 @@ erDiagram
 - `event_edges` links `event_uuid` → `parent_event_uuid` for tree traversal
 - `event_annotations.(project_id, session_id, event_uuid)` → `events` (composite FK)
 - `event_annotations.reflection_id` → `reflections.id` (CASCADE delete)
+- `agg` table uses grain `(granularity, time_bucket, project_id, session_id, model_id)` — `granularity` discriminates `'hourly'`/`'daily'`/`'weekly'`/`'monthly'`; NULL `session_id`/`model_id` stored as `''` for PK uniqueness
+
+**Notes on the `events` table:**
+- `raw_json` is **intentionally empty**. Reconstruct the raw payload by reading `source_files.filepath` at `line_number`. The column is retained only to keep the read-path error handling simple (`json.loads("")` raises `JSONDecodeError` which callers already treat as "no raw payload").
+- `prompt_id` is the join key for bridging subagent first events (`parentUuid=NULL`) back to the parent session's `tool_use` event. The bridge is materialized into `event_edges` at ingest time by `build_cross_agent_edges()`.
+- `token_rate`, `billable_tokens`, `total_cost_usd` are pre-computed at ingest (see below).
+
+## Dimensional Aggregates (`agg` table)
+
+A single pre-aggregated table rolls `events` up by time bucket, discriminated by the `granularity` column:
+
+| Table | Bucket expression |
+|-------|-------------------|
+| Granularity | Bucket expression |
+|-------------|-------------------|
+| `hourly`  | `strftime('%Y-%m-%dT%H:00:00', timestamp)` |
+| `daily`   | `date(timestamp)` |
+| `weekly`  | `date(timestamp, 'weekday 0', '-6 days')` (Monday-start weeks) |
+| `monthly` | `strftime('%Y-%m-01', timestamp)` |
+
+New granularities (e.g., `quarterly`) are added by inserting a row into `_AGG_BUCKET_EXPRS` — no DDL migration needed.
+
+**Maintenance:** `cache update` calls `refresh_aggregates_for_range(start, end)` scoped to the timestamp window of the sessions touched in that batch, so cost is proportional to changed data — not the full event history. On a cold cache (empty `agg` table) it falls back to a full rebuild. All aggregates are stored as `SUM()`s of the already-denormalized cost columns on `events`, so there is no per-query CASE expression needed to price rows by model family.
 
 ## Event Cost Enrichment
 
