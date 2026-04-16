@@ -59,7 +59,7 @@ CACHE_DB_PATH = CACHE_DIR / "introspect_sessions.db"
 # Logging setup
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = "5"
+SCHEMA_VERSION = "6"
 
 # ML Analysis Configuration (used by reflect --engine)
 ML_DEFAULT_MODELS: dict[str, str] = {
@@ -416,7 +416,8 @@ CREATE INDEX IF NOT EXISTS idx_events_covering ON events(
 -- as non-equal which would break uniqueness).
 -- =====================================================================
 
-CREATE TABLE IF NOT EXISTS agg_hourly (
+CREATE TABLE IF NOT EXISTS agg (
+    granularity TEXT NOT NULL,  -- 'hourly', 'daily', 'weekly', 'monthly'
     time_bucket TEXT NOT NULL,
     project_id TEXT NOT NULL,
     session_id TEXT NOT NULL DEFAULT '',
@@ -428,61 +429,12 @@ CREATE TABLE IF NOT EXISTS agg_hourly (
     cache_creation_tokens INTEGER NOT NULL DEFAULT 0,
     total_cost_usd REAL NOT NULL DEFAULT 0.0,
     billable_tokens REAL NOT NULL DEFAULT 0.0,
-    PRIMARY KEY (time_bucket, project_id, session_id, model_id)
+    PRIMARY KEY (granularity, time_bucket, project_id, session_id, model_id)
 );
-CREATE INDEX IF NOT EXISTS idx_agg_hourly_time ON agg_hourly(time_bucket);
-CREATE INDEX IF NOT EXISTS idx_agg_hourly_project_time ON agg_hourly(project_id, time_bucket);
-
-CREATE TABLE IF NOT EXISTS agg_daily (
-    time_bucket TEXT NOT NULL,
-    project_id TEXT NOT NULL,
-    session_id TEXT NOT NULL DEFAULT '',
-    model_id TEXT NOT NULL DEFAULT '',
-    event_count INTEGER NOT NULL DEFAULT 0,
-    input_tokens INTEGER NOT NULL DEFAULT 0,
-    output_tokens INTEGER NOT NULL DEFAULT 0,
-    cache_read_tokens INTEGER NOT NULL DEFAULT 0,
-    cache_creation_tokens INTEGER NOT NULL DEFAULT 0,
-    total_cost_usd REAL NOT NULL DEFAULT 0.0,
-    billable_tokens REAL NOT NULL DEFAULT 0.0,
-    PRIMARY KEY (time_bucket, project_id, session_id, model_id)
-);
-CREATE INDEX IF NOT EXISTS idx_agg_daily_time ON agg_daily(time_bucket);
-CREATE INDEX IF NOT EXISTS idx_agg_daily_project_time ON agg_daily(project_id, time_bucket);
-
-CREATE TABLE IF NOT EXISTS agg_weekly (
-    time_bucket TEXT NOT NULL,
-    project_id TEXT NOT NULL,
-    session_id TEXT NOT NULL DEFAULT '',
-    model_id TEXT NOT NULL DEFAULT '',
-    event_count INTEGER NOT NULL DEFAULT 0,
-    input_tokens INTEGER NOT NULL DEFAULT 0,
-    output_tokens INTEGER NOT NULL DEFAULT 0,
-    cache_read_tokens INTEGER NOT NULL DEFAULT 0,
-    cache_creation_tokens INTEGER NOT NULL DEFAULT 0,
-    total_cost_usd REAL NOT NULL DEFAULT 0.0,
-    billable_tokens REAL NOT NULL DEFAULT 0.0,
-    PRIMARY KEY (time_bucket, project_id, session_id, model_id)
-);
-CREATE INDEX IF NOT EXISTS idx_agg_weekly_time ON agg_weekly(time_bucket);
-CREATE INDEX IF NOT EXISTS idx_agg_weekly_project_time ON agg_weekly(project_id, time_bucket);
-
-CREATE TABLE IF NOT EXISTS agg_monthly (
-    time_bucket TEXT NOT NULL,
-    project_id TEXT NOT NULL,
-    session_id TEXT NOT NULL DEFAULT '',
-    model_id TEXT NOT NULL DEFAULT '',
-    event_count INTEGER NOT NULL DEFAULT 0,
-    input_tokens INTEGER NOT NULL DEFAULT 0,
-    output_tokens INTEGER NOT NULL DEFAULT 0,
-    cache_read_tokens INTEGER NOT NULL DEFAULT 0,
-    cache_creation_tokens INTEGER NOT NULL DEFAULT 0,
-    total_cost_usd REAL NOT NULL DEFAULT 0.0,
-    billable_tokens REAL NOT NULL DEFAULT 0.0,
-    PRIMARY KEY (time_bucket, project_id, session_id, model_id)
-);
-CREATE INDEX IF NOT EXISTS idx_agg_monthly_time ON agg_monthly(time_bucket);
-CREATE INDEX IF NOT EXISTS idx_agg_monthly_project_time ON agg_monthly(project_id, time_bucket);
+CREATE INDEX IF NOT EXISTS idx_agg_granularity_time
+    ON agg(granularity, time_bucket);
+CREATE INDEX IF NOT EXISTS idx_agg_granularity_project_time
+    ON agg(granularity, project_id, time_bucket);
 """
 
 
@@ -1018,31 +970,32 @@ class CacheManager:
         start_bucket: str | None = None,
         end_bucket: str | None = None,
     ) -> dict[str, int]:
-        """Refresh all four agg_* tables in a time range (or fully)."""
+        """Refresh the agg table for all granularities in a time range (or fully)."""
         cursor = self.conn.cursor()
         counts: dict[str, int] = {}
         for granularity, bucket_expr in self._AGG_BUCKET_EXPRS.items():
-            table = f"agg_{granularity}"
             if start_bucket is None or end_bucket is None:
-                cursor.execute(f"DELETE FROM {table}")
-                range_clause, range_params = "", ()
+                cursor.execute("DELETE FROM agg WHERE granularity = ?", (granularity,))
+                range_clause = ""
+                range_params: tuple[str, ...] = ()
             else:
                 cursor.execute(
-                    f"DELETE FROM {table} WHERE time_bucket >= ? AND time_bucket <= ?",
-                    (start_bucket, end_bucket),
+                    "DELETE FROM agg WHERE granularity = ? AND time_bucket >= ? AND time_bucket <= ?",
+                    (granularity, start_bucket, end_bucket),
                 )
                 range_clause = f"AND {bucket_expr} BETWEEN ? AND ?"
                 range_params = (start_bucket, end_bucket)
 
             cursor.execute(f"""
-                INSERT INTO {table} (
-                    time_bucket, project_id, session_id, model_id,
+                INSERT INTO agg (
+                    granularity, time_bucket, project_id, session_id, model_id,
                     event_count,
                     input_tokens, output_tokens,
                     cache_read_tokens, cache_creation_tokens,
                     total_cost_usd, billable_tokens
                 )
                 SELECT
+                    '{granularity}',
                     {bucket_expr} AS time_bucket,
                     project_id,
                     COALESCE(session_id, ''),
@@ -1281,12 +1234,9 @@ class CacheManager:
         # Rebuild aggregates (projects + sessions — cheap)
         self.rebuild_aggregates()
 
-        # Dimensional agg_* tables — full rebuild when empty, otherwise
+        # Dimensional agg table — full rebuild when empty, otherwise
         # incremental by the timestamp window of ingested sessions.
-        agg_empty = all(
-            self.conn.execute(f"SELECT COUNT(*) FROM agg_{g}").fetchone()[0] == 0
-            for g in ("hourly", "daily", "weekly", "monthly")
-        )
+        agg_empty = self.conn.execute("SELECT COUNT(*) FROM agg").fetchone()[0] == 0
         if agg_empty:
             log.info("Dimensional aggregates empty — doing full cold rebuild")
             self.refresh_aggregates_for_range()
