@@ -1,6 +1,6 @@
 ---
 name: mermaidjs_diagrams
-description: "Render and analyze Mermaid.JS diagrams embedded in markdown files. Enforces visual complexity limits via automated analysis. Use when creating or updating architecture diagrams, analyzing diagram complexity, or improving documentation clarity."
+description: "Render and analyze Mermaid.JS diagrams embedded in markdown files. Enforces visual complexity limits via automated analysis. Use when creating or updating architecture diagrams, analyzing diagram complexity, improving documentation clarity, or exploring a codebase to produce dual-density architecture diagrams for a README."
 argument-hint: "[markdown-file]"
 user-invocable: true
 ---
@@ -78,17 +78,38 @@ Flowchart diagrams with Font Awesome (`fa:fa-icon`) need no `--iconPacks` flag.
 
 # Complexity Analysis
 
-Analyze diagrams to ensure they stay within cognitive load thresholds.
-
-> **Note:** The complexity analyzer currently operates on `.mmd` files. A future
-> update will add support for extracting and analyzing individual mermaid code fences
-> from markdown files directly.
+Analyze diagrams to ensure they stay within cognitive load thresholds. Runs
+against `.mmd` and `.md` files (and directories of either) via Mermaid's
+canonical parser — `architecture-beta`, nested subgraphs, and edge decorators
+all parse correctly.
 
 ```bash
-uv run .claude/skills/mermaidjs_diagrams/scripts/mermaid_complexity.py path/to/diagrams/
-uv run .claude/skills/mermaidjs_diagrams/scripts/mermaid_complexity.py path/to/diagrams/ --show-working
-uv run .claude/skills/mermaidjs_diagrams/scripts/mermaid_complexity.py path/to/diagram.mmd --preset low
+bun run .claude/skills/mermaidjs_diagrams/scripts/mermaid_complexity.ts path/to/docs/
+bun run .claude/skills/mermaidjs_diagrams/scripts/mermaid_complexity.ts path/to/diagram.mmd --preset low
+bun run .claude/skills/mermaidjs_diagrams/scripts/mermaid_complexity.ts path/to/docs/ --json
 ```
+
+## Output format
+
+Ruff-style: one finding per line, **silent on clean runs**:
+
+```
+path/to/file.md:100-108: NodeCountExceedsAcceptable nodes=24 preset=high
+```
+
+| Code | Severity | Meaning |
+|------|----------|---------|
+| `ParserFailure` | error | Multi-line diagram yielded 0 nodes |
+| `ParserDegraded` | warn | Regex fallback used (no canonical parser available for this diagram type) |
+| `NodeCountExceedsHardLimit` | error | Nodes above absolute cap |
+| `NodeCountExceedsCognitiveLimit` | error | Nodes > 50 (Huang 2020 threshold) |
+| `NodeCountExceedsAcceptable` | warn | Nodes above readability threshold for preset |
+| `VisualComplexityExceedsCritical` | error | VCS above critical threshold |
+| `VisualComplexityExceedsAcceptable` | warn | VCS above readability threshold |
+| `SubgraphNestingTooDeep` | warn | Subgraph depth >= 3 |
+
+**Short-circuit behavior:** `ParserFailure` suppresses all other codes for that
+diagram — complexity is not evaluated against unparseable input.
 
 ## Density presets
 
@@ -109,6 +130,46 @@ Ratings: **ideal** / **acceptable** / **complex** / **critical**
 When a diagram is rated **complex** or **critical**, split it into simplified and
 detailed versions. See `resources/diagram_organization.md` for the dual-density
 approach and naming conventions.
+
+---
+
+# Contrast Analysis
+
+Verify rendered diagrams meet WCAG contrast requirements for accessibility and
+readability under both light and dark themes.
+
+Two complementary tools:
+
+| Script | Scope | Use when |
+|--------|-------|---------|
+| `scripts/mermaid_contrast.ts` | Audits every `classDef`/`style` directive inside `.mmd`/`.md` files — scores `fill × color` (text on fill) at AA ≥ 4.5:1 and `fill × stroke` (border on fill) at AA ≥ 3:1 | Catching low-contrast custom color palettes before they land in docs |
+| `scripts/color_contrast.ts` | Generic WCAG + APCA calculator for any two CSS colors (hex, rgb, oklch, named, etc.) | Ad-hoc pair checks — e.g. sampling colors from a screenshot or comparing theme tokens |
+
+```bash
+# Audit every diagram in a directory tree
+bun run .claude/skills/mermaidjs_diagrams/scripts/mermaid_contrast.ts docs/
+bun run .claude/skills/mermaidjs_diagrams/scripts/mermaid_contrast.ts docs/ --summary
+bun run .claude/skills/mermaidjs_diagrams/scripts/mermaid_contrast.ts docs/ --json
+
+# Ad-hoc pair
+bun run .claude/skills/mermaidjs_diagrams/scripts/color_contrast.ts "#ffffff" "#2563eb"
+bun run .claude/skills/mermaidjs_diagrams/scripts/color_contrast.ts "rgb(55 65 81)" "oklch(0.98 0 0)" --json
+
+# Batch pairs via stdin
+echo '[["#fff","#777"],["red","blue"]]' | bun run .claude/skills/mermaidjs_diagrams/scripts/color_contrast.ts --stdin --json
+```
+
+**Exit semantics** (both scripts): `0` if every pair passes AA, `1` if any
+fail, `2` on usage error. The non-zero exit makes both tools dropin-suitable
+for `make ci`-style gates.
+
+Output fields (per pair / per directive):
+
+- `ratio` — WCAG 2.x contrast ratio, 1.0 – 21.0, rounded to 2dp
+- `rating` — pass tier (`AAA`, `AA`, `AA Large`, or `fail`)
+- `apca_lc` — signed APCA Lightness contrast (-108..+106), rounded to 1dp.
+  APCA is the next-gen algorithm driving WCAG 3.0 and handles dark-mode
+  colors more accurately than the ratio metric.
 
 ---
 
@@ -141,16 +202,113 @@ with `dagre` for simple flows. The `layout` key is only honored by **flowchart**
 
 # Diagram Organization
 
-For projects with multiple architectural diagrams, use lenses (perspectives) and
-dual-density versions to keep diagrams focused and navigable.
+For projects with multiple architectural diagrams, organize around **lenses**
+(perspectives) and **dual-density** fences inlined in the project README.
 
 > Full documentation: `resources/diagram_organization.md`
 
-Key concepts:
-- **Lenses**: architecture, data-flow, deployment, security, sequence, state
-- **Density levels**: overview (simplified, <=12 nodes) vs detail (comprehensive, <=35 nodes)
-- **Naming convention**: `{lens}--[{subsystem}--]{scope}.md`
-- **README sync**: Link rendered diagrams from project README
+## Primary pattern: inline dual-density
+
+Each lens gets a README section with **two** mermaid fences: a simplified
+overview (always visible, <=12 nodes) and a detailed reference (wrapped in
+`<details>` collapsible, <=35 nodes). Both fences live in the markdown prose —
+no separate `.mmd` files, no pre-rendered PNG pipeline (GitHub and GitLab
+render mermaid fences natively).
+
+````markdown
+### System Overview
+
+```mermaid
+{simplified — <=12 nodes}
+```
+
+*Caption* | VCS: X.X ✅
+
+<details>
+<summary>📋 Complete diagram (N nodes)</summary>
+
+```mermaid
+{detailed — <=35 nodes}
+```
+
+</details>
+````
+
+## Workflow for codebase exploration
+
+When invoked as "generate architecture diagrams for this codebase," do **not**
+try to hold the whole codebase in the main agent's context. Delegate the
+enumeration step to subagents so the diagram-authoring agent keeps a clean
+context to reason in. Loop per lens:
+
+1. **Enumerate components — via subagents and LSP, not raw grep.**
+
+   Dispatch **one `Agent(subagent_type="Explore")` per lens** in parallel.
+   Each subagent reports back only the structured component list for its
+   lens, keeping the main agent's context clean for diagram authoring.
+
+   Inside each subagent, prefer the **`lsp` skill** when available — it
+   provides language-server-backed symbol enumeration, cross-references
+   (which map directly to diagram edges), and impact analysis (which
+   surfaces coupling strength). Fall back to `Grep` / `Glob` only where the
+   LSP can't reach (shell scripts, config files, IaC):
+
+   | Lens | Primary LSP queries | Fallback |
+   |------|---------------------|---------|
+   | `architecture` | Top-level symbols, module boundaries, public exports | `Glob` for directory tree |
+   | `data-flow` | References for each I/O helper (DB client, HTTP client, event bus) | `Grep` for `fetch`/`requests`/SQL strings |
+   | `deployment` | — | `Glob` + read for Dockerfiles, Terraform, `*.yaml` manifests |
+   | `security` | References to auth/crypto helpers, middleware symbols | `Grep` for decorators, middleware wiring |
+   | `sequence` | Call graph for an entry-point symbol | `Grep` for route/handler decorators |
+   | `state` | Enum / state-machine symbols and their transition call sites | `Grep` for state-constant usage |
+
+   The subagent returns **a ≤500-word structured report** — a component list,
+   edge list, and any notable external integrations. No raw code.
+
+2. **Draft the detailed fence first** (<=35 nodes, subgraphs by
+   responsibility, edge labels for what travels between nodes). Work from the
+   subagent reports — do not re-explore the code yourself.
+
+3. **Collapse to the simplified fence** — replace each subgraph with a single
+   node, drop internal wiring, keep the top-level narrative.
+
+4. **Validate**:
+   ```bash
+   bun run .claude/skills/mermaidjs_diagrams/scripts/mermaid_complexity.ts README.md
+   bun run .claude/skills/mermaidjs_diagrams/scripts/mermaid_contrast.ts README.md
+   ```
+   Non-zero exit means shrink, split, or recolor — don't relax the budget.
+
+5. **Render PNGs only if needed** for PDFs / slides / non-mermaid viewers via
+   `scripts/render_mermaid.sh`. Do not re-link them from the README that
+   already holds the fences.
+
+### Why subagents + LSP over direct exploration
+
+- **Context hygiene.** Exploration pulls huge amounts of code into context;
+  diagram authoring needs a clean slate to reason about naming, layout, and
+  layering. Subagents return structured summaries, not raw files.
+- **Parallelism.** Dispatching one subagent per lens in a single message runs
+  them concurrently — the six-lens survey takes ~one wall-clock lens-time.
+- **Cross-reference accuracy.** LSP's `find references` produces a *real*
+  call graph; grep produces a text-match approximation that misses method
+  dispatch, dynamic imports, and renames. For edges labeled "calls" or
+  "invokes," LSP is authoritative.
+- **Failure modes to watch.** If the LSP skill reports no server is
+  available for the codebase's primary language, don't pretend — tell the
+  user, and fall back to `Explore` + `Grep` with the caveat that edges may
+  be undercounted.
+
+## Key concepts
+
+- **Lenses**: architecture, data-flow, deployment, security, sequence, state.
+- **Density tiers**: simplified (overview, always-visible) vs detailed
+  (reference, collapsed).
+- **Split, don't relax** — if the detail fence exceeds 35 nodes, break the
+  lens into per-subsystem sections rather than loosening the budget.
+- **Legacy file-per-diagram** pattern (`docs/diagrams/{lens}--{scope}.md` +
+  PNG links) remains supported for wikis/static sites that can't inline
+  mermaid — see `resources/diagram_organization.md`.
 
 ---
 
@@ -204,10 +362,12 @@ when they display in browser previews. Stick to **ASCII-only text** in node labe
 
 ## Exit Codes
 
-| Tool | 0 | 1 |
-|------|---|---|
-| `mermaid_complexity.py` | All ideal/acceptable | Complex or critical found |
-| `mmdc` | All rendered | Render failure (see stderr) |
+| Tool | 0 | 1 | 2 |
+|------|---|---|---|
+| `mermaid_complexity.ts` | No findings above threshold | Any warn or error finding | Usage error (bad flag / missing file) |
+| `mermaid_contrast.ts` | All pairs pass WCAG AA | Any pair fails | Usage error |
+| `color_contrast.ts` | All pairs pass WCAG AA (>=4.5:1) | Any pair fails | Usage error |
+| `mmdc` | All rendered | Render failure (see stderr) | — |
 
 ## Resources
 
@@ -225,4 +385,7 @@ when they display in browser previews. Stick to **ASCII-only text** in node labe
 | `resources/iconify/iconify_cloud.md` | Cloud-provider icon catalogue |
 | `resources/iconify/iconify_saas.md` | SaaS / product icon catalogue |
 | `scripts/render_mermaid.sh` | Render both default variants for a markdown file |
-| `scripts/mermaid_complexity.py` | Complexity analyzer script |
+| `scripts/mermaid_complexity.ts` | Complexity analyzer — canonical parser, `.mmd` + `.md`, ruff-style output |
+| `scripts/mermaid_contrast.ts` | WCAG contrast audit for `classDef` / `style` directives inside diagrams |
+| `scripts/color_contrast.ts` | WCAG + APCA contrast calculator for arbitrary CSS color pairs (ad-hoc / stdin batch) |
+| `scripts/Makefile` | `make fix` + `make ci` SDLC loop plus `cli-demo` target showing every analyzer |

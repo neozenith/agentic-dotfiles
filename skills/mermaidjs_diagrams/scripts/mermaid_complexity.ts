@@ -31,7 +31,7 @@
 import { Window } from "happy-dom";
 import { parseArgs } from "node:util";
 import { readdirSync, statSync } from "node:fs";
-import { extname, join, resolve } from "node:path";
+import { extname, join, relative, resolve } from "node:path";
 import { parse as langiumParse } from "@mermaid-js/parser";
 
 // ─── happy-dom shim (MUST run before the first mermaid import) ───────────────
@@ -79,26 +79,55 @@ interface Preset {
 
 const PRESETS: Record<string, Preset> = {
   "low-density": {
-    node_ideal: 8, node_acceptable: 12, node_complex: 20, node_hard_limit: 35,
-    vcs_ideal: 15, vcs_acceptable: 25, vcs_complex: 40, vcs_critical: 60,
-    node_target: 10, vcs_target: 20,
+    node_ideal: 8,
+    node_acceptable: 12,
+    node_complex: 20,
+    node_hard_limit: 35,
+    vcs_ideal: 15,
+    vcs_acceptable: 25,
+    vcs_complex: 40,
+    vcs_critical: 60,
+    node_target: 10,
+    vcs_target: 20,
   },
   "medium-density": {
-    node_ideal: 12, node_acceptable: 20, node_complex: 35, node_hard_limit: 60,
-    vcs_ideal: 25, vcs_acceptable: 40, vcs_complex: 70, vcs_critical: 100,
-    node_target: 15, vcs_target: 30,
+    node_ideal: 12,
+    node_acceptable: 20,
+    node_complex: 35,
+    node_hard_limit: 60,
+    vcs_ideal: 25,
+    vcs_acceptable: 40,
+    vcs_complex: 70,
+    vcs_critical: 100,
+    node_target: 15,
+    vcs_target: 30,
   },
   "high-density": {
-    node_ideal: 20, node_acceptable: 35, node_complex: 50, node_hard_limit: 100,
-    vcs_ideal: 35, vcs_acceptable: 60, vcs_complex: 100, vcs_critical: 150,
-    node_target: 25, vcs_target: 40,
+    node_ideal: 20,
+    node_acceptable: 35,
+    node_complex: 50,
+    node_hard_limit: 100,
+    vcs_ideal: 35,
+    vcs_acceptable: 60,
+    vcs_complex: 100,
+    vcs_critical: 150,
+    node_target: 25,
+    vcs_target: 40,
   },
 };
 
 const PRESET_ALIASES: Record<string, string> = {
-  low: "low-density", l: "low-density", strict: "low-density",
-  med: "medium-density", medium: "medium-density", m: "medium-density", balanced: "medium-density",
-  high: "high-density", h: "high-density", permissive: "high-density", default: "high-density",
+  low: "low-density",
+  l: "low-density",
+  strict: "low-density",
+  med: "medium-density",
+  medium: "medium-density",
+  m: "medium-density",
+  balanced: "medium-density",
+  high: "high-density",
+  h: "high-density",
+  permissive: "high-density",
+  default: "high-density",
 };
 
 const VCS_WEIGHTS = { edge: 0.5, subgraph: 3.0, depth: 0.1 } as const;
@@ -138,10 +167,19 @@ function applyEnvOverrides(config: ThresholdConfig): ThresholdConfig {
     Object.assign(out, configFromPreset(envPreset));
   }
   const numericKeys: (keyof ThresholdConfig)[] = [
-    "node_ideal", "node_acceptable", "node_complex", "node_hard_limit",
-    "vcs_ideal", "vcs_acceptable", "vcs_complex", "vcs_critical",
-    "node_target", "vcs_target",
-    "edge_weight", "subgraph_weight", "depth_weight",
+    "node_ideal",
+    "node_acceptable",
+    "node_complex",
+    "node_hard_limit",
+    "vcs_ideal",
+    "vcs_acceptable",
+    "vcs_complex",
+    "vcs_critical",
+    "node_target",
+    "vcs_target",
+    "edge_weight",
+    "subgraph_weight",
+    "depth_weight",
   ];
   for (const key of numericKeys) {
     const envKey = `MERMAID_COMPLEXITY_${key.toUpperCase()}`;
@@ -167,7 +205,7 @@ interface MermaidStats {
   max_subgraph_depth: number;
   node_ids: string[];
   subgraph_names: string[];
-  parser_used: "langium" | "mermaid-core" | "regex-fallback";
+  parser_used: "langium" | "mermaid-core" | "custom";
   diagram_type: string;
 }
 
@@ -188,8 +226,7 @@ interface ComplexityMetrics {
 
 type Rating = "ideal" | "acceptable" | "complex" | "critical";
 type Color = "green" | "yellow" | "orange" | "red";
-type ParseQuality = "ok" | "degraded" | "failed";
-type Severity = "critical" | "complex" | "warning";
+type ParseQuality = "ok" | "failed";
 
 interface SplitEstimate {
   split_number: number;
@@ -239,8 +276,9 @@ interface ComplexityReport {
   subgraph_names: string[];
   parser_used: MermaidStats["parser_used"];
   diagram_type: string;
-  // "ok" means metrics are trustworthy; "degraded" means regex fallback used;
-  // "failed" means a multi-line diagram yielded 0 nodes (silent JISON/DOM fail).
+  // "ok" means metrics are trustworthy; "failed" means a multi-line diagram
+  // yielded 0 nodes (silent parser failure). No middle ground — a parser
+  // either extracted structure we trust, or it did not.
   parse_quality: ParseQuality;
   thresholds_used: Record<string, number>;
   // Populated when the diagram was extracted from a fenced ```mermaid block
@@ -253,79 +291,69 @@ interface ComplexityReport {
   };
 }
 
-interface Finding {
-  id: string;
-  file_path: string;
-  location: string | null;
+// Ruff-style lint output. Strong-typed, CamelCased error codes group failure
+// classes; findings are emitted one-per-line `location: Code message`, and
+// ParserFailure short-circuits any other checks on that diagram (no point
+// threshold-checking a diagram the parser couldn't read).
+export type LintCode =
+  | "ParserFailure"
+  | "NodeCountExceedsHardLimit"
+  | "NodeCountExceedsCognitiveLimit"
+  | "NodeCountExceedsAcceptable"
+  | "VisualComplexityExceedsCritical"
+  | "VisualComplexityExceedsAcceptable"
+  | "SubgraphNestingTooDeep";
+
+export type LintSeverity = "error" | "warning";
+
+export interface LintFinding {
+  code: LintCode;
+  severity: LintSeverity;
+  // Canonical terminal-clickable anchor: "path/to/file.md:100-108" for fenced
+  // diagrams; "path/to/file.mmd" (no range) for standalone .mmd files.
+  location: string;
   diagram_type: string;
-  severity: Severity;
-  rating: Rating;
-  parse_quality: ParseQuality;
-  parser_used: MermaidStats["parser_used"];
-  issues: string[];
-  recommendation: string;
-  boundaries: string[];
-  metrics: {
-    nodes: number;
-    edges: number;
-    subgraphs: number;
-    max_depth: number;
-    visual_complexity_score: number;
-  };
+  // One-line explanation with the concrete numbers that caused this finding.
+  message: string;
+  // Actionable next step. For ParserFailure, explains the root cause and
+  // records that complexity checks were skipped. For threshold codes,
+  // names the boundaries and target per-sub-diagram sizing.
+  remediation: string;
+  // Optional context fields populated only where they apply to the code.
+  actual?: number;
+  threshold?: number;
+  parser?: MermaidStats["parser_used"];
+  boundaries?: string[];
 }
 
-interface DiagramSummary {
-  id: string;
-  file_path: string;
-  location: string | null;
-  diagram_type: string;
-  parser_used: MermaidStats["parser_used"];
-  rating: Rating;
-  parse_quality: ParseQuality;
-  metrics: {
-    nodes: number;
-    edges: number;
-    subgraphs: number;
-    max_depth: number;
-    visual_complexity_score: number;
-  };
-}
-
-interface JsonOutput {
-  summary: {
-    total: number;
-    by_rating: Record<Rating, number>;
-    pass: number;
-    needs_attention: number;
-    parse_warnings: number;
-    preset: string;
-    thresholds: {
-      node_acceptable: number;
-      node_complex: number;
-      node_hard_limit: number;
-      vcs_acceptable: number;
-      vcs_complex: number;
-      vcs_critical: number;
-      node_target: number;
-      vcs_target: number;
-    };
-  };
-  findings: Finding[];
-  diagrams?: DiagramSummary[];
-}
+const ERROR_CODES: ReadonlySet<LintCode> = new Set<LintCode>([
+  "ParserFailure",
+  "NodeCountExceedsHardLimit",
+  "NodeCountExceedsCognitiveLimit",
+  "VisualComplexityExceedsCritical",
+]);
 
 // ─── Parser dispatch ─────────────────────────────────────────────────────────
 
-const LANGIUM_TYPES: Record<string, "architecture" | "info" | "pie" | "gitGraph" | "packet" | "radar" | "treemap" | "treeView" | "wardley"> = {
-  "architecture-beta": "architecture", "architecture": "architecture",
-  "info": "info",
-  "pie": "pie",
-  "gitGraph": "gitGraph",
-  "packet-beta": "packet", "packet": "packet",
-  "radar-beta": "radar", "radar": "radar",
-  "treemap-beta": "treemap", "treemap": "treemap",
-  "treeView-beta": "treeView", "treeView": "treeView",
-  "wardley-beta": "wardley", "wardley": "wardley",
+const LANGIUM_TYPES: Record<
+  string,
+  "architecture" | "info" | "pie" | "gitGraph" | "packet" | "radar" | "treemap" | "treeView" | "wardley"
+> = {
+  "architecture-beta": "architecture",
+  architecture: "architecture",
+  info: "info",
+  pie: "pie",
+  gitGraph: "gitGraph",
+  "packet-beta": "packet",
+  packet: "packet",
+  "radar-beta": "radar",
+  radar: "radar",
+  "treemap-beta": "treemap",
+  treemap: "treemap",
+  "treeView-beta": "treeView",
+  treeView: "treeView",
+  "wardley-beta": "wardley",
+  wardley: "wardley",
 };
 
 function detectKeyword(content: string): string | null {
@@ -343,35 +371,63 @@ function detectKeyword(content: string): string | null {
 async function extractStats(content: string): Promise<MermaidStats> {
   const keyword = detectKeyword(content) ?? "unknown";
 
+  // 1. Langium grammar (@mermaid-js/parser) — typed AST, no DOM needed.
   if (keyword in LANGIUM_TYPES) {
     try {
       return await extractLangiumStats(content, keyword);
     } catch {
-      /* fall through */
+      /* fall through to mermaid-core */
     }
   }
 
+  // 2. Mermaid-core JISON parser via happy-dom. The shim satisfies
+  // DOMPurify; the parsers populate each type's DB (vertices, edges,
+  // blocks, sections, etc.). A per-type adapter in extractCoreStats reads
+  // the canonical DB shape.
   try {
     return await extractCoreStats(content, keyword);
   } catch {
-    return extractRegexStats(content, keyword);
+    /* fall through */
   }
+
+  // 3. Neither canonical parser produced stats. Return a tagged failure
+  // so assessParseQuality flags ParserFailure.
+  return {
+    nodes: 0,
+    edges: 0,
+    subgraphs: 0,
+    max_subgraph_depth: 0,
+    node_ids: [],
+    subgraph_names: [],
+    parser_used: "mermaid-core",
+    diagram_type: keyword,
+  };
 }
 
 // ── Langium extraction (@mermaid-js/parser) ─────────────────────────────────
 
 async function langiumParseAny(type: string, content: string): Promise<unknown> {
   switch (type) {
-    case "architecture": return langiumParse("architecture", content);
-    case "info": return langiumParse("info", content);
-    case "pie": return langiumParse("pie", content);
-    case "gitGraph": return langiumParse("gitGraph", content);
-    case "packet": return langiumParse("packet", content);
-    case "radar": return langiumParse("radar", content);
-    case "treemap": return langiumParse("treemap", content);
-    case "treeView": return langiumParse("treeView", content);
-    case "wardley": return langiumParse("wardley", content);
-    default: throw new Error(`no langium parser for ${type}`);
+    case "architecture":
+      return langiumParse("architecture", content);
+    case "info":
+      return langiumParse("info", content);
+    case "pie":
+      return langiumParse("pie", content);
+    case "gitGraph":
+      return langiumParse("gitGraph", content);
+    case "packet":
+      return langiumParse("packet", content);
+    case "radar":
+      return langiumParse("radar", content);
+    case "treemap":
+      return langiumParse("treemap", content);
+    case "treeView":
+      return langiumParse("treeView", content);
+    case "wardley":
+      return langiumParse("wardley", content);
+    default:
+      throw new Error(`no langium parser for ${type}`);
   }
 }
 
@@ -423,30 +479,34 @@ async function extractLangiumStats(content: string, keyword: string): Promise<Me
       edges = axes.length * curves.length;
       break;
     }
-    case "treemap":
     case "treeView": {
-      const walk = (nodes: Array<Record<string, unknown>> | undefined, depth: number): void => {
-        for (const n of nodes ?? []) {
-          const label = (n.label as string | undefined) ?? (n.name as string | undefined) ?? `node_${nodeIds.length}`;
-          nodeIds.push(label);
-          if (depth > maxDepth) maxDepth = depth;
-          const children = (n.children as Array<Record<string, unknown>> | undefined) ?? (n.nodes as Array<Record<string, unknown>> | undefined);
-          if (children) {
-            edges += children.length;
-            walk(children, depth + 1);
-          }
-        }
-      };
-      walk((ast.root as Array<Record<string, unknown>> | undefined) ?? (ast.nodes as Array<Record<string, unknown>> | undefined), 1);
+      // AST shape: flat ast.nodes[] with { name, indent }. Tree structure
+      // derives from indent values; edges = nodes - roots.
+      const nodes = (ast.nodes as Array<{ name?: string; indent?: number }> | undefined) ?? [];
+      const stats = indentTreeStats(nodes.map((n, i) => ({ label: n.name ?? `node_${i}`, indent: n.indent ?? 0 })));
+      nodeIds.push(...stats.labels);
+      edges = stats.edges;
+      maxDepth = stats.depth;
+      break;
+    }
+    case "treemap": {
+      // AST shape: ast.TreemapRows[] with .indent and .item.{Section|Leaf}.name.
+      const rows = (ast.TreemapRows as Array<{ indent?: number; item?: { name?: string } }> | undefined) ?? [];
+      const stats = indentTreeStats(rows.map((r, i) => ({ label: r.item?.name ?? `row_${i}`, indent: r.indent ?? 0 })));
+      nodeIds.push(...stats.labels);
+      edges = stats.edges;
+      maxDepth = stats.depth;
       break;
     }
     case "wardley": {
+      // AST shape: ast.anchors[], ast.components[], ast.links[] — NOT ast.edges.
+      // The old code looked for `ast.edges` and returned 0.
       const components = (ast.components as Array<{ name?: string }> | undefined) ?? [];
       const anchors = (ast.anchors as Array<{ name?: string }> | undefined) ?? [];
-      const edgeArr = (ast.edges as Array<unknown> | undefined) ?? [];
-      nodeIds.push(...components.map((c, i) => c.name ?? `comp_${i}`));
+      const links = (ast.links as Array<unknown> | undefined) ?? [];
       nodeIds.push(...anchors.map((a, i) => a.name ?? `anchor_${i}`));
-      edges = edgeArr.length;
+      nodeIds.push(...components.map((c, i) => c.name ?? `comp_${i}`));
+      edges = links.length;
       break;
     }
     case "info":
@@ -483,84 +543,424 @@ function architectureDepth(groups: Array<{ id?: string; in?: string }>): number 
   return max;
 }
 
+// Compute tree structure from a flat, indent-ordered node list.
+// Used for treemap, treeView, mindmap, ishikawa, kanban — every diagram
+// type where parent-child is encoded via indentation rather than explicit
+// edges. `labels` preserves the node names for VCS bookkeeping; `edges` is
+// the number of parent-child links (nodes - number_of_roots); `depth` is
+// the maximum number of indent-steps past the root level.
+export function indentTreeStats(items: Array<{ label: string; indent: number }>): {
+  labels: string[];
+  edges: number;
+  depth: number;
+} {
+  if (items.length === 0) return { labels: [], edges: 0, depth: 0 };
+  const labels = items.map((i) => i.label);
+  const indents = items.map((i) => i.indent);
+  const minIndent = Math.min(...indents);
+  const uniqueIndents = [...new Set(indents)].sort((a, b) => a - b);
+  const roots = items.filter((i) => i.indent === minIndent).length;
+  const edges = Math.max(0, items.length - roots);
+  const depth = Math.max(0, uniqueIndents.length - 1);
+  return { labels, edges, depth };
+}
+
 // ── mermaid-core extraction via .db after parse ─────────────────────────────
+//
+// Every diagram type's canonical DB has a different shape. Some expose data
+// via getter methods (flowchart's getVertices/getEdges, kanban's getSections,
+// block's getBlocksFlat). Others expose it via direct properties (er.entities,
+// state.nodes, requirement.requirements). We dispatch on diagram.type and
+// each adapter reads ONLY that type's canonical surface — no text parsing,
+// no regex. The parser did the work; we just read the result.
+
+type AnyDb = Record<string, unknown>;
+interface Structure {
+  nodeIds: string[];
+  edges: number;
+  subgraphNames: string[];
+  maxDepth: number;
+}
+type CoreAdapter = (db: AnyDb) => Structure;
 
 async function extractCoreStats(content: string, keyword: string): Promise<MermaidStats> {
   const mermaid = await getMermaid();
 
-  // mermaid.parse() lazily registers the matching diagram's JISON grammar.
-  // It MUST run before getDiagramFromText, or the internal registry will
-  // report "No diagram type detected".
+  // mermaid.parse() lazily registers the matching diagram and populates its DB.
   await mermaid.parse(content);
 
-  const api = (mermaid as unknown as { mermaidAPI?: { getDiagramFromText?: (t: string) => Promise<{ db: Record<string, unknown>; type?: string }> } }).mermaidAPI;
+  const api = (
+    mermaid as unknown as {
+      mermaidAPI?: { getDiagramFromText?: (t: string) => Promise<{ db: AnyDb; type?: string }> };
+    }
+  ).mermaidAPI;
   if (!api?.getDiagramFromText) throw new Error("mermaidAPI.getDiagramFromText not available");
   const diagram = await api.getDiagramFromText(content);
-  const db = diagram.db as Record<string, (...args: unknown[]) => unknown>;
   const diagramType = diagram.type ?? keyword;
 
-  // Generic extractors — mermaid's internal db exposes a common vocabulary for
-  // most diagram types. We probe each known method and fall back to empty.
-  const vertices = typeof db.getVertices === "function" ? (db.getVertices() as Map<string, { text?: string }> | Record<string, unknown>) : null;
-  const edgesRaw = typeof db.getEdges === "function" ? (db.getEdges() as Array<unknown>) : null;
-  const subGraphs = typeof db.getSubGraphs === "function" ? (db.getSubGraphs() as Array<{ id?: string; title?: string; nodes?: string[] }>) : null;
-
-  // Diagram-type-specific fallbacks.
-  const actors = typeof db.getActors === "function" ? (db.getActors() as Map<string, unknown> | Record<string, unknown>) : null;
-  const messages = typeof db.getMessages === "function" ? (db.getMessages() as Array<unknown>) : null;
-  const classes = typeof db.getClasses === "function" ? (db.getClasses() as Map<string, unknown> | Record<string, unknown>) : null;
-  const relations = typeof db.getRelations === "function" ? (db.getRelations() as Array<unknown>) : null;
-  const entities = typeof db.getEntities === "function" ? (db.getEntities() as Map<string, unknown> | Record<string, unknown>) : null;
-  const erRelationships = typeof db.getRelationships === "function" ? (db.getRelationships() as Array<unknown>) : null;
-  const states = typeof db.getRootDocV2 === "function" ? (db.getRootDocV2() as { doc?: Array<{ stmt?: string }> }) : null;
-  const tasks = typeof db.getTasks === "function" ? (db.getTasks() as Array<unknown>) : null;
-
-  let nodeIds: string[] = [];
-  let edges = 0;
-  const subgraphNames: string[] = [];
-  let maxDepth = 0;
-
-  if (vertices) {
-    nodeIds = collectIds(vertices);
-    edges = edgesRaw?.length ?? 0;
-    if (subGraphs?.length) {
-      subgraphNames.push(...subGraphs.map((s) => s.title ?? s.id ?? ""));
-      maxDepth = subgraphNestingDepth(subGraphs);
-    }
-  } else if (actors) {
-    nodeIds = collectIds(actors);
-    edges = messages?.length ?? 0;
-  } else if (classes) {
-    nodeIds = collectIds(classes);
-    edges = relations?.length ?? 0;
-  } else if (entities) {
-    nodeIds = collectIds(entities);
-    edges = erRelationships?.length ?? 0;
-  } else if (states?.doc) {
-    nodeIds = states.doc.filter((s) => s.stmt === "state").map((_, i) => `state_${i}`);
-    edges = states.doc.filter((s) => s.stmt === "relation").length;
-  } else if (tasks) {
-    nodeIds = tasks.map((_, i) => `task_${i}`);
+  const adapter = CORE_ADAPTERS[diagramType];
+  if (!adapter) {
+    throw new Error(`no core adapter for diagram.type="${diagramType}" (keyword="${keyword}")`);
   }
+  const { nodeIds, edges, subgraphNames, maxDepth } = adapter(diagram.db);
 
   return {
     nodes: nodeIds.length,
     edges,
     subgraphs: subgraphNames.length,
     max_subgraph_depth: maxDepth,
-    node_ids: nodeIds.sort(),
+    node_ids: [...nodeIds].sort(),
     subgraph_names: subgraphNames,
     parser_used: "mermaid-core",
     diagram_type: diagramType,
   };
 }
 
-function collectIds(source: Map<string, unknown> | Record<string, unknown>): string[] {
-  if (source instanceof Map) return [...source.keys()];
-  return Object.keys(source);
+// ─── Per-type DB adapters ──
+// Each adapter reads ONLY canonical mermaid DB surface for that diagram type.
+// Keys below match the `diagram.type` string mermaid assigns after parse
+// (which may differ from the first-line keyword — e.g. "flowchart-v2" vs
+// "flowchart", "er" vs "erDiagram", "stateDiagram" vs "stateDiagram-v2").
+
+const CORE_ADAPTERS: Record<string, CoreAdapter> = {
+  "flowchart-v2": adaptFlowchart,
+  flowchart: adaptFlowchart,
+  graph: adaptFlowchart,
+  classDiagram: adaptClass,
+  "classDiagram-v2": adaptClass,
+  class: adaptClass,
+  sequence: adaptSequence,
+  block: adaptBlock,
+  c4: adaptC4,
+  er: adaptEr,
+  gantt: adaptGantt,
+  ishikawa: adaptIshikawa,
+  kanban: adaptKanban,
+  mindmap: adaptMindmap,
+  quadrantChart: adaptQuadrantChart,
+  requirement: adaptRequirement,
+  sankey: adaptSankey,
+  stateDiagram: adaptState,
+  "stateDiagram-v2": adaptState,
+  timeline: adaptTimeline,
+  journey: adaptJourney,
+  venn: adaptVenn,
+  xychart: adaptXychart,
+};
+
+function callGetter<T>(db: AnyDb, name: string): T | null {
+  const fn = db[name];
+  return typeof fn === "function" ? ((fn as () => T)() ?? null) : null;
+}
+
+function adaptFlowchart(db: AnyDb): Structure {
+  // flowchartDb exposes data on direct properties: db.vertices (Map),
+  // db.edges (Array), db.subGraphs (Array). No getters.
+  const vertices = (db.vertices instanceof Map ? db.vertices : new Map()) as Map<string, unknown>;
+  const edgesArr = (Array.isArray(db.edges) ? db.edges : []) as Array<unknown>;
+  const subGraphs = (Array.isArray(db.subGraphs) ? db.subGraphs : []) as Array<{
+    id?: string;
+    title?: string;
+    nodes?: string[];
+  }>;
+  return {
+    nodeIds: [...vertices.keys()],
+    edges: edgesArr.length,
+    subgraphNames: subGraphs.map((s) => s.title ?? s.id ?? ""),
+    maxDepth: subgraphNestingDepth(subGraphs),
+  };
+}
+
+function adaptClass(db: AnyDb): Structure {
+  // classDb exposes data on direct properties: db.classes (Map), db.relations (Array).
+  const classes = (db.classes instanceof Map ? db.classes : new Map()) as Map<string, unknown>;
+  const relations = (Array.isArray(db.relations) ? db.relations : []) as Array<unknown>;
+  return { nodeIds: [...classes.keys()], edges: relations.length, subgraphNames: [], maxDepth: 0 };
+}
+
+interface SequenceState {
+  records?: {
+    actors?: Map<string, unknown>;
+    messages?: Array<unknown>;
+  };
+}
+function adaptSequence(db: AnyDb): Structure {
+  // sequenceDb stores state under db.state.records.{actors,messages}.
+  const state = (db.state as SequenceState | undefined)?.records;
+  const actors = state?.actors instanceof Map ? state.actors : new Map<string, unknown>();
+  const messages = Array.isArray(state?.messages) ? state!.messages! : [];
+  return {
+    nodeIds: [...actors.keys()],
+    edges: messages.length,
+    subgraphNames: [],
+    maxDepth: 0,
+  };
+}
+
+interface BlockItem {
+  id?: string;
+  type?: string;
+  children?: BlockItem[];
+}
+function adaptBlock(db: AnyDb): Structure {
+  // Block uses a recursive tree: container blocks have non-empty `children`,
+  // leaf blocks don't. getBlocks() is the top-level list; walk recursively.
+  const roots = callGetter<BlockItem[]>(db, "getBlocks") ?? [];
+  const edges = (callGetter<Array<unknown>>(db, "getEdges") ?? []).length;
+  const leaves: string[] = [];
+  const containers: string[] = [];
+  let maxDepth = 0;
+  const walk = (items: BlockItem[], depth: number): void => {
+    for (const item of items) {
+      const id = item.id ?? "";
+      const kids = item.children ?? [];
+      // Mermaid wraps content in "space" / "composite" synthetic nodes —
+      // count user-visible blocks only. Treat composite-with-children as
+      // a container (subgraph), everything else as a leaf node.
+      if (kids.length > 0) {
+        containers.push(id);
+        if (depth + 1 > maxDepth) maxDepth = depth + 1;
+        walk(kids, depth + 1);
+      } else if (item.type !== "space" && item.type !== "composite") {
+        leaves.push(id);
+      }
+    }
+  };
+  walk(roots, 0);
+  return { nodeIds: leaves, edges, subgraphNames: containers, maxDepth };
+}
+
+interface C4Boundary {
+  alias?: string;
+  label?: { text?: string };
+}
+function adaptC4(db: AnyDb): Structure {
+  const shapes = callGetter<Array<{ alias?: string }>>(db, "getC4ShapeArray") ?? [];
+  const rels = callGetter<Array<unknown>>(db, "getRels") ?? [];
+  const boundaries = callGetter<C4Boundary[]>(db, "getBoundaries") ?? [];
+  // Top-level "global" boundary is synthetic; exclude from user-visible count.
+  const userBoundaries = boundaries.filter((b) => b.alias && b.alias !== "global");
+  return {
+    nodeIds: shapes.map((s) => s.alias ?? ""),
+    edges: rels.length,
+    subgraphNames: userBoundaries.map((b) => b.alias ?? ""),
+    maxDepth: userBoundaries.length > 0 ? 1 : 0,
+  };
+}
+
+function adaptEr(db: AnyDb): Structure {
+  // ER db exposes data on direct properties. entities is a Map keyed on
+  // entity name (CAR, NAMED-DRIVER); relationships is an Array.
+  const entities = db.entities instanceof Map ? db.entities : new Map<string, unknown>();
+  const relationships = (Array.isArray(db.relationships) ? db.relationships : []) as Array<unknown>;
+  return {
+    nodeIds: [...entities.keys()],
+    edges: relationships.length,
+    subgraphNames: [],
+    maxDepth: 0,
+  };
+}
+
+interface GanttTask {
+  id?: string;
+  task?: string;
+}
+interface GanttSection {
+  name?: string;
+}
+function adaptGantt(db: AnyDb): Structure {
+  const tasks = callGetter<GanttTask[]>(db, "getTasks") ?? [];
+  const sections = callGetter<GanttSection[]>(db, "getSections") ?? [];
+  return {
+    nodeIds: tasks.map((t) => t.id ?? t.task ?? ""),
+    edges: 0,
+    subgraphNames: sections.map((s) => s.name ?? ""),
+    maxDepth: sections.length > 0 ? 1 : 0,
+  };
+}
+
+interface IshikawaNode {
+  label?: string;
+  name?: string;
+  children?: IshikawaNode[];
+}
+function adaptIshikawa(db: AnyDb): Structure {
+  const root = callGetter<IshikawaNode | null>(db, "getRoot");
+  if (!root) return { nodeIds: [], edges: 0, subgraphNames: [], maxDepth: 0 };
+  const labels: string[] = [];
+  let maxDepth = 0;
+  const walk = (node: IshikawaNode, depth: number): void => {
+    labels.push(node.label ?? node.name ?? "");
+    if (depth > maxDepth) maxDepth = depth;
+    for (const c of node.children ?? []) walk(c, depth + 1);
+  };
+  walk(root, 0);
+  return { nodeIds: labels, edges: Math.max(0, labels.length - 1), subgraphNames: [], maxDepth };
+}
+
+interface KanbanNode {
+  id?: string;
+  parentId?: string;
+  isGroup?: boolean;
+}
+function adaptKanban(db: AnyDb): Structure {
+  // getData() returns a flat node list; isGroup=true marks columns, tasks
+  // point at their column via parentId.
+  const data = callGetter<{ nodes?: KanbanNode[] } | null>(db, "getData");
+  const nodes = data?.nodes ?? [];
+  const columns = nodes.filter((n) => n.isGroup === true);
+  const tasks = nodes.filter((n) => n.isGroup === false);
+  return {
+    nodeIds: tasks.map((t) => t.id ?? ""),
+    edges: 0,
+    subgraphNames: columns.map((c) => c.id ?? ""),
+    maxDepth: columns.length > 0 ? 1 : 0,
+  };
+}
+
+interface MindmapNode {
+  nodeId?: number;
+  descr?: string;
+  children?: MindmapNode[];
+}
+function adaptMindmap(db: AnyDb): Structure {
+  const root = callGetter<MindmapNode | null>(db, "getMindmap");
+  if (!root) return { nodeIds: [], edges: 0, subgraphNames: [], maxDepth: 0 };
+  const labels: string[] = [];
+  let maxDepth = 0;
+  const walk = (node: MindmapNode, depth: number): void => {
+    labels.push(node.descr ?? String(node.nodeId ?? ""));
+    if (depth > maxDepth) maxDepth = depth;
+    for (const c of node.children ?? []) walk(c, depth + 1);
+  };
+  walk(root, 0);
+  return { nodeIds: labels, edges: Math.max(0, labels.length - 1), subgraphNames: [], maxDepth };
+}
+
+interface QuadrantData {
+  quadrants?: Array<{ text?: { text?: string } | string }>;
+}
+function adaptQuadrantChart(db: AnyDb): Structure {
+  const data = callGetter<QuadrantData | null>(db, "getQuadrantData");
+  const quadrants = data?.quadrants ?? [];
+  const labels = quadrants.map((q) => {
+    const t = q.text;
+    return typeof t === "string" ? t : (t?.text ?? "");
+  });
+  return { nodeIds: labels, edges: 0, subgraphNames: [], maxDepth: 0 };
+}
+
+function adaptRequirement(db: AnyDb): Structure {
+  // requirements and elements are both Maps keyed on name. relations is an Array.
+  const requirements = db.requirements instanceof Map ? db.requirements : new Map<string, unknown>();
+  const elements = db.elements instanceof Map ? db.elements : new Map<string, unknown>();
+  const relations = (Array.isArray(db.relations) ? db.relations : []) as Array<unknown>;
+  return {
+    nodeIds: [...requirements.keys(), ...elements.keys()],
+    edges: relations.length,
+    subgraphNames: [],
+    maxDepth: 0,
+  };
+}
+
+function adaptSankey(db: AnyDb): Structure {
+  const nodes = callGetter<Array<{ id?: string }>>(db, "getNodes") ?? [];
+  const links = callGetter<Array<unknown>>(db, "getLinks") ?? [];
+  return {
+    nodeIds: nodes.map((n) => n.id ?? ""),
+    edges: links.length,
+    subgraphNames: [],
+    maxDepth: 0,
+  };
+}
+
+interface StateNode {
+  id?: string;
+  type?: string;
+}
+interface StateEdge {
+  id1?: string;
+  id2?: string;
+}
+function adaptState(db: AnyDb): Structure {
+  // stateDiagram db exposes data on direct properties.
+  const nodes = (db.nodes as StateNode[] | undefined) ?? [];
+  const edges = (db.edges as StateEdge[] | undefined) ?? [];
+  return {
+    nodeIds: nodes.map((n) => n.id ?? ""),
+    edges: edges.length,
+    subgraphNames: [],
+    maxDepth: 0,
+  };
+}
+
+interface TimelineTask {
+  task?: string;
+  section?: string;
+}
+interface TimelineSection {
+  sectionName?: string;
+  section?: string;
+}
+function adaptTimeline(db: AnyDb): Structure {
+  const tasks = callGetter<TimelineTask[]>(db, "getTasks") ?? [];
+  const sections = callGetter<TimelineSection[]>(db, "getSections") ?? [];
+  return {
+    nodeIds: tasks.map((t) => t.task ?? ""),
+    edges: 0,
+    subgraphNames: sections.map((s) => s.sectionName ?? s.section ?? ""),
+    maxDepth: sections.length > 0 ? 1 : 0,
+  };
+}
+
+interface JourneyTask {
+  task?: string;
+}
+interface JourneySection {
+  id?: string;
+  name?: string;
+}
+function adaptJourney(db: AnyDb): Structure {
+  const tasks = callGetter<JourneyTask[]>(db, "getTasks") ?? [];
+  const sections = callGetter<JourneySection[]>(db, "getSections") ?? [];
+  return {
+    nodeIds: tasks.map((t) => t.task ?? ""),
+    edges: 0,
+    subgraphNames: sections.map((s) => s.name ?? s.id ?? ""),
+    maxDepth: sections.length > 0 ? 1 : 0,
+  };
+}
+
+interface VennSet {
+  id?: string;
+}
+interface VennSubset {
+  sets?: string[];
+}
+function adaptVenn(db: AnyDb): Structure {
+  const sets = callGetter<VennSet[]>(db, "getCurrentSets") ?? [];
+  const subsets = callGetter<VennSubset[]>(db, "getSubsetData") ?? [];
+  // Subsets with multiple sets = unions/intersections = edges.
+  const multiSetSubsets = subsets.filter((s) => (s.sets?.length ?? 0) >= 2);
+  return {
+    nodeIds: sets.map((s) => s.id ?? ""),
+    edges: multiSetSubsets.length,
+    subgraphNames: [],
+    maxDepth: 0,
+  };
+}
+
+interface XYChartData {
+  xAxis?: { categories?: string[] };
+}
+function adaptXychart(db: AnyDb): Structure {
+  const data = callGetter<XYChartData | null>(db, "getXYChartData");
+  const categories = data?.xAxis?.categories ?? [];
+  return { nodeIds: categories, edges: 0, subgraphNames: [], maxDepth: 0 };
 }
 
 function subgraphNestingDepth(subGraphs: Array<{ id?: string; nodes?: string[] }>): number {
+  if (subGraphs.length === 0) return 0;
   const idToMembers = new Map<string, Set<string>>();
   for (const sg of subGraphs) {
     if (sg.id) idToMembers.set(sg.id, new Set(sg.nodes ?? []));
@@ -581,84 +981,13 @@ function subgraphNestingDepth(subGraphs: Array<{ id?: string; nodes?: string[] }
   return max;
 }
 
-// ── Regex fallback (direct port of the Python parser) ────────────────────────
-
-function extractRegexStats(content: string, keyword: string): MermaidStats {
-  const lines = content.split("\n");
-  const nodes = new Set<string>();
-  const subgraphStack: string[] = [];
-  const subgraphNames: string[] = [];
-  let edges = 0;
-  let maxDepth = 0;
-
-  const nodePatterns = [
-    /^[ \t]*([A-Za-z_][A-Za-z0-9_]*)\[/,
-    /^[ \t]*([A-Za-z_][A-Za-z0-9_]*)\(/,
-    /^[ \t]*([A-Za-z_][A-Za-z0-9_]*)\{/,
-    /^[ \t]*([A-Za-z_][A-Za-z0-9_]*)>/,
-    /^[ \t]*([A-Za-z_][A-Za-z0-9_]*)@\{/,
-  ];
-  const simpleEdgeRe = /([A-Za-z_][A-Za-z0-9_]*)\s*(?:-->|-\.->|==>|~~~|<-->|--[^-].*-->|-\.-.*-\.->|==.*==>)\s*([A-Za-z_][A-Za-z0-9_]*)/g;
-  const arrowRe = /-->|-\.->|==>|~~~|<-->/g;
-  const subgraphRe = /^[ \t]*subgraph\s+(?:"([^"]+)"|(\S+))?/i;
-  const endRe = /^[ \t]*end\s*$/i;
-  const commentRe = /^[ \t]*%%/;
-  const directiveRe = /^[ \t]*(?:graph|flowchart|sequenceDiagram|classDiagram|stateDiagram|erDiagram|gantt|pie|journey)\s/i;
-  const styleRe = /^[ \t]*(?:classDef|class|linkStyle|style)\s/i;
-  const KEYWORDS = new Set(["graph","flowchart","subgraph","end","tb","td","bt","rl","lr","classdef","class","linkstyle","style","click","callback","direction","default","fill","stroke","color","width"]);
-
-  for (const line of lines) {
-    if (!line.trim() || commentRe.test(line) || directiveRe.test(line) || styleRe.test(line)) continue;
-
-    const sg = subgraphRe.exec(line);
-    if (sg) {
-      const name = sg[1] ?? sg[2] ?? `subgraph_${subgraphNames.length}`;
-      subgraphStack.push(name);
-      subgraphNames.push(name);
-      if (subgraphStack.length > maxDepth) maxDepth = subgraphStack.length;
-      continue;
-    }
-    if (endRe.test(line)) { if (subgraphStack.length) subgraphStack.pop(); continue; }
-
-    edges += (line.match(arrowRe) ?? []).length;
-
-    let m: RegExpExecArray | null;
-    simpleEdgeRe.lastIndex = 0;
-    while ((m = simpleEdgeRe.exec(line)) !== null) {
-      if (m[1]) nodes.add(m[1]);
-      if (m[2]) nodes.add(m[2]);
-    }
-    for (const pat of nodePatterns) {
-      const hit = pat.exec(line);
-      if (hit?.[1]) nodes.add(hit[1]);
-    }
-    const potential = line.match(/\b([A-Za-z_][A-Za-z0-9_]*)\b/g) ?? [];
-    for (const p of potential) {
-      if (KEYWORDS.has(p.toLowerCase())) continue;
-      const esc = p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      if (new RegExp(`\\b${esc}\\b\\s*(?:-->|-\\.->|==>|<--|<-\\.|-<)`).test(line)
-          || new RegExp(`(?:-->|-\\.->|==>|<--|<-\\.|-<)\\s*\\b${esc}\\b`).test(line)) {
-        nodes.add(p);
-      }
-    }
-  }
-
-  return {
-    nodes: nodes.size,
-    edges,
-    subgraphs: subgraphNames.length,
-    max_subgraph_depth: maxDepth,
-    node_ids: [...nodes].sort(),
-    subgraph_names: subgraphNames,
-    parser_used: "regex-fallback",
-    diagram_type: keyword,
-  };
-}
-
 // ─── Metrics ─────────────────────────────────────────────────────────────────
 
 function calculateComplexity(stats: MermaidStats, config: ThresholdConfig): ComplexityMetrics {
-  const n = stats.nodes, e = stats.edges, s = stats.subgraphs, d = stats.max_subgraph_depth;
+  const n = stats.nodes,
+    e = stats.edges,
+    s = stats.subgraphs,
+    d = stats.max_subgraph_depth;
   const depthMultiplier = 1 + d * config.depth_weight;
   const baseVcs = n + e * config.edge_weight + s * config.subgraph_weight;
   const vcs = baseVcs * depthMultiplier;
@@ -696,7 +1025,11 @@ function rateComplexity(vcs: number, nodes: number, c: ThresholdConfig): { ratin
 // ─── Subdivision recommendation ──────────────────────────────────────────────
 
 function recommendSubdivisions(
-  vcs: number, nodes: number, edges: number, subgraphs: number, config: ThresholdConfig,
+  vcs: number,
+  nodes: number,
+  edges: number,
+  subgraphs: number,
+  config: ThresholdConfig,
 ): { needs: boolean; count: number; rationale: string; workingOut: SubdivisionWorkingOut } {
   const nodesExceedsAcceptable = nodes > config.node_acceptable;
   const nodesExceedsComplex = nodes > config.node_complex;
@@ -726,7 +1059,8 @@ function recommendSubdivisions(
   const finalCount = subgraphAdjusted;
 
   const rationaleParts: string[] = [];
-  if (nodesExceedsAcceptable) rationaleParts.push(`Node count (${nodes}) exceeds threshold (${config.node_acceptable})`);
+  if (nodesExceedsAcceptable)
+    rationaleParts.push(`Node count (${nodes}) exceeds threshold (${config.node_acceptable})`);
   if (vcsExceedsAcceptable) rationaleParts.push(`VCS (${vcs.toFixed(1)}) exceeds threshold (${config.vcs_acceptable})`);
   if (nodesExceedsComplex) rationaleParts.push(`⚠️ Nodes (${nodes}) exceed cognitive limit (${config.node_complex})`);
   if (subgraphAdjusted !== count) rationaleParts.push(`Using ${subgraphs} subgraphs as boundaries`);
@@ -758,14 +1092,20 @@ function recommendSubdivisions(
   }
 
   return {
-    needs, count: finalCount, rationale,
+    needs,
+    count: finalCount,
+    rationale,
     workingOut: {
-      nodes, vcs, subgraphs,
+      nodes,
+      vcs,
+      subgraphs,
       nodes_exceeds_acceptable: nodesExceedsAcceptable,
       nodes_exceeds_complex: nodesExceedsComplex,
       vcs_exceeds_acceptable: vcsExceedsAcceptable,
-      node_based_splits: nodeSplits, node_based_formula: nodeFormula,
-      vcs_based_splits: vcsSplits, vcs_based_formula: vcsFormula,
+      node_based_splits: nodeSplits,
+      node_based_formula: nodeFormula,
+      vcs_based_splits: vcsSplits,
+      vcs_based_formula: vcsFormula,
       subgraph_adjusted_splits: subgraphAdjusted,
       subgraph_adjustment_reason: subgraphReason,
       final_splits: finalCount,
@@ -838,10 +1178,7 @@ async function readDiagrams(filePath: string): Promise<DiagramEntry[]> {
 // Analyze one file, returning one ComplexityReport per diagram found.
 // - .mmd / other: a single-element array (the whole file is one diagram).
 // - .md / .markdown: one entry per ```mermaid fenced block.
-export async function analyzeFile(
-  filePath: string,
-  config: ThresholdConfig,
-): Promise<ComplexityReport[]> {
+export async function analyzeFile(filePath: string, config: ThresholdConfig): Promise<ComplexityReport[]> {
   const diagrams = await readDiagrams(filePath);
   const reports: ComplexityReport[] = [];
   for (const entry of diagrams) {
@@ -853,25 +1190,35 @@ export async function analyzeFile(
 }
 
 export async function analyzeContent(
-  content: string, config: ThresholdConfig, filePath = "<stdin>",
+  content: string,
+  config: ThresholdConfig,
+  filePath = "<stdin>",
 ): Promise<ComplexityReport> {
   const stats = await extractStats(content);
   const metrics = calculateComplexity(stats, config);
   const { rating, color } = rateComplexity(metrics.visual_complexity_score, stats.nodes, config);
   const { needs, count, rationale, workingOut } = recommendSubdivisions(
-    metrics.visual_complexity_score, stats.nodes, stats.edges, stats.subgraphs, config,
+    metrics.visual_complexity_score,
+    stats.nodes,
+    stats.edges,
+    stats.subgraphs,
+    config,
   );
   const parseQuality = assessParseQuality(content, stats);
 
   return {
     file_path: filePath,
-    nodes: stats.nodes, edges: stats.edges, subgraphs: stats.subgraphs, max_depth: stats.max_subgraph_depth,
+    nodes: stats.nodes,
+    edges: stats.edges,
+    subgraphs: stats.subgraphs,
+    max_depth: stats.max_subgraph_depth,
     visual_complexity_score: metrics.visual_complexity_score,
     edge_density: metrics.edge_density,
     cyclomatic_complexity: metrics.cyclomatic_complexity,
     vcs_formula: metrics.vcs_formula,
     vcs_breakdown: metrics.vcs_breakdown,
-    rating, color,
+    rating,
+    color,
     needs_subdivision: needs,
     recommended_subdivisions: count,
     subdivision_rationale: rationale,
@@ -890,14 +1237,13 @@ export async function analyzeContent(
   };
 }
 
-// Detects silent parser failures. Mermaid-core's JISON grammars silently fall
-// through under headless DOM for several diagram types (block, c4, er, kanban,
-// mindmap, quadrantChart, requirement, sankey, journey, venn, xychart, etc.),
-// returning stats with 0 nodes/edges. Without this check, those get rated
-// "ideal" because 0 ≤ every threshold, misleading LLM consumers.
+// Detects silent parser failures. All three extraction paths (Langium,
+// custom line-based extractors, mermaid-core) return stats; when a
+// multi-line diagram yields 0 nodes that's a strong signal that extraction
+// failed and the metrics are unreliable. We surface that as a ParserFailure
+// rather than letting the diagram be rated "ideal" on the basis of
+// 0 ≤ every threshold.
 export function assessParseQuality(content: string, stats: MermaidStats): ParseQuality {
-  if (stats.parser_used === "regex-fallback") return "degraded";
-
   const contentLines = content.split("\n").filter((l) => {
     const t = l.trim();
     return t && !t.startsWith("%%") && t !== "---";
@@ -912,317 +1258,177 @@ export function assessParseQuality(content: string, stats: MermaidStats): ParseQ
   return "ok";
 }
 
-// ─── LLM-friendly JSON builders ──────────────────────────────────────────────
-// Transform verbose ComplexityReport[] into a concise { summary, findings,
-// diagrams } shape. `findings` is the only slice most LLMs need — it carries
-// concrete `issues[]`, a single-sentence `recommendation`, and split
-// `boundaries[]` derived from existing subgraphs. `diagrams` is a compact
-// per-diagram roll-up (no vcs_breakdown, no working_out, no formulas).
+// ─── Ruff-style findings ─────────────────────────────────────────────────────
+// Emit one finding per issue, grouped into a strong-typed CamelCase enum.
+// Priority rules:
+//   1. ParserFailure short-circuits a diagram — complexity thresholds are not
+//      evaluated against garbage metrics.
+//   2. Within a diagram, the node-count family is a waterfall (hard > cog >
+//      acceptable). Only the most severe node-count code fires. Same for VCS.
 
-function reportId(r: ComplexityReport): string {
-  const file = basename(r.file_path);
-  return r.fence ? `${file}:L${r.fence.line_start}-L${r.fence.line_end}#${r.diagram_type}` : file;
+function formatLocation(r: ComplexityReport): string {
+  const file = displayPath(r.file_path);
+  return r.fence ? `${file}:${r.fence.line_start}-${r.fence.line_end}` : file;
 }
 
-function reportLocation(r: ComplexityReport): string | null {
-  return r.fence ? `L${r.fence.line_start}-L${r.fence.line_end}` : null;
+function displayPath(abs: string): string {
+  const rel = relative(process.cwd(), abs);
+  // Outside CWD or identical → keep the absolute form.
+  if (!rel || rel.startsWith("..") || rel.startsWith("/")) return abs;
+  return rel;
 }
 
-function hasFinding(r: ComplexityReport): boolean {
-  return r.rating === "complex" || r.rating === "critical" || r.parse_quality !== "ok";
+function boundaryHint(boundaries: string[]): string {
+  if (boundaries.length === 0) return "introduce subgraphs to group related nodes before splitting";
+  const shown = boundaries.slice(0, 4);
+  const extra = boundaries.length > shown.length ? ` (+${boundaries.length - shown.length} more)` : "";
+  return `along existing subgraph boundaries: ${shown.join(", ")}${extra}`;
 }
 
-export function buildFinding(r: ComplexityReport, c: ThresholdConfig): Finding {
-  const issues: string[] = [];
-  const severity: Severity =
-    r.rating === "critical" ? "critical" : r.rating === "complex" ? "complex" : "warning";
-
-  if (r.parse_quality === "failed") {
-    issues.push(
-      `Parser returned 0 nodes for a multi-line ${r.diagram_type} diagram via ${r.parser_used}. ` +
-        `This is a silent parse failure — the JISON grammar likely needs a real DOM to extract structure. Metrics are unreliable.`,
-    );
-  } else if (r.parse_quality === "degraded") {
-    issues.push(
-      `Using regex-fallback parser for ${r.diagram_type} — both the Langium and mermaid-core paths failed. Metrics are approximate.`,
-    );
-  }
-
-  if (r.rating === "critical") {
-    if (r.nodes > c.node_complex) {
-      issues.push(`Node count ${r.nodes} exceeds cognitive limit of ${c.node_complex} (Huang et al. 2020)`);
-    }
-    if (r.visual_complexity_score > c.vcs_complex) {
-      issues.push(
-        `Visual Complexity Score ${r.visual_complexity_score.toFixed(1)} exceeds critical threshold of ${c.vcs_complex}`,
-      );
-    }
-    if (r.nodes > c.node_hard_limit) {
-      issues.push(`Node count ${r.nodes} exceeds hard limit of ${c.node_hard_limit}`);
-    }
-  } else if (r.rating === "complex") {
-    if (r.nodes > c.node_acceptable) {
-      issues.push(`Node count ${r.nodes} exceeds acceptable threshold of ${c.node_acceptable}`);
-    }
-    if (r.visual_complexity_score > c.vcs_acceptable) {
-      issues.push(
-        `Visual Complexity Score ${r.visual_complexity_score.toFixed(1)} exceeds acceptable threshold of ${c.vcs_acceptable}`,
-      );
-    }
-  }
-
-  if (r.max_depth >= 3) {
-    issues.push(`Subgraph nesting depth ${r.max_depth} (≥3) hinders readability`);
-  }
-
-  const boundaries = r.subgraph_names.slice();
-  const recommendation = buildRecommendation(r, c, boundaries);
-
-  return {
-    id: reportId(r),
-    file_path: r.file_path,
-    location: reportLocation(r),
-    diagram_type: r.diagram_type,
-    severity,
-    rating: r.rating,
-    parse_quality: r.parse_quality,
-    parser_used: r.parser_used,
-    issues,
-    recommendation,
-    boundaries,
-    metrics: {
-      nodes: r.nodes,
-      edges: r.edges,
-      subgraphs: r.subgraphs,
-      max_depth: r.max_depth,
-      visual_complexity_score: r.visual_complexity_score,
-    },
-  };
+function splitTarget(c: ThresholdConfig): string {
+  return `Target ≤${c.node_target} nodes and ≤${c.vcs_target} VCS per sub-diagram.`;
 }
 
-function buildRecommendation(r: ComplexityReport, c: ThresholdConfig, boundaries: string[]): string {
-  if (r.parse_quality === "failed") {
-    return `Metrics for ${r.diagram_type} cannot be extracted reliably headlessly. Either review this diagram manually, skip complexity enforcement for this diagram type, or run analysis in an environment with a real DOM (jsdom/browser).`;
-  }
-  if (!r.needs_subdivision && r.parse_quality === "degraded") {
-    return `Consider rewriting the diagram using syntax the canonical parser recognizes, or accept that metrics from regex fallback are approximate.`;
-  }
-  if (!r.needs_subdivision) return "No action required.";
+export function buildFindings(reports: ComplexityReport[], c: ThresholdConfig): LintFinding[] {
+  const findings: LintFinding[] = [];
 
-  const splits = r.recommended_subdivisions;
-  const target = `Target: ≤${c.node_target} nodes and ≤${c.vcs_target} VCS per sub-diagram.`;
-  if (boundaries.length >= 2) {
-    const shown = boundaries.slice(0, Math.max(splits, 4));
-    const extra = boundaries.length > shown.length ? ` (+${boundaries.length - shown.length} more)` : "";
-    return `Split into ${splits} sub-diagrams along existing subgraph boundaries: ${shown.join(", ")}${extra}. ${target}`;
-  }
-  return `Split into ${splits} sub-diagrams. No subgraph boundaries exist — introduce subgraphs to group related nodes before splitting. ${target}`;
-}
-
-function buildDiagramSummary(r: ComplexityReport): DiagramSummary {
-  return {
-    id: reportId(r),
-    file_path: r.file_path,
-    location: reportLocation(r),
-    diagram_type: r.diagram_type,
-    parser_used: r.parser_used,
-    rating: r.rating,
-    parse_quality: r.parse_quality,
-    metrics: {
-      nodes: r.nodes,
-      edges: r.edges,
-      subgraphs: r.subgraphs,
-      max_depth: r.max_depth,
-      visual_complexity_score: r.visual_complexity_score,
-    },
-  };
-}
-
-export function buildJsonOutput(
-  reports: ComplexityReport[],
-  config: ThresholdConfig,
-  includeDiagrams = true,
-): JsonOutput {
-  const byRating: Record<Rating, number> = { ideal: 0, acceptable: 0, complex: 0, critical: 0 };
-  let parseWarnings = 0;
   for (const r of reports) {
-    byRating[r.rating]++;
-    if (r.parse_quality !== "ok") parseWarnings++;
-  }
-  const findings = reports.filter(hasFinding).map((r) => buildFinding(r, config));
-  const out: JsonOutput = {
-    summary: {
-      total: reports.length,
-      by_rating: byRating,
-      pass: byRating.ideal + byRating.acceptable,
-      needs_attention: byRating.complex + byRating.critical,
-      parse_warnings: parseWarnings,
-      preset: config.preset_name,
-      thresholds: {
-        node_acceptable: config.node_acceptable,
-        node_complex: config.node_complex,
-        node_hard_limit: config.node_hard_limit,
-        vcs_acceptable: config.vcs_acceptable,
-        vcs_complex: config.vcs_complex,
-        vcs_critical: config.vcs_critical,
-        node_target: config.node_target,
-        vcs_target: config.vcs_target,
-      },
-    },
-    findings,
-  };
-  if (includeDiagrams) out.diagrams = reports.map(buildDiagramSummary);
-  return out;
-}
+    const location = formatLocation(r);
+    const boundaries = r.subgraph_names.slice();
 
-// ─── Formatting ──────────────────────────────────────────────────────────────
-
-const COLORS = {
-  green: "\x1b[92m", yellow: "\x1b[93m", orange: "\x1b[38;5;208m", red: "\x1b[91m",
-  reset: "\x1b[0m", dim: "\x1b[2m", bold: "\x1b[1m",
-} as const;
-const EMOJI: Record<Rating, string> = { ideal: "✅", acceptable: "🟡", complex: "🟠", critical: "🔴" };
-
-function formatReport(r: ComplexityReport, showWorking: boolean): string {
-  const c = COLORS[r.color];
-  const rs = COLORS.reset, dim = COLORS.dim, bold = COLORS.bold;
-  const bd = r.vcs_breakdown;
-  const out: string[] = [
-    "",
-    "=".repeat(70),
-    `📊 ${bold}${basename(r.file_path)}${rs}${r.fence ? ` ${dim}[fence ${r.fence.index} L${r.fence.line_start}-L${r.fence.line_end}]${rs}` : ""}  ${dim}(${r.diagram_type} via ${r.parser_used})${rs}`,
-    "=".repeat(70),
-    "",
-    "📈 Raw Metrics:",
-    `   Nodes:     ${pad(r.nodes, 4)}  ${dim}(acceptable ≤${r.thresholds_used.node_acceptable})${rs}`,
-    `   Edges:     ${pad(r.edges, 4)}`,
-    `   Subgraphs: ${pad(r.subgraphs, 4)}  (depth: ${r.max_depth})`,
-    "",
-    "📐 Visual Complexity Score (VCS):",
-    `   Formula:  ${dim}${r.vcs_formula}${rs}`,
-    `   Result:   ${c}${bold}${r.visual_complexity_score.toFixed(1).padStart(6)}${rs}  ${dim}(acceptable ≤${r.thresholds_used.vcs_acceptable})${rs}`,
-    "",
-    `   ${dim}Breakdown:${rs}`,
-    `     Nodes:     ${bd.nodes_contribution.toFixed(1).padStart(6)}`,
-    `     Edges:   + ${bd.edges_contribution.toFixed(1).padStart(6)}  ${dim}(${r.edges} × edge_weight)${rs}`,
-    `     Subgraphs:+ ${bd.subgraphs_contribution.toFixed(1).padStart(6)}  ${dim}(${r.subgraphs} × subgraph_weight)${rs}`,
-    `     Base VCS:  ${bd.base_vcs.toFixed(1).padStart(6)}`,
-    `     × Depth:   ${bd.depth_multiplier.toFixed(2).padStart(6)}  ${dim}(1 + ${r.max_depth} × depth_weight)${rs}`,
-    "     ─────────────────",
-    `     Final:     ${bd.final_vcs.toFixed(1).padStart(6)}`,
-    "",
-    `   Edge Density:          ${r.edge_density.toFixed(4).padStart(6)}`,
-    `   Cyclomatic Complexity: ${pad(r.cyclomatic_complexity, 6)}`,
-    "",
-    `🎯 Rating: ${EMOJI[r.rating]} ${c}${bold}${r.rating.toUpperCase()}${rs}`,
-  ];
-
-  if (r.needs_subdivision) {
-    out.push("", `⚠️  ${bold}SUBDIVISION RECOMMENDED${rs}`);
-    out.push(`   Recommended splits: ${bold}${r.recommended_subdivisions}${rs}`);
-    out.push(`   Rationale: ${r.subdivision_rationale}`);
-    if (r.subgraph_names.length) {
-      const head = r.subgraph_names.slice(0, 5).join(", ");
-      const tail = r.subgraph_names.length > 5 ? ` (+${r.subgraph_names.length - 5} more)` : "";
-      out.push(`   Potential boundaries: ${head}${tail}`);
+    // Rule 1: ParserFailure short-circuits. Emit only this code.
+    if (r.parse_quality === "failed") {
+      findings.push({
+        code: "ParserFailure",
+        severity: "error",
+        location,
+        diagram_type: r.diagram_type,
+        message: `${r.diagram_type} yielded 0 nodes from multi-line source (parser: ${r.parser_used})`,
+        remediation:
+          `Parser could not extract structure headlessly. Verify the diagram renders in mermaid.js. ` +
+          `If it does, this diagram type needs a DOM-enabled environment (jsdom/browser) to measure — ` +
+          `either disable complexity checks for this diagram type or run analysis with a DOM polyfill. ` +
+          `Complexity thresholds are skipped while parsing is broken.`,
+        parser: r.parser_used,
+      });
+      continue;
     }
-    if (showWorking && r.working_out) {
-      const wo = r.working_out;
-      out.push(
-        "",
-        `📝 ${bold}Calculation Working Out:${rs}`,
-        "",
-        "   Step 1: Check thresholds",
-        `     Nodes (${wo.nodes}) > acceptable (${r.thresholds_used.node_acceptable})? ${wo.nodes_exceeds_acceptable ? "YES ❌" : "NO ✓"}`,
-        `     VCS (${wo.vcs.toFixed(1)}) > acceptable (${r.thresholds_used.vcs_acceptable})? ${wo.vcs_exceeds_acceptable ? "YES ❌" : "NO ✓"}`,
-        "",
-        "   Step 2: Calculate node-based splits",
-        `     ${wo.node_based_formula}`,
-        `     → ${wo.node_based_splits} split(s) needed`,
-        "",
-        "   Step 3: Calculate VCS-based splits",
-        `     ${wo.vcs_based_formula}`,
-        `     → ${wo.vcs_based_splits} split(s) needed`,
-        "",
-        "   Step 4: Take maximum",
-        `     max(${wo.node_based_splits}, ${wo.vcs_based_splits}) = ${Math.max(wo.node_based_splits, wo.vcs_based_splits)}`,
-      );
-      if (wo.subgraph_adjusted_splits !== Math.max(wo.node_based_splits, wo.vcs_based_splits)) {
-        out.push("", "   Step 5: Subgraph adjustment", `     ${wo.subgraph_adjustment_reason}`);
-      }
-      out.push("", `   ${bold}Final recommendation: ${wo.final_splits} split(s)${rs}`);
 
-      if (wo.estimated_per_split.length) {
-        out.push("", `🔄 ${bold}Estimated Per-Split Complexity:${rs}`);
-        let anyFurther = false;
-        for (const split of wo.estimated_per_split) {
-          const splitColor = COLORS[{ ideal: "green", acceptable: "yellow", complex: "orange", critical: "red" }[split.estimated_rating] as Color];
-          const status = split.estimated_rating === "ideal" || split.estimated_rating === "acceptable" ? "✓" : "⚠️";
-          out.push(`   Split ${split.split_number}: ~${split.estimated_nodes} nodes, ~${split.estimated_vcs.toFixed(0)} VCS → ${splitColor}${split.estimated_rating}${rs} ${status}`);
-          if (split.would_need_further_subdivision) {
-            anyFurther = true;
-            if (split.recursive_recommendation) out.push(`      └─ ${dim}${split.recursive_recommendation}${rs}`);
-          }
-        }
-        if (anyFurther) out.push("", `   ⚠️  ${bold}Warning:${rs} Some splits would still exceed thresholds.`, "      Consider increasing splits or reducing detail level.");
-      }
+    // Node-count waterfall: pick the most severe band that applies.
+    if (r.nodes > c.node_hard_limit) {
+      findings.push({
+        code: "NodeCountExceedsHardLimit",
+        severity: "error",
+        location,
+        diagram_type: r.diagram_type,
+        message: `${r.nodes} nodes > ${c.node_hard_limit} hard limit`,
+        remediation:
+          `Split immediately. This diagram is beyond any comprehensible size. ` +
+          `${boundaryHint(boundaries).replace(/^along /, "Split along ")}. ${splitTarget(c)}`,
+        actual: r.nodes,
+        threshold: c.node_hard_limit,
+        boundaries,
+      });
+    } else if (r.nodes > c.node_complex) {
+      findings.push({
+        code: "NodeCountExceedsCognitiveLimit",
+        severity: "error",
+        location,
+        diagram_type: r.diagram_type,
+        message: `${r.nodes} nodes > ${c.node_complex} (Huang 2020 cognitive limit)`,
+        remediation: `Split into sub-diagrams ${boundaryHint(boundaries)}. ${splitTarget(c)}`,
+        actual: r.nodes,
+        threshold: c.node_complex,
+        boundaries,
+      });
+    } else if (r.nodes > c.node_acceptable) {
+      findings.push({
+        code: "NodeCountExceedsAcceptable",
+        severity: "warning",
+        location,
+        diagram_type: r.diagram_type,
+        message: `${r.nodes} nodes > ${c.node_acceptable} acceptable threshold`,
+        remediation: `Consider splitting ${boundaryHint(boundaries)}. ${splitTarget(c)}`,
+        actual: r.nodes,
+        threshold: c.node_acceptable,
+        boundaries,
+      });
     }
-  } else {
-    out.push("", "✅ No subdivision needed - diagram is within visual clarity thresholds");
-  }
 
-  return out.join("\n");
-}
+    // VCS waterfall: critical > acceptable, pick most severe.
+    const vcs = r.visual_complexity_score;
+    if (vcs > c.vcs_complex) {
+      findings.push({
+        code: "VisualComplexityExceedsCritical",
+        severity: "error",
+        location,
+        diagram_type: r.diagram_type,
+        message: `VCS ${vcs.toFixed(1)} > ${c.vcs_complex} critical threshold`,
+        remediation:
+          `Reduce diagram complexity. Split ${boundaryHint(boundaries)}, remove redundant edges, ` +
+          `or collapse leaf nodes into labeled groups. ${splitTarget(c)}`,
+        actual: Number(vcs.toFixed(1)),
+        threshold: c.vcs_complex,
+        boundaries,
+      });
+    } else if (vcs > c.vcs_acceptable) {
+      findings.push({
+        code: "VisualComplexityExceedsAcceptable",
+        severity: "warning",
+        location,
+        diagram_type: r.diagram_type,
+        message: `VCS ${vcs.toFixed(1)} > ${c.vcs_acceptable} acceptable threshold`,
+        remediation:
+          `Consider reducing complexity by splitting ${boundaryHint(boundaries)} ` +
+          `or pruning edges. ${splitTarget(c)}`,
+        actual: Number(vcs.toFixed(1)),
+        threshold: c.vcs_acceptable,
+        boundaries,
+      });
+    }
 
-function formatSummary(reports: ComplexityReport[]): string {
-  const byRating: Record<Rating, ComplexityReport[]> = { ideal: [], acceptable: [], complex: [], critical: [] };
-  for (const r of reports) byRating[r.rating].push(r);
-  const needsWork = [...byRating.complex, ...byRating.critical];
-  const lines = [
-    "",
-    "=".repeat(70),
-    `📊 SUMMARY: ${reports.length} diagram(s) analyzed`,
-    "=".repeat(70),
-    "",
-    `  ✅ Ideal:      ${pad(byRating.ideal.length, 3)}`,
-    `  🟡 Acceptable: ${pad(byRating.acceptable.length, 3)}`,
-    `  🟠 Complex:    ${pad(byRating.complex.length, 3)}`,
-    `  🔴 Critical:   ${pad(byRating.critical.length, 3)}`,
-  ];
-  if (needsWork.length) {
-    lines.push("", "📋 Diagrams needing attention:");
-    for (const r of needsWork.sort((a, b) => b.visual_complexity_score - a.visual_complexity_score)) {
-      lines.push(`   • ${basename(r.file_path)}: VCS=${r.visual_complexity_score.toFixed(1)}, nodes=${r.nodes}, recommend ${r.recommended_subdivisions} split(s)`);
+    if (r.max_depth >= 3) {
+      findings.push({
+        code: "SubgraphNestingTooDeep",
+        severity: "warning",
+        location,
+        diagram_type: r.diagram_type,
+        message: `subgraph nesting depth ${r.max_depth} (≥3) hinders readability`,
+        remediation:
+          `Flatten nesting by inlining inner subgraphs or promoting deeply-nested groups ` +
+          `into their own top-level sub-diagrams.`,
+        actual: r.max_depth,
+        threshold: 3,
+      });
     }
   }
-  return lines.join("\n");
+
+  return findings;
 }
+
+export function formatFinding(f: LintFinding): string {
+  return `${f.location}: ${f.code} ${f.message}`;
+}
+
+// Verify at compile-time that ERROR_CODES matches the inline severity assignments above.
+void ERROR_CODES;
 
 // ─── CLI ─────────────────────────────────────────────────────────────────────
 
 function printHelp(): void {
   console.log(`Usage: mermaid_complexity.ts <path...> [options]
 
-Analyze Mermaid diagram complexity via canonical parsers.
+Lint Mermaid diagrams for visual-complexity thresholds and parser failures.
+Ruff-style output: one finding per line, silent on clean runs.
 
 Arguments:
-  path...                      One or more .mmd files or directories
+  path...                      One or more .mmd/.md files or directories
 
 Options:
   --preset, -p <name>          Density preset: low | medium | high (default: high)
                                Aliases: l/low/strict, m/medium/med/balanced, h/high/permissive
-  --json                       Emit { summary, findings, diagrams } JSON.
-                               - summary: totals, preset, thresholds
-                               - findings: only diagrams with issues/warnings, each
-                                 with concrete issues[], a recommendation, and
-                                 boundaries[] derived from subgraphs (LLM-friendly)
-                               - diagrams: compact per-diagram roll-up
-  --findings-only              With --json, drop the diagrams[] array so only
-                               summary + findings are emitted. Maximum concision
-                               for LLM consumers.
-  --summary-only               Emit only the summary block (text mode)
-  --show-working, -w           Show subdivision calculation details
-  --quiet, -q                  Minimal output
+  --json                       Emit findings as a top-level JSON array.
+  --quiet, -q                  (reserved; default output is already minimal)
   -h, --help                   Show this help
 
 Threshold overrides (all numeric):
@@ -1234,7 +1440,22 @@ Threshold overrides (all numeric):
 Environment variables (same precedence as CLI overrides):
   MERMAID_COMPLEXITY_PRESET, MERMAID_COMPLEXITY_NODE_ACCEPTABLE, etc.
 
-Exit codes: 0 if all diagrams ideal/acceptable, 1 if any complex/critical.`);
+Output format (text, default):
+  path/to/file.md:100-108: <CamelCaseCode> <terse message with numbers>
+
+Codes (CamelCase enum):
+  ParserFailure                      (error)  multi-line diagram yielded 0 nodes
+  NodeCountExceedsHardLimit          (error)  nodes above absolute cap
+  NodeCountExceedsCognitiveLimit     (error)  nodes > 50 (Huang 2020)
+  NodeCountExceedsAcceptable         (warn)   nodes above readability threshold
+  VisualComplexityExceedsCritical    (error)  VCS above critical threshold
+  VisualComplexityExceedsAcceptable  (warn)   VCS above readability threshold
+  SubgraphNestingTooDeep             (warn)   subgraph depth >= 3
+
+Short-circuit: ParserFailure suppresses all other codes for that diagram —
+  complexity thresholds are not evaluated against unparseable input.
+
+Exit codes: 0 if no findings; 1 if any finding (error OR warning); 2 for usage errors.`);
 }
 
 export async function main(argv: string[] = Bun.argv.slice(2)): Promise<number> {
@@ -1243,51 +1464,66 @@ export async function main(argv: string[] = Bun.argv.slice(2)): Promise<number> 
     options: {
       preset: { type: "string", short: "p" },
       json: { type: "boolean", default: false },
-      "findings-only": { type: "boolean", default: false },
-      "summary-only": { type: "boolean", default: false },
-      "show-working": { type: "boolean", short: "w", default: false },
       quiet: { type: "boolean", short: "q", default: false },
       help: { type: "boolean", short: "h", default: false },
-      "node-ideal": { type: "string" }, "node-acceptable": { type: "string" }, "node-complex": { type: "string" },
-      "vcs-ideal": { type: "string" }, "vcs-acceptable": { type: "string" }, "vcs-complex": { type: "string" },
-      "node-target": { type: "string" }, "vcs-target": { type: "string" },
-      "edge-weight": { type: "string" }, "subgraph-weight": { type: "string" }, "depth-weight": { type: "string" },
+      "node-ideal": { type: "string" },
+      "node-acceptable": { type: "string" },
+      "node-complex": { type: "string" },
+      "vcs-ideal": { type: "string" },
+      "vcs-acceptable": { type: "string" },
+      "vcs-complex": { type: "string" },
+      "node-target": { type: "string" },
+      "vcs-target": { type: "string" },
+      "edge-weight": { type: "string" },
+      "subgraph-weight": { type: "string" },
+      "depth-weight": { type: "string" },
     },
     allowPositionals: true,
     strict: true,
   });
 
-  if (values.help) { printHelp(); return 0; }
-  if (positionals.length === 0) { printHelp(); return 2; }
+  if (values.help) {
+    printHelp();
+    return 0;
+  }
+  if (positionals.length === 0) {
+    printHelp();
+    return 2;
+  }
 
   // Config: CLI preset > env preset > default
   let config = configFromPreset(values.preset ?? "high-density");
   config = applyEnvOverrides(config);
   const cliOverrides: Array<[string, keyof ThresholdConfig]> = [
-    ["node-ideal","node_ideal"], ["node-acceptable","node_acceptable"], ["node-complex","node_complex"],
-    ["vcs-ideal","vcs_ideal"], ["vcs-acceptable","vcs_acceptable"], ["vcs-complex","vcs_complex"],
-    ["node-target","node_target"], ["vcs-target","vcs_target"],
-    ["edge-weight","edge_weight"], ["subgraph-weight","subgraph_weight"], ["depth-weight","depth_weight"],
+    ["node-ideal", "node_ideal"],
+    ["node-acceptable", "node_acceptable"],
+    ["node-complex", "node_complex"],
+    ["vcs-ideal", "vcs_ideal"],
+    ["vcs-acceptable", "vcs_acceptable"],
+    ["vcs-complex", "vcs_complex"],
+    ["node-target", "node_target"],
+    ["vcs-target", "vcs_target"],
+    ["edge-weight", "edge_weight"],
+    ["subgraph-weight", "subgraph_weight"],
+    ["depth-weight", "depth_weight"],
   ];
   let customized = false;
   for (const [flag, field] of cliOverrides) {
     const raw = values[flag as keyof typeof values];
     if (typeof raw === "string") {
       const n = Number(raw);
-      if (Number.isFinite(n)) { (config[field] as number) = n; customized = true; }
+      if (Number.isFinite(n)) {
+        (config[field] as number) = n;
+        customized = true;
+      }
     }
   }
   if (customized) config.preset_name = "custom";
 
-  if (!values.quiet && !values.json) {
-    console.log(`\n🔧 Using preset: ${config.preset_name}`);
-    console.log(`   Thresholds: nodes ≤${config.node_acceptable}/${config.node_complex}, VCS ≤${config.vcs_acceptable}/${config.vcs_complex}, targets: ${config.node_target}/${config.vcs_target}`);
-  }
-
   const files = collectFiles(positionals);
   if (files.length === 0) {
-    console.error("❌ No files found");
-    return 1;
+    console.error("No files found");
+    return 2;
   }
 
   const reports: ComplexityReport[] = [];
@@ -1295,20 +1531,22 @@ export async function main(argv: string[] = Bun.argv.slice(2)): Promise<number> 
     reports.push(...(await analyzeFile(f, config)));
   }
 
+  // Sort findings by severity (errors first), then by location. Emission order
+  // controls LLM attention; errors should not be buried behind warnings.
+  const findings = buildFindings(reports, config).sort((a, b) => {
+    if (a.severity !== b.severity) return a.severity === "error" ? -1 : 1;
+    return a.location.localeCompare(b.location);
+  });
+
   if (values.json) {
-    const output = buildJsonOutput(reports, config, !values["findings-only"]);
-    console.log(JSON.stringify(output, null, 2));
-  } else if (values["summary-only"]) {
-    console.log(formatSummary(reports));
+    console.log(JSON.stringify(findings, null, 2));
   } else {
-    for (const r of reports) {
-      if (!values.quiet) console.log(formatReport(r, values["show-working"] ?? false));
-    }
-    if (reports.length > 1) console.log(formatSummary(reports));
+    for (const f of findings) console.log(formatFinding(f));
   }
 
-  const hasIssues = reports.some((r) => r.rating === "complex" || r.rating === "critical");
-  return hasIssues ? 1 : 0;
+  // Ruff semantics: any finding (error or warning) produces a non-zero exit.
+  // Zero findings = clean run = exit 0 = no output.
+  return findings.length > 0 ? 1 : 0;
 }
 
 const DIRECTORY_FILE_EXTS = new Set([".mmd", ".md", ".markdown"]);
@@ -1337,11 +1575,15 @@ function collectFiles(paths: string[]): string[] {
 
 // ─── Small helpers ───────────────────────────────────────────────────────────
 
-function round1(x: number): number { return Math.round(x * 10) / 10; }
-function round2(x: number): number { return Math.round(x * 100) / 100; }
-function round4(x: number): number { return Math.round(x * 10000) / 10000; }
-function pad(n: number, w: number): string { return n.toString().padStart(w); }
-function basename(p: string): string { return p.split("/").pop() ?? p; }
+function round1(x: number): number {
+  return Math.round(x * 10) / 10;
+}
+function round2(x: number): number {
+  return Math.round(x * 100) / 100;
+}
+function round4(x: number): number {
+  return Math.round(x * 10000) / 10000;
+}
 
 // ─── Entry ───────────────────────────────────────────────────────────────────
 

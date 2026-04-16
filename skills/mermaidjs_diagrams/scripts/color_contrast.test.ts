@@ -9,14 +9,7 @@
 
 import { describe, expect, test } from "bun:test";
 
-import {
-  apcaLc,
-  extractStyleDirectives,
-  main,
-  wcagAssess,
-  wcagRating,
-  wcagRatio,
-} from "./color_contrast.ts";
+import { apcaLc, extractStyleDirectives, main, wcagAssess, wcagRating, wcagRatio } from "./color_contrast.ts";
 
 // ─── Canonical ratio values ──────────────────────────────────────────────────
 
@@ -71,10 +64,18 @@ describe("wcagRatio — accepts any CSS color syntax", () => {
 // ─── Rating tiers ────────────────────────────────────────────────────────────
 
 describe("wcagRating tiers", () => {
-  test("≥7 → AAA", () => { expect(wcagRating(7.01)).toBe("AAA"); });
-  test("[4.5, 7) → AA", () => { expect(wcagRating(5.0)).toBe("AA"); });
-  test("[3, 4.5) → AA Large", () => { expect(wcagRating(3.5)).toBe("AA Large"); });
-  test("<3 → Fail", () => { expect(wcagRating(2.0)).toBe("Fail"); });
+  test("≥7 → AAA", () => {
+    expect(wcagRating(7.01)).toBe("AAA");
+  });
+  test("[4.5, 7) → AA", () => {
+    expect(wcagRating(5.0)).toBe("AA");
+  });
+  test("[3, 4.5) → AA Large", () => {
+    expect(wcagRating(3.5)).toBe("AA Large");
+  });
+  test("<3 → Fail", () => {
+    expect(wcagRating(2.0)).toBe("Fail");
+  });
 });
 
 // ─── wcagAssess bundles the flags correctly ──────────────────────────────────
@@ -118,30 +119,30 @@ describe("extractStyleDirectives", () => {
     const src = "classDef good fill:#2563eb,stroke:#1e40af,color:#ffffff,stroke-width:2px\n";
     const dirs = extractStyleDirectives(src);
     expect(dirs).toHaveLength(1);
-    expect(dirs[0]!.kind).toBe("classDef");
-    expect(dirs[0]!.selector).toBe("good");
-    expect(dirs[0]!.properties.fill).toBe("#2563eb");
-    expect(dirs[0]!.properties.color).toBe("#ffffff");
-    expect(dirs[0]!.properties.stroke).toBe("#1e40af");
-    expect(dirs[0]!.properties["stroke-width"]).toBe("2px");
-    expect(dirs[0]!.line).toBe(1);
+    expect(dirs[0]?.kind).toBe("classDef");
+    expect(dirs[0]?.selector).toBe("good");
+    expect(dirs[0]?.properties.fill).toBe("#2563eb");
+    expect(dirs[0]?.properties.color).toBe("#ffffff");
+    expect(dirs[0]?.properties.stroke).toBe("#1e40af");
+    expect(dirs[0]?.properties["stroke-width"]).toBe("2px");
+    expect(dirs[0]?.line).toBe(1);
   });
 
   test("extracts style (per-node) directive", () => {
     const src = "\nstyle A fill:#ef4444,color:#000\n";
     const dirs = extractStyleDirectives(src);
     expect(dirs).toHaveLength(1);
-    expect(dirs[0]!.kind).toBe("style");
-    expect(dirs[0]!.selector).toBe("A");
-    expect(dirs[0]!.line).toBe(2);
+    expect(dirs[0]?.kind).toBe("style");
+    expect(dirs[0]?.selector).toBe("A");
+    expect(dirs[0]?.line).toBe(2);
   });
 
   test("extracts linkStyle with indices", () => {
     const src = "linkStyle 0,1 stroke:#6b7280\n";
     const dirs = extractStyleDirectives(src);
     expect(dirs).toHaveLength(1);
-    expect(dirs[0]!.kind).toBe("linkStyle");
-    expect(dirs[0]!.selector).toBe("0,1");
+    expect(dirs[0]?.kind).toBe("linkStyle");
+    expect(dirs[0]?.selector).toBe("0,1");
   });
 
   test("inline ::: classes detected with node id and class name", () => {
@@ -158,7 +159,7 @@ describe("extractStyleDirectives", () => {
   test("accepts both comma and semicolon property separators", () => {
     const src = "classDef x fill:#fff;color:#000;stroke:#777\n";
     const dirs = extractStyleDirectives(src);
-    expect(dirs[0]!.properties).toMatchObject({ fill: "#fff", color: "#000", stroke: "#777" });
+    expect(dirs[0]?.properties).toMatchObject({ fill: "#fff", color: "#000", stroke: "#777" });
   });
 
   test("empty source yields no directives", () => {

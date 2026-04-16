@@ -27,33 +27,28 @@ import { readdirSync, statSync } from "node:fs";
 import { basename, extname, join, resolve } from "node:path";
 
 import { extractMarkdownFences } from "./mermaid_complexity.ts";
-import {
-  extractStyleDirectives,
-  wcagAssess,
-  type ContrastAssessment,
-  type StyleDirective,
-} from "./color_contrast.ts";
+import { extractStyleDirectives, wcagAssess, type ContrastAssessment, type StyleDirective } from "./color_contrast.ts";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export type PairKind = "text" | "border";
 
 export interface ContrastPair {
-  kind: PairKind;                  // text = fill×color, border = fill×stroke
-  selector: string;                // classDef/style name
+  kind: PairKind; // text = fill×color, border = fill×stroke
+  selector: string; // classDef/style name
   directive_kind: StyleDirective["kind"];
-  foreground: string;              // text: color, border: stroke
-  background: string;              // fill in both cases
-  line: number;                    // where the directive appears
+  foreground: string; // text: color, border: stroke
+  background: string; // fill in both cases
+  line: number; // where the directive appears
   assessment: ContrastAssessment;
-  passes: boolean;                 // text: ratio >= 4.5; border: ratio >= 3
+  passes: boolean; // text: ratio >= 4.5; border: ratio >= 3
 }
 
 export interface SkippedDirective {
   selector: string;
   directive_kind: StyleDirective["kind"];
   line: number;
-  reason: string;                  // e.g. "no fill declared", "no color or stroke declared"
+  reason: string; // e.g. "no fill declared", "no color or stroke declared"
 }
 
 export interface DiagramContrastReport {
@@ -71,15 +66,10 @@ export interface DiagramContrastReport {
 
 // ─── Scoring ─────────────────────────────────────────────────────────────────
 
-const AA_NORMAL = 4.5;   // text rule
+const AA_NORMAL = 4.5; // text rule
 const AA_NON_TEXT = 3.0; // UI-component / border rule
 
-function scorePair(
-  kind: PairKind,
-  directive: StyleDirective,
-  fg: string,
-  bg: string,
-): ContrastPair {
+function scorePair(kind: PairKind, directive: StyleDirective, fg: string, bg: string): ContrastPair {
   const assessment = wcagAssess(fg, bg);
   const threshold = kind === "text" ? AA_NORMAL : AA_NON_TEXT;
   return {
@@ -119,9 +109,8 @@ export function scoreDirectives(directives: StyleDirective[]): {
         selector: d.selector,
         directive_kind: d.kind,
         line: d.line,
-        reason: color || stroke
-          ? "no fill declared — can't anchor text/border contrast"
-          : "no color properties declared",
+        reason:
+          color || stroke ? "no fill declared — can't anchor text/border contrast" : "no color properties declared",
       });
       continue;
     }
@@ -248,12 +237,7 @@ function formatReport(r: DiagramContrastReport): string {
     const icon = p.passes ? `${C.green}✓${C.reset}` : `${C.red}✗${C.reset}`;
     const ratio = p.assessment.ratio.toFixed(2).padStart(5);
     const rating = p.assessment.rating;
-    const ratingColor =
-      rating === "AAA" || rating === "AA"
-        ? C.green
-        : rating === "AA Large"
-          ? C.yellow
-          : C.red;
+    const ratingColor = rating === "AAA" || rating === "AA" ? C.green : rating === "AA Large" ? C.yellow : C.red;
     const threshold = p.kind === "text" ? "≥4.5" : "≥3.0";
     lines.push(
       `  ${icon} L${String(p.line).padStart(3)} ${p.directive_kind} ${C.bold}${p.selector}${C.reset}  ${p.kind.padEnd(6)} ${ratio}:1 (${threshold}) ${ratingColor}${rating}${C.reset}  ${C.dim}${p.foreground} on ${p.background}${C.reset}`,
@@ -261,7 +245,9 @@ function formatReport(r: DiagramContrastReport): string {
   }
 
   for (const s of r.skipped) {
-    lines.push(`  ${C.dim}- L${String(s.line).padStart(3)} ${s.directive_kind} ${s.selector}  skipped: ${s.reason}${C.reset}`);
+    lines.push(
+      `  ${C.dim}- L${String(s.line).padStart(3)} ${s.directive_kind} ${s.selector}  skipped: ${s.reason}${C.reset}`,
+    );
   }
 
   return lines.join("\n");
@@ -323,7 +309,7 @@ For ad-hoc color comparison (e.g. from a screenshot), use color_contrast.ts.`);
 }
 
 export async function main(argv: string[] = Bun.argv.slice(2)): Promise<number> {
-  let parsed;
+  let parsed: ReturnType<typeof parseArgs>;
   try {
     parsed = parseArgs({
       args: argv,
@@ -343,8 +329,14 @@ export async function main(argv: string[] = Bun.argv.slice(2)): Promise<number> 
   }
   const { values, positionals } = parsed;
 
-  if (values.help) { printHelp(); return 0; }
-  if (positionals.length === 0) { printHelp(); return 2; }
+  if (values.help) {
+    printHelp();
+    return 0;
+  }
+  if (positionals.length === 0) {
+    printHelp();
+    return 2;
+  }
 
   const files = collectFiles(positionals);
   if (files.length === 0) {
@@ -374,9 +366,11 @@ export async function main(argv: string[] = Bun.argv.slice(2)): Promise<number> 
 }
 
 if (import.meta.main) {
-  main().then((code) => process.exit(code)).catch((err: unknown) => {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`fatal: ${msg}`);
-    process.exit(1);
-  });
+  main()
+    .then((code) => process.exit(code))
+    .catch((err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`fatal: ${msg}`);
+      process.exit(1);
+    });
 }

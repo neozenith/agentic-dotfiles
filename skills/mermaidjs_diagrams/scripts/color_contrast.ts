@@ -29,24 +29,24 @@ import { parseArgs } from "node:util";
 export type WcagRating = "AAA" | "AA" | "AA Large" | "Fail";
 
 export interface ContrastAssessment {
-  foreground: string;           // user-provided string
-  background: string;           // user-provided string
-  foreground_hex: string;       // normalized #rrggbb (or #rrggbbaa if alpha < 1)
+  foreground: string; // user-provided string
+  background: string; // user-provided string
+  foreground_hex: string; // normalized #rrggbb (or #rrggbbaa if alpha < 1)
   background_hex: string;
-  ratio: number;                // WCAG 2.x contrast ratio, 1..21, rounded to 2dp
-  rating: WcagRating;           // pass tier
-  passes_aa_normal: boolean;    // ratio >= 4.5
-  passes_aa_large: boolean;     // ratio >= 3
-  passes_aaa_normal: boolean;   // ratio >= 7
-  apca_lc: number;              // signed APCA Lc (-108..+106), rounded to 1dp
+  ratio: number; // WCAG 2.x contrast ratio, 1..21, rounded to 2dp
+  rating: WcagRating; // pass tier
+  passes_aa_normal: boolean; // ratio >= 4.5
+  passes_aa_large: boolean; // ratio >= 3
+  passes_aaa_normal: boolean; // ratio >= 7
+  apca_lc: number; // signed APCA Lc (-108..+106), rounded to 1dp
 }
 
 export interface StyleDirective {
   kind: "classDef" | "style" | "linkStyle" | "inlineClass";
-  selector: string;             // class name, node id, link index, or node id (for inlineClass)
-  class_name?: string;          // only for inlineClass: the class applied
+  selector: string; // class name, node id, link index, or node id (for inlineClass)
+  class_name?: string; // only for inlineClass: the class applied
   properties: Record<string, string>; // { fill: "#2563eb", color: "#fff", stroke: "..." }
-  line: number;                 // 1-based line number in the source
+  line: number; // 1-based line number in the source
 }
 
 // ─── Contrast math (all via colorjs.io) ──────────────────────────────────────
@@ -78,10 +78,10 @@ function toHex(color: string): string {
   // colorjs.io uses `null` coords for powerless channels (e.g. hue of a pure
   // gray in hsl). After converting to sRGB those map to 0 without ambiguity.
   const c = new Color(color).to("srgb");
-  const [r, g, b] = c.coords.map((v) => Math.round(Math.max(0, Math.min(1, v ?? 0)) * 255));
+  const rgb = c.coords.map((v) => Math.round(Math.max(0, Math.min(1, v ?? 0)) * 255));
   const a = c.alpha ?? 1;
-  const hex = (n: number) => n.toString(16).padStart(2, "0");
-  const base = `#${hex(r!)}${hex(g!)}${hex(b!)}`;
+  const hex = (n: number): string => n.toString(16).padStart(2, "0");
+  const base = `#${hex(rgb[0] ?? 0)}${hex(rgb[1] ?? 0)}${hex(rgb[2] ?? 0)}`;
   return a < 1 ? `${base}${hex(Math.round(a * 255))}` : base;
 }
 
@@ -152,28 +152,26 @@ export function extractStyleDirectives(source: string): StyleDirective[] {
 
     let m = CLASSDEF_RE.exec(line);
     if (m) {
-      out.push({ kind: "classDef", selector: m[1]!, properties: parseProperties(m[2]!), line: lineNo });
+      out.push({ kind: "classDef", selector: m[1] ?? "", properties: parseProperties(m[2] ?? ""), line: lineNo });
       continue;
     }
     m = STYLE_RE.exec(line);
     if (m) {
-      out.push({ kind: "style", selector: m[1]!, properties: parseProperties(m[2]!), line: lineNo });
+      out.push({ kind: "style", selector: m[1] ?? "", properties: parseProperties(m[2] ?? ""), line: lineNo });
       continue;
     }
     m = LINKSTYLE_RE.exec(line);
     if (m) {
-      out.push({ kind: "linkStyle", selector: m[1]!, properties: parseProperties(m[2]!), line: lineNo });
+      out.push({ kind: "linkStyle", selector: m[1] ?? "", properties: parseProperties(m[2] ?? ""), line: lineNo });
       continue;
     }
 
     // Inline `:::className` can occur on any line — scan separately.
-    INLINE_CLASS_RE.lastIndex = 0;
-    let inlineMatch: RegExpExecArray | null;
-    while ((inlineMatch = INLINE_CLASS_RE.exec(line)) !== null) {
+    for (const inlineMatch of line.matchAll(INLINE_CLASS_RE)) {
       out.push({
         kind: "inlineClass",
-        selector: inlineMatch[1]!,
-        class_name: inlineMatch[2]!,
+        selector: inlineMatch[1] ?? "",
+        class_name: inlineMatch[2] ?? "",
         properties: {},
         line: lineNo,
       });
@@ -233,7 +231,7 @@ async function readStdin(): Promise<string> {
 }
 
 export async function main(argv: string[] = Bun.argv.slice(2)): Promise<number> {
-  let parsed;
+  let parsed: ReturnType<typeof parseArgs>;
   try {
     parsed = parseArgs({
       args: argv,
@@ -253,7 +251,10 @@ export async function main(argv: string[] = Bun.argv.slice(2)): Promise<number> 
   }
   const { values, positionals } = parsed;
 
-  if (values.help) { printHelp(); return 0; }
+  if (values.help) {
+    printHelp();
+    return 0;
+  }
 
   // ── stdin mode: JSON array of [fg, bg] pairs in, array of assessments out ──
   if (values.stdin) {
@@ -300,14 +301,17 @@ export async function main(argv: string[] = Bun.argv.slice(2)): Promise<number> 
 
   // ── Pair mode: positional fg, bg ─────────────────────────────────────────
   if (positionals.length !== 2) {
-    if (positionals.length === 0) { printHelp(); return 2; }
+    if (positionals.length === 0) {
+      printHelp();
+      return 2;
+    }
     console.error(`error: expected 2 positional args (foreground, background), got ${positionals.length}`);
     return 2;
   }
 
   let assessment: ContrastAssessment;
   try {
-    assessment = wcagAssess(positionals[0]!, positionals[1]!);
+    assessment = wcagAssess(positionals[0] ?? "", positionals[1] ?? "");
   } catch (err) {
     console.error(`error: could not parse colors: ${(err as Error).message}`);
     return 2;
@@ -323,9 +327,11 @@ export async function main(argv: string[] = Bun.argv.slice(2)): Promise<number> 
 
 // Only run main() when executed directly, not when imported as a library.
 if (import.meta.main) {
-  main().then((code) => process.exit(code)).catch((err: unknown) => {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`fatal: ${msg}`);
-    process.exit(1);
-  });
+  main()
+    .then((code) => process.exit(code))
+    .catch((err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`fatal: ${msg}`);
+      process.exit(1);
+    });
 }

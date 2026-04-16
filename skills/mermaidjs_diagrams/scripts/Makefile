@@ -3,8 +3,10 @@
 
 # ── Python source ──────────────────────────────────────────────────────────
 
-# Public scripts: referenced in SKILL.md, used during skill execution
-PY_SCRIPTS = mermaid_complexity
+# Public Python scripts (none — the TS port is now authoritative for
+# complexity analysis; mermaid_complexity.py was removed once the TS
+# implementation reached feature parity via canonical mermaid parsers).
+PY_SCRIPTS =
 
 # Private scripts: maintenance helpers for the skill itself, NOT in SKILL.md
 PRIVATE_PY_SCRIPTS = _update_examples_readme
@@ -14,9 +16,8 @@ PY_SRC = $(addsuffix .py,$(PY_SCRIPTS)) $(addprefix test_,$(addsuffix .py,$(PY_S
 
 # ── TypeScript source ──────────────────────────────────────────────────────
 
-# Python remains the scientific baseline; TS versions use mermaid's canonical
-# parsers for higher-fidelity structural extraction. See .claude/rules/typescript/
-# for conventions.
+# TS is now the authoritative implementation for complexity + contrast.
+# See .claude/rules/typescript/ for conventions.
 TS_SCRIPTS = color_contrast mermaid_complexity mermaid_contrast
 TS_SRC = $(addsuffix .ts,$(TS_SCRIPTS)) $(addsuffix .test.ts,$(TS_SCRIPTS))
 
@@ -30,8 +31,12 @@ EXAMPLES_README := $(EXAMPLES_DIR)/README.md
 # which would otherwise inject unrelated coverage config and deps.
 UV = uv run --no-project
 
-# Shared pytest args to isolate from root pyproject.toml config
-PYTEST_ARGS = -v --rootdir . -o 'addopts='
+# Shared pytest args to isolate from root pyproject.toml config. We override
+# both `addopts` and `filterwarnings` because the root project references
+# pytest plugins / warning filters (pydantic, litellm) that aren't in our
+# minimal PEP-723 test environment. Without these overrides, pytest picks
+# them up via --rootdir discovery and fails before any test runs.
+PYTEST_ARGS = -v -c /dev/null --rootdir .
 
 # Biome: invoked via bunx so it stays out of package.json devDependencies.
 # `--bun` forces it to run on Bun's runtime rather than Node.
@@ -45,7 +50,7 @@ BIOME = bunx --bun @biomejs/biome
         typecheck typecheck-py typecheck-ts \
         test test-py test-ts \
         test-cov test-cov-py test-cov-ts \
-        install-ts docs parity ci fix
+        install-ts docs ci fix cli-demo
 
 # Default target
 all: format lint typecheck test-cov docs
@@ -113,7 +118,6 @@ test: test-py test-ts
 
 # PEP-723 entry point — deps declared in the test file itself
 test-py:
-	$(UV) test_mermaid_complexity.py $(PYTEST_ARGS)
 	$(UV) test__update_examples_readme.py $(PYTEST_ARGS)
 
 test-ts:
@@ -122,8 +126,6 @@ test-ts:
 test-cov: test-cov-py test-cov-ts
 
 test-cov-py:
-	$(UV) test_mermaid_complexity.py $(PYTEST_ARGS) \
-		--cov=mermaid_complexity --cov-report=term-missing --cov-fail-under=90
 	$(UV) test__update_examples_readme.py $(PYTEST_ARGS) \
 		--cov=_update_examples_readme --cov-report=term-missing --cov-fail-under=90
 
@@ -148,6 +150,32 @@ ci: format-check lint typecheck test-cov docs
 
 # Run all auto-fixers (local development)
 fix: format lint-fix
+
+# End-to-end CLI demo of every public TS analyzer against fixture inputs.
+# Non-zero exits are tolerated (demo showcases both pass and fail cases), so
+# each command is prefixed with `-` to keep `make cli-demo` running to the end.
+# Paths use $(THIS_DIR) / $(EXAMPLES_DIR) so the target works regardless of
+# where `make -C` was invoked from.
+cli-demo:
+	@echo "=== mermaid_complexity.ts ==="
+	-bun run $(THIS_DIR)mermaid_complexity.ts $(EXAMPLES_DIR)/test_complexity.md
+	@echo ""
+	@echo "=== mermaid_contrast.ts ==="
+	-bun run $(THIS_DIR)mermaid_contrast.ts $(EXAMPLES_DIR)/test_contrast.md
+	@echo ""
+	@echo "=== color_contrast.ts: single pair (passes AA) ==="
+	-bun run $(THIS_DIR)color_contrast.ts "#ffffff" "#2563eb"
+	@echo ""
+	@echo "=== color_contrast.ts: single pair (fails AA) ==="
+	-bun run $(THIS_DIR)color_contrast.ts "#aaaaaa" "#ffffff"
+	@echo ""
+	@echo "=== color_contrast.ts: CSS color syntaxes (oklch + rgb) ==="
+	-bun run $(THIS_DIR)color_contrast.ts "rgb(55 65 81)" "oklch(0.98 0 0)"
+	@echo ""
+	@echo "=== color_contrast.ts: batch via stdin, JSON output ==="
+	-echo '[["#fff","#2563eb"],["#aaa","#fff"],["red","blue"]]' | bun run $(THIS_DIR)color_contrast.ts --stdin --json
+
+
 
 # Clean up cache and temp files
 clean:

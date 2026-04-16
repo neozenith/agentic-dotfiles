@@ -25,9 +25,9 @@ describe("scoreDirectives", () => {
     ];
     const { pairs, skipped } = scoreDirectives(dirs);
     expect(pairs).toHaveLength(1);
-    expect(pairs[0]!.kind).toBe("text");
-    expect(pairs[0]!.passes).toBe(true);
-    expect(pairs[0]!.assessment.ratio).toBeCloseTo(5.17, 2);
+    expect(pairs[0]?.kind).toBe("text");
+    expect(pairs[0]?.passes).toBe(true);
+    expect(pairs[0]?.assessment.ratio).toBeCloseTo(5.17, 2);
     expect(skipped).toHaveLength(0);
   });
 
@@ -37,28 +37,31 @@ describe("scoreDirectives", () => {
     ];
     const { pairs } = scoreDirectives(dirs);
     expect(pairs).toHaveLength(1);
-    expect(pairs[0]!.kind).toBe("border");
+    expect(pairs[0]?.kind).toBe("border");
     // #777 on #fff = 4.48 — passes 3.0 border threshold.
-    expect(pairs[0]!.passes).toBe(true);
-    expect(pairs[0]!.assessment.ratio).toBeCloseTo(4.48, 2);
+    expect(pairs[0]?.passes).toBe(true);
+    expect(pairs[0]?.assessment.ratio).toBeCloseTo(4.48, 2);
   });
 
   test("fill+color AND fill+stroke yields TWO pairs (text + border)", () => {
     const dirs: StyleDirective[] = [
-      { kind: "classDef", selector: "both", properties: { fill: "#2563eb", color: "#fff", stroke: "#1e40af" }, line: 1 },
+      {
+        kind: "classDef",
+        selector: "both",
+        properties: { fill: "#2563eb", color: "#fff", stroke: "#1e40af" },
+        line: 1,
+      },
     ];
     const { pairs } = scoreDirectives(dirs);
     expect(pairs.map((p) => p.kind).sort()).toEqual(["border", "text"]);
   });
 
   test("missing fill skips the directive with a clear reason", () => {
-    const dirs: StyleDirective[] = [
-      { kind: "classDef", selector: "orphan", properties: { color: "#fff" }, line: 1 },
-    ];
+    const dirs: StyleDirective[] = [{ kind: "classDef", selector: "orphan", properties: { color: "#fff" }, line: 1 }];
     const { pairs, skipped } = scoreDirectives(dirs);
     expect(pairs).toHaveLength(0);
     expect(skipped).toHaveLength(1);
-    expect(skipped[0]!.reason).toMatch(/no fill declared/);
+    expect(skipped[0]?.reason).toMatch(/no fill declared/);
   });
 
   test("only fill declared — skipped because theme defaults would apply", () => {
@@ -67,7 +70,7 @@ describe("scoreDirectives", () => {
     ];
     const { pairs, skipped } = scoreDirectives(dirs);
     expect(pairs).toHaveLength(0);
-    expect(skipped[0]!.reason).toMatch(/theme defaults/);
+    expect(skipped[0]?.reason).toMatch(/theme defaults/);
   });
 
   test("inlineClass and linkStyle are NOT scored (informational)", () => {
@@ -86,8 +89,8 @@ describe("scoreDirectives", () => {
       { kind: "classDef", selector: "bad", properties: { fill: "#fbbf24", color: "#f3f4f6" }, line: 1 },
     ];
     const { pairs } = scoreDirectives(dirs);
-    expect(pairs[0]!.passes).toBe(false);
-    expect(pairs[0]!.assessment.rating).toBe("Fail");
+    expect(pairs[0]?.passes).toBe(false);
+    expect(pairs[0]?.assessment.rating).toBe("Fail");
   });
 });
 
@@ -112,8 +115,9 @@ describe("auditContent", () => {
     const report = auditContent(src);
     expect(report.pairs).toHaveLength(2);
     // text pair should pass (oklch near-white on blue ≈ 4.88)
-    const textPair = report.pairs.find((p) => p.kind === "text")!;
-    expect(textPair.passes).toBe(true);
+    const textPair = report.pairs.find((p) => p.kind === "text");
+    expect(textPair).toBeDefined();
+    expect(textPair?.passes).toBe(true);
   });
 });
 
@@ -137,9 +141,9 @@ flowchart LR
     writeFileSync(path, md);
     const reports = await auditFile(path);
     expect(reports).toHaveLength(1);
-    expect(reports[0]!.fence?.line_start).toBe(5);
+    expect(reports[0]?.fence?.line_start).toBe(5);
     // classDef is on fence-local line 3, so absolute line = 5 + 3 = 8.
-    expect(reports[0]!.pairs[0]!.line).toBe(8);
+    expect(reports[0]?.pairs[0]?.line).toBe(8);
   });
 
   test(".mmd file gets no fence offset (file-relative line numbers)", async () => {
@@ -150,8 +154,8 @@ flowchart LR
     const path = join(tmp, "sample.mmd");
     writeFileSync(path, src);
     const reports = await auditFile(path);
-    expect(reports[0]!.fence).toBeUndefined();
-    expect(reports[0]!.pairs[0]!.line).toBe(3);
+    expect(reports[0]?.fence).toBeUndefined();
+    expect(reports[0]?.pairs[0]?.line).toBe(3);
   });
 });
 

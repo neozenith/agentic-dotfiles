@@ -103,7 +103,7 @@ class TestBuildReadme:
         assert result.index("## a_first") < result.index("## z_last")
 
     def test_raises_on_empty_dir(self, temp_dir: Path) -> None:
-        with pytest.raises(RuntimeError, match="No .mmd files found"):
+        with pytest.raises(RuntimeError, match=r"No \.mmd files found"):
             mod.build_readme(temp_dir)
 
     def test_idempotent(self, examples_dir: Path) -> None:
