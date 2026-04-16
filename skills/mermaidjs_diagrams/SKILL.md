@@ -1,6 +1,6 @@
 ---
 name: mermaidjs_diagrams
-description: "Render and analyze Mermaid.JS diagrams embedded in markdown files. Enforces visual complexity limits via automated analysis. Use when creating or updating architecture diagrams, analyzing diagram complexity, improving documentation clarity, or exploring a codebase to produce dual-density architecture diagrams for a README."
+description: "Render and analyze Mermaid.JS diagrams embedded in markdown files. Enforces visual complexity limits AND WCAG color-contrast requirements via automated analysis. Every diagram MUST derive its palette from `resources/color_theming.md` and pass `scripts/mermaid_contrast.ts` before being declared done. Use when creating or updating architecture diagrams, analyzing diagram complexity, improving documentation clarity, or exploring a codebase to produce dual-density architecture diagrams for a README."
 argument-hint: "[markdown-file]"
 user-invocable: true
 ---
@@ -12,6 +12,70 @@ Works for ANY project. Cognitive load research (Huang et al., 2020) shows 50 nod
 is the difficulty threshold — this skill enforces limits via automated complexity analysis.
 
 Diagrams live as ` ```mermaid ` code fences inside `.md` files.
+
+---
+
+# Required for every diagram
+
+Two requirements apply to **every** diagram this skill authors or reviews.
+Not "consider," not "when time permits" — **mandatory, enforced, verifiable**.
+
+## 1. Apply the color theory reference
+
+Every diagram that uses custom colors (via `classDef`, `style`, theme
+frontmatter, or node-level styles) MUST derive its palette from
+`resources/color_theming.md`. That file covers:
+
+- WCAG-aware palettes that work in both dark and light viewer themes.
+- HSL encoding conventions so sibling nodes stay visually coherent.
+- Subgraph-coloring patterns that don't clash with node fills.
+
+Do not ad-hoc pick `#random` hex values. If the palette you need isn't in
+`color_theming.md`, add it there first (with the same contrast-verified
+shape as existing entries), then use it — don't fork the convention per
+diagram.
+
+## 2. Run `mermaid_contrast.ts` before declaring the diagram done
+
+Every diagram that defines style directives MUST pass a WCAG contrast
+audit. The skill ships the tool; use it:
+
+```bash
+bun run .claude/skills/mermaidjs_diagrams/scripts/mermaid_contrast.ts path/to/doc.md
+```
+
+Exit code 0 means every `fill × color` pair passes WCAG AA (≥ 4.5:1 for
+text) and every `fill × stroke` pair passes AA (≥ 3:1 for borders). Any
+non-zero exit is a **blocker** — fix the palette or drop the custom
+styling.
+
+For ad-hoc color-pair checks (picking from a screenshot, validating a
+theme token pair before committing):
+
+```bash
+bun run .claude/skills/mermaidjs_diagrams/scripts/color_contrast.ts "<fg>" "<bg>"
+```
+
+## Why this is mandatory
+
+A diagram that's illegible to a low-vision reader, or that melts into the
+background under a dark GitHub theme, **fails its job** — it communicates
+nothing. The cost of the audit is seconds; the cost of shipping
+unreadable documentation is repeated across every reader for the life of
+the project. The failure mode of skipping this check is silent (the
+author can read it fine on their screen; readers quietly give up). That's
+the same Type-2-silent-failure pattern the complexity linter was built to
+prevent — the contrast check is its twin, gating the **color** axis of
+visual clarity the way complexity checks gate the **structural** axis.
+
+Wire both into any `make ci` / pre-commit pipeline that touches docs.
+
+> Deep-dive references:
+> - `resources/color_theming.md` — palette catalog, HSL encoding, dark/light mode safety
+> - `scripts/mermaid_contrast.ts` — diagram-aware WCAG audit (scans `classDef`/`style` directives in `.md` / `.mmd`)
+> - `scripts/color_contrast.ts` — generic WCAG + APCA calculator for ad-hoc pairs
+
+---
 
 # Rendering
 
@@ -135,8 +199,10 @@ approach and naming conventions.
 
 # Contrast Analysis
 
-Verify rendered diagrams meet WCAG contrast requirements for accessibility and
-readability under both light and dark themes.
+Contrast checking is **mandatory**, not optional — see "Required for every
+diagram" above. This section covers the full toolchain surface (flags,
+output formats, exit-code contract) for authors who need more than the
+recipe block at the top of the file.
 
 Two complementary tools:
 
@@ -272,12 +338,18 @@ context to reason in. Loop per lens:
 3. **Collapse to the simplified fence** — replace each subgraph with a single
    node, drop internal wiring, keep the top-level narrative.
 
-4. **Validate**:
+4. **Validate — both gates are mandatory**, neither may be skipped:
    ```bash
+   # Complexity gate (structural clarity)
    bun run .claude/skills/mermaidjs_diagrams/scripts/mermaid_complexity.ts README.md
+
+   # Contrast gate (color clarity) — REQUIRED; see "Required for every diagram"
    bun run .claude/skills/mermaidjs_diagrams/scripts/mermaid_contrast.ts README.md
    ```
-   Non-zero exit means shrink, split, or recolor — don't relax the budget.
+   Non-zero exit from either is a **blocker**. Fix by shrinking,
+   splitting, or recoloring — do not relax the budget, do not skip the
+   audit. If you added custom colors, their palette must come from
+   `resources/color_theming.md`, not from ad-hoc hex picks.
 
 5. **Render PNGs only if needed** for PDFs / slides / non-mermaid viewers via
    `scripts/render_mermaid.sh`. Do not re-link them from the README that

@@ -40,7 +40,13 @@ PYTEST_ARGS = -v -c /dev/null --rootdir .
 
 # Biome: invoked via bunx so it stays out of package.json devDependencies.
 # `--bun` forces it to run on Bun's runtime rather than Node.
+#
+# NOTE: `biome lint`, `biome format`, and `biome check` exit 0 when the only
+# findings are warnings — only errors produce a non-zero exit. That silently
+# masks lint regressions in CI. `--error-on-warnings` promotes any warning
+# to a non-zero exit code so the instrumentation is loud.
 BIOME = bunx --bun @biomejs/biome
+BIOME_FLAGS = --error-on-warnings
 
 .PHONY: all debug help clean \
         format format-py format-ts \
@@ -71,7 +77,7 @@ format-py: $(PY_SRC)
 	$(UV) ruff format $(PY_SRC)
 
 format-ts: $(TS_SRC)
-	$(BIOME) format --write $(TS_SRC)
+	$(BIOME) format $(BIOME_FLAGS) --write $(TS_SRC)
 
 format-check: format-check-py format-check-ts
 
@@ -79,7 +85,7 @@ format-check-py: $(PY_SRC)
 	$(UV) ruff format --check $(PY_SRC)
 
 format-check-ts: $(TS_SRC)
-	$(BIOME) format $(TS_SRC)
+	$(BIOME) format $(BIOME_FLAGS) $(TS_SRC)
 
 # ── Lint ───────────────────────────────────────────────────────────────────
 
@@ -89,7 +95,7 @@ lint-py: $(PY_SRC)
 	$(UV) ruff check --line-length 120 $(PY_SRC)
 
 lint-ts: $(TS_SRC)
-	$(BIOME) lint $(TS_SRC)
+	$(BIOME) lint $(BIOME_FLAGS) $(TS_SRC)
 
 lint-fix: lint-fix-py lint-fix-ts
 
@@ -97,7 +103,7 @@ lint-fix-py: $(PY_SRC)
 	$(UV) ruff check --fix --line-length 120 $(PY_SRC)
 
 lint-fix-ts: $(TS_SRC)
-	$(BIOME) lint --write $(TS_SRC)
+	$(BIOME) lint $(BIOME_FLAGS) --write $(TS_SRC)
 
 # ── Typecheck ──────────────────────────────────────────────────────────────
 
@@ -135,16 +141,26 @@ test-cov-py:
 # "All files" row of the text reporter and fail the target ourselves. That
 # ensures the instrumentation is loud — coverage regressions exit non-zero
 # with a clearly-labeled message, not a generic make error.
+#
+# CRITICAL: the `bun test | tee` pipeline needs `set -o pipefail` — without
+# it `$?` captures tee's exit code (always 0), not bun's, so failing tests
+# silently pass. Historical bug. We also explicitly tell make to use bash
+# (rather than dash/sh) via SHELL so pipefail is available. Every shell line
+# in this recipe runs in ONE sub-shell (backslash continuation), so the
+# `set -o pipefail` at the top applies to the whole recipe.
 COVERAGE_THRESHOLD = 90
+SHELL := /bin/bash
 test-cov-ts:
-	@bun test --cwd $(THIS_DIR) --coverage 2>&1 | tee $(THIS_DIR)tmp-cov.log; status=$$?; \
+	@set -o pipefail; \
+	bun test --cwd $(THIS_DIR) --coverage 2>&1 | tee $(THIS_DIR)tmp-cov.log; \
+	bun_status=$$?; \
 	line="$$(grep '^All files' $(THIS_DIR)tmp-cov.log || true)"; \
 	funcs=$$(printf '%s' "$$line" | awk -F'|' '{gsub(/ /,""); print $$2}'); \
 	lines=$$(printf '%s' "$$line" | awk -F'|' '{gsub(/ /,""); print $$3}'); \
 	rm -f $(THIS_DIR)tmp-cov.log; \
-	if [ $$status -ne 0 ]; then \
-		printf "\n[FAIL] test-cov-ts: bun test exited non-zero (tests or threshold failed)\n" >&2; \
-		exit $$status; \
+	if [ $$bun_status -ne 0 ]; then \
+		printf "\n[FAIL] test-cov-ts: bun test exited %s (failing tests)\n" "$$bun_status" >&2; \
+		exit $$bun_status; \
 	fi; \
 	if [ -z "$$funcs" ] || [ -z "$$lines" ]; then \
 		printf "\n[FAIL] test-cov-ts: could not parse coverage totals from bun output\n" >&2; \

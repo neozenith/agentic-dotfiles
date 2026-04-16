@@ -515,13 +515,13 @@ describe("buildFindings — ruff-style lint output", () => {
     const content = [
       "flowchart LR",
       "  subgraph Alpha",
-      "    " + Array.from({ length: 15 }, (_, i) => `A${i}[a${i}]`).join("\n    "),
+      `    ${Array.from({ length: 15 }, (_, i) => `A${i}[a${i}]`).join("\n    ")}`,
       "  end",
       "  subgraph Beta",
-      "    " + Array.from({ length: 15 }, (_, i) => `B${i}[b${i}]`).join("\n    "),
+      `    ${Array.from({ length: 15 }, (_, i) => `B${i}[b${i}]`).join("\n    ")}`,
       "  end",
       "  subgraph Gamma",
-      "    " + Array.from({ length: 15 }, (_, i) => `G${i}[g${i}]`).join("\n    "),
+      `    ${Array.from({ length: 15 }, (_, i) => `G${i}[g${i}]`).join("\n    ")}`,
       "  end",
     ].join("\n");
     const config = highDensity();

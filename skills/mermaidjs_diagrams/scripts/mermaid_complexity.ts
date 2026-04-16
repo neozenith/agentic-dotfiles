@@ -688,7 +688,8 @@ function adaptSequence(db: AnyDb): Structure {
   // sequenceDb stores state under db.state.records.{actors,messages}.
   const state = (db.state as SequenceState | undefined)?.records;
   const actors = state?.actors instanceof Map ? state.actors : new Map<string, unknown>();
-  const messages = Array.isArray(state?.messages) ? state!.messages! : [];
+  const rawMessages = state?.messages;
+  const messages = Array.isArray(rawMessages) ? rawMessages : [];
   return {
     nodeIds: [...actors.keys()],
     edges: messages.length,

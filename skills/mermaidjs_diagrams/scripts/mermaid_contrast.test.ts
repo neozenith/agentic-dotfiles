@@ -217,7 +217,7 @@ describe("main() CLI", () => {
   test("non-existent path returns 1 (no matching files)", async () => {
     // collectFiles logs a warning via statSync catch (line 283) and returns 0
     // files → main returns 1 via "no matching files" (lines 343-344).
-    const bogus = join(tmp, "does-not-exist-" + Date.now());
+    const bogus = join(tmp, `does-not-exist-${Date.now()}`);
     expect(await main([bogus])).toBe(1);
   });
 
@@ -225,7 +225,7 @@ describe("main() CLI", () => {
     // collectFiles directory branch (lines 275-279) filters by extension.
     // Default (non-json, non-summary) output path exercises formatReport + formatSummary
     // (lines 226-252, 256-260, 354-360).
-    const dir = join(tmp, "dirtest-" + Date.now());
+    const dir = join(tmp, `dirtest-${Date.now()}`);
     mkdirSync(dir, { recursive: true });
     writeFileSync(
       join(dir, "a.mmd"),
