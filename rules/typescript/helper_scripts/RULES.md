@@ -10,7 +10,7 @@ Rules for standalone TypeScript helper scripts executed with Bun.
 
 > Extends `../RULES.md` for standalone scripts.
 
-See also [claude_skills.md](claude_skills.md) when the script lives under `.claude/skills/*/scripts/`.
+See also [../../claude_skills.md](../../claude_skills.md) when the script lives under `.claude/skills/*/scripts/` (merged Python + TypeScript conventions, also covers mixed-language skills).
 
 ## Execution
 
@@ -129,6 +129,6 @@ Never use the OS temp dir (`/tmp/`, `os.tmpdir()`) — see the global `CLAUDE.md
 
 Conditional rule files that extend this base. Each activates based on its frontmatter `paths:` globs:
 
-- [claude_skills.md](claude_skills.md) — Conventions for scripts inside `.claude/skills/*/scripts/`. Use when writing **TypeScript scripts that are part of a Claude skill**.
+- [../../claude_skills.md](../../claude_skills.md) — Merged Python + TypeScript conventions for scripts inside `.claude/skills/*/scripts/`. Use when writing **TypeScript scripts that are part of a Claude skill** (also covers mixed-language skills).
 
 (More conditional rule files — e.g., AWS patterns, ML workflows, manifest patterns — can be added here as TypeScript helper scripts grow into those domains, mirroring the Python helper-scripts hierarchy.)

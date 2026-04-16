@@ -38,8 +38,15 @@ README = EXAMPLES_DIR / "README.md"
 HEADER = """\
 # Examples
 
+---
+
+<details>
+<summary><b>Table of Contents</b></summary>
 <!--TOC-->
 <!--TOC-->
+</details>
+
+---
 
 """
 
@@ -86,7 +93,9 @@ def build_readme(examples_dir: Path = EXAMPLES_DIR) -> str:
     if not mmds:
         raise RuntimeError(f"No .mmd files found in {examples_dir}")
 
-    sections = [build_section(mmd.stem, mmd.read_text(encoding="utf-8")) for mmd in mmds]
+    sections = [
+        build_section(mmd.stem, mmd.read_text(encoding="utf-8")) for mmd in mmds
+    ]
     body = "\n---\n\n".join(sections)
     return HEADER + body + "\n---\n" + FOOTER
 
@@ -96,7 +105,9 @@ def build_readme(examples_dir: Path = EXAMPLES_DIR) -> str:
 # ============================================================================
 
 
-def main(args: argparse.Namespace, readme: Path = README, examples_dir: Path = EXAMPLES_DIR) -> int:
+def main(
+    args: argparse.Namespace, readme: Path = README, examples_dir: Path = EXAMPLES_DIR
+) -> int:
     """Regenerate the examples README from .mmd + .png pairs."""
     content = build_readme(examples_dir)
     if args.dry_run:
@@ -119,10 +130,19 @@ if __name__ == "__main__":  # pragma: no cover
     )
     parser.add_argument("-v", "--verbose", action="store_true", help="Debug logging")
     parser.add_argument("-q", "--quiet", action="store_true", help="Errors only")
-    parser.add_argument("-n", "--dry-run", action="store_true", help="Show what would be written without writing")
+    parser.add_argument(
+        "-n",
+        "--dry-run",
+        action="store_true",
+        help="Show what would be written without writing",
+    )
     parsed = parser.parse_args()
     logging.basicConfig(
-        level=logging.DEBUG if parsed.verbose else logging.ERROR if parsed.quiet else logging.INFO,
+        level=logging.DEBUG
+        if parsed.verbose
+        else logging.ERROR
+        if parsed.quiet
+        else logging.INFO,
         format="%(asctime)s|%(name)s|%(levelname)s|%(filename)s:%(lineno)d - %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )

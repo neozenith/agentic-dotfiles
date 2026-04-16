@@ -24,7 +24,7 @@ Add this snippet to the top of the markdown file to enable TOC generation:
 ---
 
 <details>
-<summary>Table of Contents</summary>
+<summary><b>Table of Contents</b></summary>
 <!--TOC-->
 <!--TOC-->
 </details>
@@ -33,7 +33,7 @@ Add this snippet to the top of the markdown file to enable TOC generation:
 
 ```
 
-NOTES: 
+NOTES:
 - The blank lines around the horizontal rules are important for correct TOC placement.
 - The `<!--TOC-->` markers denote where the TOC will be injected. Do not remove or alter these markers. The python `md-toc` tool looks for these exact markers to know where to insert the generated TOC.
 
@@ -54,7 +54,7 @@ uvx --from md-toc md_toc --in-place --no-list-coherence github --header-levels 4
 
 Overview of the project...
 
-## Installation 
+## Installation
 
 ...
 
@@ -73,14 +73,14 @@ Overview of the project...
 ---
 
 <details>
-<summary>Table of Contents</summary>
+<summary><b>Table of Contents</b></summary>
 <!--TOC-->
 <!--TOC-->
 </details>
 
 ---
 
-## Installation 
+## Installation
 
 ...
 
@@ -103,7 +103,7 @@ Overview of the project...
 ---
 
 <details>
-<summary>Table of Contents</summary>
+<summary><b>Table of Contents</b></summary>
 <!--TOC-->
 
 1. [My Documentation](#my-documentation)
@@ -115,7 +115,7 @@ Overview of the project...
 
 ---
 
-## Installation 
+## Installation
 
 ...
 

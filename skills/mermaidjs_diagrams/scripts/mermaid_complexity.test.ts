@@ -12,7 +12,14 @@
 import { describe, expect, test } from "bun:test";
 import { resolve } from "node:path";
 
-import { analyzeContent, analyzeFile, main } from "./mermaid_complexity.ts";
+import {
+  analyzeContent,
+  analyzeFile,
+  assessParseQuality,
+  buildFinding,
+  buildJsonOutput,
+  main,
+} from "./mermaid_complexity.ts";
 
 const EXAMPLES_DIR = resolve(import.meta.dir, "../resources/examples");
 
@@ -142,6 +149,135 @@ describe("main() CLI", () => {
       resolve(EXAMPLES_DIR, "flowchart_fontawesome_icons.mmd"),
     ]);
     expect(code).toBe(0);
+  });
+});
+
+// ─── LLM-friendly JSON output ────────────────────────────────────────────────
+
+describe("parse quality detection", () => {
+  test("single-keyword diagram (info) with 0 nodes is ok, not failed", async () => {
+    const report = await analyzeContent("info\n", highDensity());
+    expect(report.parse_quality).toBe("ok");
+  });
+
+  test("multi-line diagram with 0 nodes is flagged as failed", () => {
+    // Simulate a mermaid-core silent JISON parse failure: multi-line content,
+    // but the extractor returned no structure. assessParseQuality should
+    // catch this so the diagram doesn't get rated "ideal" by default.
+    const content = `block\ncolumns 1\n  db(("DB"))\n  block:ID\n    A\n    B\n  end\n`;
+    const quality = assessParseQuality(content, {
+      nodes: 0, edges: 0, subgraphs: 0, max_subgraph_depth: 0,
+      node_ids: [], subgraph_names: [],
+      parser_used: "mermaid-core", diagram_type: "block",
+    });
+    expect(quality).toBe("failed");
+  });
+
+  test("regex-fallback parser is always degraded", () => {
+    const quality = assessParseQuality("flowchart LR\n  A --> B\n", {
+      nodes: 2, edges: 1, subgraphs: 0, max_subgraph_depth: 0,
+      node_ids: ["A", "B"], subgraph_names: [],
+      parser_used: "regex-fallback", diagram_type: "flowchart",
+    });
+    expect(quality).toBe("degraded");
+  });
+});
+
+describe("buildFinding", () => {
+  test("critical rating produces concrete issues with thresholds and research citation", async () => {
+    const nodes = Array.from({ length: 80 }, (_, i) => `N${i}[node${i}]`).join("\n");
+    const edges = Array.from({ length: 60 }, (_, i) => `N${i} --> N${(i + 1) % 80}`).join("\n");
+    const content = `flowchart LR\n${nodes}\n${edges}\n`;
+    const config = highDensity();
+    const report = await analyzeContent(content, config);
+    expect(report.rating).toBe("critical");
+
+    const finding = buildFinding(report, config);
+    expect(finding.severity).toBe("critical");
+    // Issues name the threshold and cite Huang et al. 2020 for the node cap
+    const allIssues = finding.issues.join(" | ");
+    expect(allIssues).toContain("exceeds cognitive limit");
+    expect(allIssues).toContain("Huang et al.");
+    expect(allIssues).toContain("Visual Complexity Score");
+    expect(finding.recommendation).toMatch(/Split into \d+ sub-diagram/);
+    // With no subgraphs, recommendation should say "No subgraph boundaries exist"
+    expect(finding.recommendation).toContain("No subgraph boundaries");
+  });
+
+  test("subdivision-needed with subgraphs recommends boundaries by name", async () => {
+    const content = [
+      "flowchart LR",
+      "  subgraph Alpha",
+      "    " + Array.from({ length: 15 }, (_, i) => `A${i}[a${i}]`).join("\n    "),
+      "  end",
+      "  subgraph Beta",
+      "    " + Array.from({ length: 15 }, (_, i) => `B${i}[b${i}]`).join("\n    "),
+      "  end",
+      "  subgraph Gamma",
+      "    " + Array.from({ length: 15 }, (_, i) => `G${i}[g${i}]`).join("\n    "),
+      "  end",
+    ].join("\n");
+    const config = highDensity();
+    const report = await analyzeContent(content, config);
+    if (report.needs_subdivision && report.subgraph_names.length >= 2) {
+      const finding = buildFinding(report, config);
+      expect(finding.boundaries).toEqual(expect.arrayContaining(["Alpha", "Beta", "Gamma"]));
+      expect(finding.recommendation).toContain("Alpha");
+    }
+  });
+});
+
+describe("buildJsonOutput", () => {
+  test("shape is { summary, findings, diagrams? } with expected counts", async () => {
+    const reports = await analyzeFile(
+      resolve(EXAMPLES_DIR, "test_gallery.md"),
+      highDensity(),
+    );
+    const out = buildJsonOutput(reports, highDensity(), true);
+    expect(out.summary.total).toBe(reports.length);
+    expect(out.summary.pass + out.summary.needs_attention).toBe(reports.length);
+    expect(out.summary.by_rating.ideal + out.summary.by_rating.acceptable
+         + out.summary.by_rating.complex + out.summary.by_rating.critical).toBe(reports.length);
+    expect(out.summary.preset).toBe("high-density");
+    // Test gallery includes multiple JISON diagrams that fail silently — we
+    // expect parse_warnings to be > 0, otherwise the detection is off.
+    expect(out.summary.parse_warnings).toBeGreaterThan(0);
+    // Every parse-quality warning surfaces in findings
+    expect(out.findings.length).toBeGreaterThanOrEqual(out.summary.parse_warnings);
+    expect(out.diagrams).toBeDefined();
+    expect(out.diagrams!.length).toBe(reports.length);
+  });
+
+  test("includeDiagrams=false omits the diagrams array (maximum concision)", async () => {
+    const reports = await analyzeFile(
+      resolve(EXAMPLES_DIR, "test_gallery.md"),
+      highDensity(),
+    );
+    const out = buildJsonOutput(reports, highDensity(), false);
+    expect(out.diagrams).toBeUndefined();
+    expect(out.findings).toBeDefined();
+    expect(out.summary).toBeDefined();
+  });
+
+  test("ideal diagram with no issues produces an empty findings array", async () => {
+    const content = "flowchart LR\n  A --> B\n  B --> C\n";
+    const report = await analyzeContent(content, highDensity());
+    expect(report.rating).toBe("ideal");
+    expect(report.parse_quality).toBe("ok");
+    const out = buildJsonOutput([report], highDensity(), false);
+    expect(out.findings).toHaveLength(0);
+    expect(out.summary.by_rating.ideal).toBe(1);
+  });
+});
+
+describe("edge density handles 0 or 1 node correctly", () => {
+  test("n=0, e=5 gives edge_density 0 (not 5.0 from div-by-1 fallback)", async () => {
+    // Historically a parser could return nodes=0 with edges>0. The bugfix
+    // reports 0 rather than dividing e by a fallback denominator of 1.
+    const stats = { nodes: 0, edges: 5 };
+    const maxEdges = stats.nodes > 1 ? stats.nodes * (stats.nodes - 1) : 0;
+    const density = maxEdges > 0 ? stats.edges / maxEdges : 0;
+    expect(density).toBe(0);
   });
 });
 

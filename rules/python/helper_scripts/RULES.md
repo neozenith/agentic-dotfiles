@@ -93,4 +93,4 @@ Conditional rule files that extend this base. Each activates based on its frontm
 - [triage.md](triage.md) — Conventions for `triage_*.py` scripts that collate logs/tests and suggest next steps. Use when writing a script whose **verb is `triage`**.
 - [aws.md](aws.md) — AWS service interaction rules (authentication, boto3 patterns, error handling). Use when a script **calls AWS APIs or uses boto3/CDK**.
 - [ml_huggingface.md](ml_huggingface.md) — HuggingFace `transformers` pipeline conventions, including the deferred-import exception for heavy ML libraries. Use when a script **loads ML models via HuggingFace**.
-- [claude_skills.md](claude_skills.md) — Conventions for scripts inside `.claude/skills/*/scripts/`. Use when writing **Python scripts that are part of a Claude skill**.
+- [../../claude_skills.md](../../claude_skills.md) — Merged Python + TypeScript conventions for scripts inside `.claude/skills/*/scripts/`. Use when writing **Python scripts that are part of a Claude skill** (also covers mixed-language skills).

@@ -188,6 +188,8 @@ interface ComplexityMetrics {
 
 type Rating = "ideal" | "acceptable" | "complex" | "critical";
 type Color = "green" | "yellow" | "orange" | "red";
+type ParseQuality = "ok" | "degraded" | "failed";
+type Severity = "critical" | "complex" | "warning";
 
 interface SplitEstimate {
   split_number: number;
@@ -237,6 +239,9 @@ interface ComplexityReport {
   subgraph_names: string[];
   parser_used: MermaidStats["parser_used"];
   diagram_type: string;
+  // "ok" means metrics are trustworthy; "degraded" means regex fallback used;
+  // "failed" means a multi-line diagram yielded 0 nodes (silent JISON/DOM fail).
+  parse_quality: ParseQuality;
   thresholds_used: Record<string, number>;
   // Populated when the diagram was extracted from a fenced ```mermaid block
   // inside a markdown file. Absent for standalone .mmd files.
@@ -246,6 +251,67 @@ interface ComplexityReport {
     line_start: number;
     line_end: number;
   };
+}
+
+interface Finding {
+  id: string;
+  file_path: string;
+  location: string | null;
+  diagram_type: string;
+  severity: Severity;
+  rating: Rating;
+  parse_quality: ParseQuality;
+  parser_used: MermaidStats["parser_used"];
+  issues: string[];
+  recommendation: string;
+  boundaries: string[];
+  metrics: {
+    nodes: number;
+    edges: number;
+    subgraphs: number;
+    max_depth: number;
+    visual_complexity_score: number;
+  };
+}
+
+interface DiagramSummary {
+  id: string;
+  file_path: string;
+  location: string | null;
+  diagram_type: string;
+  parser_used: MermaidStats["parser_used"];
+  rating: Rating;
+  parse_quality: ParseQuality;
+  metrics: {
+    nodes: number;
+    edges: number;
+    subgraphs: number;
+    max_depth: number;
+    visual_complexity_score: number;
+  };
+}
+
+interface JsonOutput {
+  summary: {
+    total: number;
+    by_rating: Record<Rating, number>;
+    pass: number;
+    needs_attention: number;
+    parse_warnings: number;
+    preset: string;
+    thresholds: {
+      node_acceptable: number;
+      node_complex: number;
+      node_hard_limit: number;
+      vcs_acceptable: number;
+      vcs_complex: number;
+      vcs_critical: number;
+      node_target: number;
+      vcs_target: number;
+    };
+  };
+  findings: Finding[];
+  diagrams?: DiagramSummary[];
 }
 
 // ─── Parser dispatch ─────────────────────────────────────────────────────────
@@ -596,7 +662,10 @@ function calculateComplexity(stats: MermaidStats, config: ThresholdConfig): Comp
   const depthMultiplier = 1 + d * config.depth_weight;
   const baseVcs = n + e * config.edge_weight + s * config.subgraph_weight;
   const vcs = baseVcs * depthMultiplier;
-  const maxEdges = n > 1 ? n * (n - 1) : 1;
+  // Edge density = E / (N*(N-1)). Undefined for N≤1 — report 0 rather than
+  // dividing by 1 as a fallback, which gave nonsensical densities like 5.0
+  // when a parser returned 0 nodes but non-zero edges.
+  const maxEdges = n > 1 ? n * (n - 1) : 0;
   const edgeDensity = maxEdges > 0 ? e / maxEdges : 0;
   const cyclomatic = Math.max(1, e - n + 2);
 
@@ -792,6 +861,7 @@ export async function analyzeContent(
   const { needs, count, rationale, workingOut } = recommendSubdivisions(
     metrics.visual_complexity_score, stats.nodes, stats.edges, stats.subgraphs, config,
   );
+  const parseQuality = assessParseQuality(content, stats);
 
   return {
     file_path: filePath,
@@ -809,6 +879,7 @@ export async function analyzeContent(
     subgraph_names: stats.subgraph_names,
     parser_used: stats.parser_used,
     diagram_type: stats.diagram_type,
+    parse_quality: parseQuality,
     thresholds_used: {
       node_acceptable: config.node_acceptable,
       node_complex: config.node_complex,
@@ -817,6 +888,191 @@ export async function analyzeContent(
       vcs_target: config.vcs_target,
     },
   };
+}
+
+// Detects silent parser failures. Mermaid-core's JISON grammars silently fall
+// through under headless DOM for several diagram types (block, c4, er, kanban,
+// mindmap, quadrantChart, requirement, sankey, journey, venn, xychart, etc.),
+// returning stats with 0 nodes/edges. Without this check, those get rated
+// "ideal" because 0 ≤ every threshold, misleading LLM consumers.
+export function assessParseQuality(content: string, stats: MermaidStats): ParseQuality {
+  if (stats.parser_used === "regex-fallback") return "degraded";
+
+  const contentLines = content.split("\n").filter((l) => {
+    const t = l.trim();
+    return t && !t.startsWith("%%") && t !== "---";
+  });
+  // A diagram with only a keyword line (e.g., `info`) has no structure to extract.
+  if (contentLines.length <= 1) return "ok";
+
+  // Multi-line diagram but the parser returned no structure → likely a silent
+  // JISON headless failure. Also catches partial extractions (edges without
+  // nodes, e.g. the stateDiagram case).
+  if (stats.nodes === 0) return "failed";
+  return "ok";
+}
+
+// ─── LLM-friendly JSON builders ──────────────────────────────────────────────
+// Transform verbose ComplexityReport[] into a concise { summary, findings,
+// diagrams } shape. `findings` is the only slice most LLMs need — it carries
+// concrete `issues[]`, a single-sentence `recommendation`, and split
+// `boundaries[]` derived from existing subgraphs. `diagrams` is a compact
+// per-diagram roll-up (no vcs_breakdown, no working_out, no formulas).
+
+function reportId(r: ComplexityReport): string {
+  const file = basename(r.file_path);
+  return r.fence ? `${file}:L${r.fence.line_start}-L${r.fence.line_end}#${r.diagram_type}` : file;
+}
+
+function reportLocation(r: ComplexityReport): string | null {
+  return r.fence ? `L${r.fence.line_start}-L${r.fence.line_end}` : null;
+}
+
+function hasFinding(r: ComplexityReport): boolean {
+  return r.rating === "complex" || r.rating === "critical" || r.parse_quality !== "ok";
+}
+
+export function buildFinding(r: ComplexityReport, c: ThresholdConfig): Finding {
+  const issues: string[] = [];
+  const severity: Severity =
+    r.rating === "critical" ? "critical" : r.rating === "complex" ? "complex" : "warning";
+
+  if (r.parse_quality === "failed") {
+    issues.push(
+      `Parser returned 0 nodes for a multi-line ${r.diagram_type} diagram via ${r.parser_used}. ` +
+        `This is a silent parse failure — the JISON grammar likely needs a real DOM to extract structure. Metrics are unreliable.`,
+    );
+  } else if (r.parse_quality === "degraded") {
+    issues.push(
+      `Using regex-fallback parser for ${r.diagram_type} — both the Langium and mermaid-core paths failed. Metrics are approximate.`,
+    );
+  }
+
+  if (r.rating === "critical") {
+    if (r.nodes > c.node_complex) {
+      issues.push(`Node count ${r.nodes} exceeds cognitive limit of ${c.node_complex} (Huang et al. 2020)`);
+    }
+    if (r.visual_complexity_score > c.vcs_complex) {
+      issues.push(
+        `Visual Complexity Score ${r.visual_complexity_score.toFixed(1)} exceeds critical threshold of ${c.vcs_complex}`,
+      );
+    }
+    if (r.nodes > c.node_hard_limit) {
+      issues.push(`Node count ${r.nodes} exceeds hard limit of ${c.node_hard_limit}`);
+    }
+  } else if (r.rating === "complex") {
+    if (r.nodes > c.node_acceptable) {
+      issues.push(`Node count ${r.nodes} exceeds acceptable threshold of ${c.node_acceptable}`);
+    }
+    if (r.visual_complexity_score > c.vcs_acceptable) {
+      issues.push(
+        `Visual Complexity Score ${r.visual_complexity_score.toFixed(1)} exceeds acceptable threshold of ${c.vcs_acceptable}`,
+      );
+    }
+  }
+
+  if (r.max_depth >= 3) {
+    issues.push(`Subgraph nesting depth ${r.max_depth} (≥3) hinders readability`);
+  }
+
+  const boundaries = r.subgraph_names.slice();
+  const recommendation = buildRecommendation(r, c, boundaries);
+
+  return {
+    id: reportId(r),
+    file_path: r.file_path,
+    location: reportLocation(r),
+    diagram_type: r.diagram_type,
+    severity,
+    rating: r.rating,
+    parse_quality: r.parse_quality,
+    parser_used: r.parser_used,
+    issues,
+    recommendation,
+    boundaries,
+    metrics: {
+      nodes: r.nodes,
+      edges: r.edges,
+      subgraphs: r.subgraphs,
+      max_depth: r.max_depth,
+      visual_complexity_score: r.visual_complexity_score,
+    },
+  };
+}
+
+function buildRecommendation(r: ComplexityReport, c: ThresholdConfig, boundaries: string[]): string {
+  if (r.parse_quality === "failed") {
+    return `Metrics for ${r.diagram_type} cannot be extracted reliably headlessly. Either review this diagram manually, skip complexity enforcement for this diagram type, or run analysis in an environment with a real DOM (jsdom/browser).`;
+  }
+  if (!r.needs_subdivision && r.parse_quality === "degraded") {
+    return `Consider rewriting the diagram using syntax the canonical parser recognizes, or accept that metrics from regex fallback are approximate.`;
+  }
+  if (!r.needs_subdivision) return "No action required.";
+
+  const splits = r.recommended_subdivisions;
+  const target = `Target: ≤${c.node_target} nodes and ≤${c.vcs_target} VCS per sub-diagram.`;
+  if (boundaries.length >= 2) {
+    const shown = boundaries.slice(0, Math.max(splits, 4));
+    const extra = boundaries.length > shown.length ? ` (+${boundaries.length - shown.length} more)` : "";
+    return `Split into ${splits} sub-diagrams along existing subgraph boundaries: ${shown.join(", ")}${extra}. ${target}`;
+  }
+  return `Split into ${splits} sub-diagrams. No subgraph boundaries exist — introduce subgraphs to group related nodes before splitting. ${target}`;
+}
+
+function buildDiagramSummary(r: ComplexityReport): DiagramSummary {
+  return {
+    id: reportId(r),
+    file_path: r.file_path,
+    location: reportLocation(r),
+    diagram_type: r.diagram_type,
+    parser_used: r.parser_used,
+    rating: r.rating,
+    parse_quality: r.parse_quality,
+    metrics: {
+      nodes: r.nodes,
+      edges: r.edges,
+      subgraphs: r.subgraphs,
+      max_depth: r.max_depth,
+      visual_complexity_score: r.visual_complexity_score,
+    },
+  };
+}
+
+export function buildJsonOutput(
+  reports: ComplexityReport[],
+  config: ThresholdConfig,
+  includeDiagrams = true,
+): JsonOutput {
+  const byRating: Record<Rating, number> = { ideal: 0, acceptable: 0, complex: 0, critical: 0 };
+  let parseWarnings = 0;
+  for (const r of reports) {
+    byRating[r.rating]++;
+    if (r.parse_quality !== "ok") parseWarnings++;
+  }
+  const findings = reports.filter(hasFinding).map((r) => buildFinding(r, config));
+  const out: JsonOutput = {
+    summary: {
+      total: reports.length,
+      by_rating: byRating,
+      pass: byRating.ideal + byRating.acceptable,
+      needs_attention: byRating.complex + byRating.critical,
+      parse_warnings: parseWarnings,
+      preset: config.preset_name,
+      thresholds: {
+        node_acceptable: config.node_acceptable,
+        node_complex: config.node_complex,
+        node_hard_limit: config.node_hard_limit,
+        vcs_acceptable: config.vcs_acceptable,
+        vcs_complex: config.vcs_complex,
+        vcs_critical: config.vcs_critical,
+        node_target: config.node_target,
+        vcs_target: config.vcs_target,
+      },
+    },
+    findings,
+  };
+  if (includeDiagrams) out.diagrams = reports.map(buildDiagramSummary);
+  return out;
 }
 
 // ─── Formatting ──────────────────────────────────────────────────────────────
@@ -955,8 +1211,16 @@ Arguments:
 Options:
   --preset, -p <name>          Density preset: low | medium | high (default: high)
                                Aliases: l/low/strict, m/medium/med/balanced, h/high/permissive
-  --json                       Emit JSON
-  --summary-only               Emit only the summary block
+  --json                       Emit { summary, findings, diagrams } JSON.
+                               - summary: totals, preset, thresholds
+                               - findings: only diagrams with issues/warnings, each
+                                 with concrete issues[], a recommendation, and
+                                 boundaries[] derived from subgraphs (LLM-friendly)
+                               - diagrams: compact per-diagram roll-up
+  --findings-only              With --json, drop the diagrams[] array so only
+                               summary + findings are emitted. Maximum concision
+                               for LLM consumers.
+  --summary-only               Emit only the summary block (text mode)
   --show-working, -w           Show subdivision calculation details
   --quiet, -q                  Minimal output
   -h, --help                   Show this help
@@ -979,6 +1243,7 @@ export async function main(argv: string[] = Bun.argv.slice(2)): Promise<number> 
     options: {
       preset: { type: "string", short: "p" },
       json: { type: "boolean", default: false },
+      "findings-only": { type: "boolean", default: false },
       "summary-only": { type: "boolean", default: false },
       "show-working": { type: "boolean", short: "w", default: false },
       quiet: { type: "boolean", short: "q", default: false },
@@ -1031,7 +1296,8 @@ export async function main(argv: string[] = Bun.argv.slice(2)): Promise<number> 
   }
 
   if (values.json) {
-    console.log(JSON.stringify(reports, null, 2));
+    const output = buildJsonOutput(reports, config, !values["findings-only"]);
+    console.log(JSON.stringify(output, null, 2));
   } else if (values["summary-only"]) {
     console.log(formatSummary(reports));
   } else {

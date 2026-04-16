@@ -1,5 +1,9 @@
 # Examples
 
+---
+
+<details>
+<summary><b>Table of Contents</b></summary>
 <!--TOC-->
 
 - [Examples](#examples)
@@ -11,11 +15,38 @@
     - [Code](#code-1)
     - [Mermaid](#mermaid-1)
     - [Image (PNG)](#image-png-1)
-  - [Mermaid Version Information Debugging](#mermaid-version-information-debugging)
+  - [layout_dagre_classic](#layout_dagre_classic)
     - [Code](#code-2)
     - [Mermaid](#mermaid-2)
+    - [Image (PNG)](#image-png-2)
+  - [layout_dagre_handdrawn](#layout_dagre_handdrawn)
+    - [Code](#code-3)
+    - [Mermaid](#mermaid-3)
+    - [Image (PNG)](#image-png-3)
+  - [layout_dagre_neo](#layout_dagre_neo)
+    - [Code](#code-4)
+    - [Mermaid](#mermaid-4)
+    - [Image (PNG)](#image-png-4)
+  - [layout_elk_default](#layout_elk_default)
+    - [Code](#code-5)
+    - [Mermaid](#mermaid-5)
+    - [Image (PNG)](#image-png-5)
+  - [layout_elk_tuned](#layout_elk_tuned)
+    - [Code](#code-6)
+    - [Mermaid](#mermaid-6)
+    - [Image (PNG)](#image-png-6)
+  - [layout_tidytree_mindmap](#layout_tidytree_mindmap)
+    - [Code](#code-7)
+    - [Mermaid](#mermaid-7)
+    - [Image (PNG)](#image-png-7)
+  - [Mermaid Version Information Debugging](#mermaid-version-information-debugging)
+    - [Code](#code-8)
+    - [Mermaid](#mermaid-8)
 
 <!--TOC-->
+</details>
+
+---
 
 ## architecture_beta_iconify_logos
 
@@ -162,6 +193,378 @@ flowchart LR
 ### Image (PNG)
 
 ![flowchart_fontawesome_icons](flowchart_fontawesome_icons.png)
+
+---
+
+## layout_dagre_classic
+
+### Code
+
+```text
+---
+config:
+  layout: dagre
+  look: classic
+  theme: default
+---
+flowchart LR
+    user([User]) --> edge[CDN / Edge]
+    edge --> lb[Load Balancer]
+    lb --> api1[API Server 1]
+    lb --> api2[API Server 2]
+    api1 --> cache[(Cache)]
+    api2 --> cache
+    api1 --> db[(Primary DB)]
+    api2 --> db
+    api1 --> queue[[Job Queue]]
+    api2 --> queue
+    queue --> worker[Worker]
+    worker --> db
+    worker --> store[(Object Store)]
+    db -. replicate .-> replica[(Read Replica)]
+```
+
+### Mermaid
+
+```mermaid
+---
+config:
+  layout: dagre
+  look: classic
+  theme: default
+---
+flowchart LR
+    user([User]) --> edge[CDN / Edge]
+    edge --> lb[Load Balancer]
+    lb --> api1[API Server 1]
+    lb --> api2[API Server 2]
+    api1 --> cache[(Cache)]
+    api2 --> cache
+    api1 --> db[(Primary DB)]
+    api2 --> db
+    api1 --> queue[[Job Queue]]
+    api2 --> queue
+    queue --> worker[Worker]
+    worker --> db
+    worker --> store[(Object Store)]
+    db -. replicate .-> replica[(Read Replica)]
+```
+
+### Image (PNG)
+
+![layout_dagre_classic](layout_dagre_classic.png)
+
+---
+
+## layout_dagre_handdrawn
+
+### Code
+
+```text
+---
+config:
+  layout: dagre
+  look: handDrawn
+  handDrawnSeed: 1
+  theme: default
+---
+flowchart LR
+    user([User]) --> edge[CDN / Edge]
+    edge --> lb[Load Balancer]
+    lb --> api1[API Server 1]
+    lb --> api2[API Server 2]
+    api1 --> cache[(Cache)]
+    api2 --> cache
+    api1 --> db[(Primary DB)]
+    api2 --> db
+    api1 --> queue[[Job Queue]]
+    api2 --> queue
+    queue --> worker[Worker]
+    worker --> db
+    worker --> store[(Object Store)]
+    db -. replicate .-> replica[(Read Replica)]
+```
+
+### Mermaid
+
+```mermaid
+---
+config:
+  layout: dagre
+  look: handDrawn
+  handDrawnSeed: 1
+  theme: default
+---
+flowchart LR
+    user([User]) --> edge[CDN / Edge]
+    edge --> lb[Load Balancer]
+    lb --> api1[API Server 1]
+    lb --> api2[API Server 2]
+    api1 --> cache[(Cache)]
+    api2 --> cache
+    api1 --> db[(Primary DB)]
+    api2 --> db
+    api1 --> queue[[Job Queue]]
+    api2 --> queue
+    queue --> worker[Worker]
+    worker --> db
+    worker --> store[(Object Store)]
+    db -. replicate .-> replica[(Read Replica)]
+```
+
+### Image (PNG)
+
+![layout_dagre_handdrawn](layout_dagre_handdrawn.png)
+
+---
+
+## layout_dagre_neo
+
+### Code
+
+```text
+---
+config:
+  layout: dagre
+  look: neo
+  theme: default
+  useGradient: true
+  gradientStart: "#ede9fe"
+  gradientStop: "#a78bfa"
+  dropShadow: true
+---
+flowchart LR
+    user([User]) --> edge[CDN / Edge]
+    edge --> lb[Load Balancer]
+    lb --> api1[API Server 1]
+    lb --> api2[API Server 2]
+    api1 --> cache[(Cache)]
+    api2 --> cache
+    api1 --> db[(Primary DB)]
+    api2 --> db
+    api1 --> queue[[Job Queue]]
+    api2 --> queue
+    queue --> worker[Worker]
+    worker --> db
+    worker --> store[(Object Store)]
+    db -. replicate .-> replica[(Read Replica)]
+```
+
+### Mermaid
+
+```mermaid
+---
+config:
+  layout: dagre
+  look: neo
+  theme: default
+  useGradient: true
+  gradientStart: "#ede9fe"
+  gradientStop: "#a78bfa"
+  dropShadow: true
+---
+flowchart LR
+    user([User]) --> edge[CDN / Edge]
+    edge --> lb[Load Balancer]
+    lb --> api1[API Server 1]
+    lb --> api2[API Server 2]
+    api1 --> cache[(Cache)]
+    api2 --> cache
+    api1 --> db[(Primary DB)]
+    api2 --> db
+    api1 --> queue[[Job Queue]]
+    api2 --> queue
+    queue --> worker[Worker]
+    worker --> db
+    worker --> store[(Object Store)]
+    db -. replicate .-> replica[(Read Replica)]
+```
+
+### Image (PNG)
+
+![layout_dagre_neo](layout_dagre_neo.png)
+
+---
+
+## layout_elk_default
+
+### Code
+
+```text
+---
+config:
+  layout: elk
+  look: classic
+  theme: default
+---
+flowchart LR
+    user([User]) --> edge[CDN / Edge]
+    edge --> lb[Load Balancer]
+    lb --> api1[API Server 1]
+    lb --> api2[API Server 2]
+    api1 --> cache[(Cache)]
+    api2 --> cache
+    api1 --> db[(Primary DB)]
+    api2 --> db
+    api1 --> queue[[Job Queue]]
+    api2 --> queue
+    queue --> worker[Worker]
+    worker --> db
+    worker --> store[(Object Store)]
+    db -. replicate .-> replica[(Read Replica)]
+```
+
+### Mermaid
+
+```mermaid
+---
+config:
+  layout: elk
+  look: classic
+  theme: default
+---
+flowchart LR
+    user([User]) --> edge[CDN / Edge]
+    edge --> lb[Load Balancer]
+    lb --> api1[API Server 1]
+    lb --> api2[API Server 2]
+    api1 --> cache[(Cache)]
+    api2 --> cache
+    api1 --> db[(Primary DB)]
+    api2 --> db
+    api1 --> queue[[Job Queue]]
+    api2 --> queue
+    queue --> worker[Worker]
+    worker --> db
+    worker --> store[(Object Store)]
+    db -. replicate .-> replica[(Read Replica)]
+```
+
+### Image (PNG)
+
+![layout_elk_default](layout_elk_default.png)
+
+---
+
+## layout_elk_tuned
+
+### Code
+
+```text
+---
+config:
+  layout: elk
+  look: classic
+  theme: default
+  elk:
+    mergeEdges: true
+    nodePlacementStrategy: LINEAR_SEGMENTS
+---
+flowchart LR
+    user([User]) --> edge[CDN / Edge]
+    edge --> lb[Load Balancer]
+    lb --> api1[API Server 1]
+    lb --> api2[API Server 2]
+    api1 --> cache[(Cache)]
+    api2 --> cache
+    api1 --> db[(Primary DB)]
+    api2 --> db
+    api1 --> queue[[Job Queue]]
+    api2 --> queue
+    queue --> worker[Worker]
+    worker --> db
+    worker --> store[(Object Store)]
+    db -. replicate .-> replica[(Read Replica)]
+```
+
+### Mermaid
+
+```mermaid
+---
+config:
+  layout: elk
+  look: classic
+  theme: default
+  elk:
+    mergeEdges: true
+    nodePlacementStrategy: LINEAR_SEGMENTS
+---
+flowchart LR
+    user([User]) --> edge[CDN / Edge]
+    edge --> lb[Load Balancer]
+    lb --> api1[API Server 1]
+    lb --> api2[API Server 2]
+    api1 --> cache[(Cache)]
+    api2 --> cache
+    api1 --> db[(Primary DB)]
+    api2 --> db
+    api1 --> queue[[Job Queue]]
+    api2 --> queue
+    queue --> worker[Worker]
+    worker --> db
+    worker --> store[(Object Store)]
+    db -. replicate .-> replica[(Read Replica)]
+```
+
+### Image (PNG)
+
+![layout_elk_tuned](layout_elk_tuned.png)
+
+---
+
+## layout_tidytree_mindmap
+
+### Code
+
+```text
+---
+config:
+  layout: tidy-tree
+  look: classic
+  theme: default
+---
+mindmap
+  root((System))
+    Ingress
+      CDN
+      Load Balancer
+    Compute
+      API
+      Worker
+    Data
+      Cache
+      Primary DB
+        Read Replica
+      Object Store
+```
+
+### Mermaid
+
+```mermaid
+---
+config:
+  layout: tidy-tree
+  look: classic
+  theme: default
+---
+mindmap
+  root((System))
+    Ingress
+      CDN
+      Load Balancer
+    Compute
+      API
+      Worker
+    Data
+      Cache
+      Primary DB
+        Read Replica
+      Object Store
+```
+
+### Image (PNG)
+
+![layout_tidytree_mindmap](layout_tidytree_mindmap.png)
 
 ---
 ## Mermaid Version Information Debugging

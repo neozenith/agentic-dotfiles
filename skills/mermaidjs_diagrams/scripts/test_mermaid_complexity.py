@@ -125,17 +125,23 @@ class TestRateComplexity:
         config = mc.ThresholdConfig.from_preset("high")
         stats = mc.parse_mermaid_file(SIMPLE_FLOWCHART)
         metrics = mc.calculate_complexity(stats, config)
-        rating, color = mc.rate_complexity(metrics["visual_complexity_score"], stats.nodes, config)
+        rating, color = mc.rate_complexity(
+            metrics["visual_complexity_score"], stats.nodes, config
+        )
         assert rating == "ideal"
         assert color == "green"
 
     def test_rating_values(self) -> None:
         config = mc.ThresholdConfig.from_preset("low")
         # Force critical: many nodes
-        content = "flowchart LR\n" + "\n".join(f"    N{i} --> N{i + 1}" for i in range(50))
+        content = "flowchart LR\n" + "\n".join(
+            f"    N{i} --> N{i + 1}" for i in range(50)
+        )
         stats = mc.parse_mermaid_file(content)
         metrics = mc.calculate_complexity(stats, config)
-        rating, _ = mc.rate_complexity(metrics["visual_complexity_score"], stats.nodes, config)
+        rating, _ = mc.rate_complexity(
+            metrics["visual_complexity_score"], stats.nodes, config
+        )
         assert rating in ("complex", "critical")
 
 
@@ -173,10 +179,14 @@ class TestAnalyzeFile:
         report = mc.analyze_file(simple_mmd, mc.ThresholdConfig())
         assert report.file_path == str(simple_mmd)
 
-    def test_complex_diagram_needs_subdivision_with_low_preset(self, temp_dir: Path) -> None:
+    def test_complex_diagram_needs_subdivision_with_low_preset(
+        self, temp_dir: Path
+    ) -> None:
         # 15 nodes exceeds low-density node_acceptable (12) — subdivision required
         big = temp_dir / "big.mmd"
-        big.write_text("flowchart LR\n" + "\n".join(f"    N{i} --> N{i + 1}" for i in range(15)))
+        big.write_text(
+            "flowchart LR\n" + "\n".join(f"    N{i} --> N{i + 1}" for i in range(15))
+        )
         config = mc.ThresholdConfig.from_preset("low")
         report = mc.analyze_file(big, config)
         assert report.needs_subdivision is True
@@ -184,23 +194,36 @@ class TestAnalyzeFile:
 
 
 class TestMain:
-    def test_analyze_single_file(self, monkeypatch: pytest.MonkeyPatch, simple_mmd: Path) -> None:
+    def test_analyze_single_file(
+        self, monkeypatch: pytest.MonkeyPatch, simple_mmd: Path
+    ) -> None:
         monkeypatch.setattr(sys, "argv", ["mermaid_complexity.py", str(simple_mmd)])
         result = mc.main()
         assert result == 0
 
-    def test_exit_code_1_on_complex(self, monkeypatch: pytest.MonkeyPatch, temp_dir: Path) -> None:
+    def test_exit_code_1_on_complex(
+        self, monkeypatch: pytest.MonkeyPatch, temp_dir: Path
+    ) -> None:
         # Create a diagram that will fail low-density thresholds
         big = temp_dir / "big.mmd"
-        big.write_text("flowchart LR\n" + "\n".join(f"    N{i} --> N{i + 1}" for i in range(40)))
-        monkeypatch.setattr(sys, "argv", ["mermaid_complexity.py", str(big), "--preset", "low"])
+        big.write_text(
+            "flowchart LR\n" + "\n".join(f"    N{i} --> N{i + 1}" for i in range(40))
+        )
+        monkeypatch.setattr(
+            sys, "argv", ["mermaid_complexity.py", str(big), "--preset", "low"]
+        )
         result = mc.main()
         assert result == 1
 
     def test_json_output(
-        self, monkeypatch: pytest.MonkeyPatch, simple_mmd: Path, capsys: pytest.CaptureFixture[str]
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        simple_mmd: Path,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
-        monkeypatch.setattr(sys, "argv", ["mermaid_complexity.py", str(simple_mmd), "--json"])
+        monkeypatch.setattr(
+            sys, "argv", ["mermaid_complexity.py", str(simple_mmd), "--json"]
+        )
         mc.main()
         captured = capsys.readouterr()
         import json
@@ -209,14 +232,18 @@ class TestMain:
         assert isinstance(data, list)
         assert data[0]["nodes"] == 3
 
-    def test_directory_input(self, monkeypatch: pytest.MonkeyPatch, temp_dir: Path) -> None:
+    def test_directory_input(
+        self, monkeypatch: pytest.MonkeyPatch, temp_dir: Path
+    ) -> None:
         (temp_dir / "a.mmd").write_text(SIMPLE_FLOWCHART)
         (temp_dir / "b.mmd").write_text(SIMPLE_FLOWCHART)
         monkeypatch.setattr(sys, "argv", ["mermaid_complexity.py", str(temp_dir)])
         result = mc.main()
         assert result == 0
 
-    def test_no_files_returns_1(self, monkeypatch: pytest.MonkeyPatch, temp_dir: Path) -> None:
+    def test_no_files_returns_1(
+        self, monkeypatch: pytest.MonkeyPatch, temp_dir: Path
+    ) -> None:
         monkeypatch.setattr(sys, "argv", ["mermaid_complexity.py", str(temp_dir)])
         result = mc.main()
         assert result == 1

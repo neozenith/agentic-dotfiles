@@ -6,7 +6,7 @@ paths:
 
 # ML HuggingFace Script Conventions
 
-Rules specific to Python scripts that use HuggingFace `transformers` pipelines. Extends `claude_skills.md` and `RULES.md`.
+Rules specific to Python scripts that use HuggingFace `transformers` pipelines. Extends `../../claude_skills.md` and `RULES.md`.
 
 ## Deferred Import Exception
 

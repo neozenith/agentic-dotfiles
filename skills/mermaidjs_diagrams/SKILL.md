@@ -112,6 +112,33 @@ approach and naming conventions.
 
 ---
 
+# Layout Algorithms
+
+Mermaid supports several layout engines (`dagre` default, `elk`, `tidy-tree`,
+`cose-bilkent`) selected via YAML frontmatter inside the diagram source:
+
+```yaml
+---
+config:
+  layout: elk
+  look: classic
+  elk:
+    mergeEdges: true
+    nodePlacementStrategy: BRANDES_KOEPF
+---
+flowchart LR
+    ...
+```
+
+Use `elk` for dense architecture diagrams (cleaner orthogonal routing), stick
+with `dagre` for simple flows. The `layout` key is only honored by **flowchart**,
+**state**, and **mindmap** diagrams — others use their own built-in algorithms.
+
+> Full documentation: `resources/layout_algorithms.md`
+> Rendered comparison gallery (dagre vs. elk vs. tidy-tree): `resources/examples/README.md`
+
+---
+
 # Diagram Organization
 
 For projects with multiple architectural diagrams, use lenses (perspectives) and
@@ -188,10 +215,14 @@ when they display in browser previews. Stick to **ASCII-only text** in node labe
 |------|---------|
 | `resources/color_theming.md` | Color palettes, HSL encoding, dark/light mode safety, subgraph coloring |
 | `resources/diagram_organization.md` | Lens naming, dual-density approach, README sync |
+| `resources/layout_algorithms.md` | `layout` + `look` config for dagre / elk / tidy-tree / cose-bilkent, ELK tuning keys, per-diagram-type support |
 | `resources/pattern_render_markdown.md` | Full render-from-markdown documentation |
-| `resources/examples/` | Sample `.mmd` files and rendered PNG output |
-| `resources/iconify_setup.md` | Iconify icon pack setup guide |
-| `resources/iconify_logos.md` | Available Iconify logo icons |
-| `resources/iconify_mdi.md` | Available Material Design icons |
+| `resources/examples/` | Sample `.mmd` files and rendered PNG output (includes layout comparison gallery) |
+| `resources/iconify/` | Iconify icon-pack reference (subdirectory — see files below) |
+| `resources/iconify/iconify_setup.md` | Iconify icon pack setup guide |
+| `resources/iconify/iconify_logos.md` | Available Iconify logo icons |
+| `resources/iconify/iconify_mdi.md` | Available Material Design icons |
+| `resources/iconify/iconify_cloud.md` | Cloud-provider icon catalogue |
+| `resources/iconify/iconify_saas.md` | SaaS / product icon catalogue |
 | `scripts/render_mermaid.sh` | Render both default variants for a markdown file |
 | `scripts/mermaid_complexity.py` | Complexity analyzer script |
