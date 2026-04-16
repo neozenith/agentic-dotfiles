@@ -82,12 +82,12 @@ const log = consola.withTag("{name}");
 // ─── Core types and functions ────────────────────────────────────────────────
 interface Result { /* ... */ }
 
-export function doTheThing(input: string): Result { /* ... */ }
+export const doTheThing = (input: string): Result => { /* ... */ };
 
 // ─── CLI interface ───────────────────────────────────────────────────────────
-function printHelp(): void { /* ... */ }
+const printHelp = (): void => { /* ... */ };
 
-export async function main(argv: string[] = Bun.argv.slice(2)): Promise<void> {
+export const main = async (argv: string[] = Bun.argv.slice(2)): Promise<void> => {
   const { values, positionals } = parseArgs({
     args: argv,
     options: { /* ... */ },
@@ -95,7 +95,7 @@ export async function main(argv: string[] = Bun.argv.slice(2)): Promise<void> {
     strict: true,
   });
   // ... dispatch ...
-}
+};
 
 if (import.meta.main) {  // Bun's equivalent of `if __name__ == "__main__":`
   main().catch((err: unknown) => {
@@ -117,15 +117,15 @@ Functions that use global paths should accept optional parameters:
 
 ```typescript
 // ✅ CORRECT - allows testing with temp directories
-export function processData(cachePath: string, dataPath: string = DEFAULT_DATA_PATH): Result {
+export const processData = (cachePath: string, dataPath: string = DEFAULT_DATA_PATH): Result => {
   // ...
-}
+};
 
 // ✅ CORRECT - main() accepts optional dependencies
-export async function main(argv: string[], deps: { cache?: CacheManager } = {}): Promise<void> {
+export const main = async (argv: string[], deps: { cache?: CacheManager } = {}): Promise<void> => {
   const cache = deps.cache ?? new CacheManager();
   // ...
-}
+};
 ```
 
 ## Shell Wrapper (`{name}.sh`)

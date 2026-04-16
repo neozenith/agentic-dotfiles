@@ -16,7 +16,7 @@ For a script with a handful of flags and no subcommands, this is the full patter
 #!/usr/bin/env bun
 import { parseArgs } from "node:util";
 
-function printHelp(): void {
+const printHelp = (): void => {
   console.log([
     "Usage: my-script <input-file> [--json] [--force]",
     "",
@@ -27,9 +27,9 @@ function printHelp(): void {
     "  -f, --force  Overwrite existing output",
     "  -h, --help   Show this help and exit",
   ].join("\n"));
-}
+};
 
-async function main(): Promise<void> {
+const main = async (): Promise<void> => {
   const { values, positionals } = parseArgs({
     args: Bun.argv.slice(2),
     options: {
@@ -45,7 +45,7 @@ async function main(): Promise<void> {
   if (positionals.length === 0) { printHelp(); process.exit(2); }
 
   // ... actual work ...
-}
+};
 
 main().catch((err: unknown) => {
   const msg = err instanceof Error ? err.message : String(err);
@@ -88,7 +88,7 @@ const COMMANDS: Subcommand[] = [
   },
 ];
 
-async function main(): Promise<void> {
+const main = async (): Promise<void> => {
   const argv = Bun.argv.slice(2);
   const [cmdName, ...rest] = argv;
 
@@ -113,7 +113,7 @@ async function main(): Promise<void> {
 
   if (values.help) { printSubcommandHelp(cmd); return; }
   await cmd.handler({ ...values, _: positionals });
-}
+};
 ```
 
 ### Why This Pattern (vs. nested argparse)

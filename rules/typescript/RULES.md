@@ -69,31 +69,174 @@ const PROJECT_ROOT = resolve(SCRIPT_DIR, "..");
 
 (ESM has no `__dirname`; use `import.meta.url` + `fileURLToPath`. Bun also exposes `import.meta.dir` and `import.meta.path` as shortcuts.)
 
+## Functions
+
+**Prefer arrow functions over `function` declarations.** Arrow form is more consistent with the rest of modern TypeScript, avoids the `this`-binding pitfalls of `function`, and reads uniformly whether the body is a one-liner or a block.
+
+```typescript
+// ✅ CORRECT
+const toSlug = (name: string): string => name.toLowerCase().replace(/\s+/g, "-");
+
+export const processData = async (input: Input): Promise<Output> => {
+  // ...
+};
+```
+
+```typescript
+// ❌ AVOID — do not use `function` declarations for new code
+export function processData(input: Input): Promise<Output> { ... }
+```
+
+Exceptions — use `function` only when you genuinely need one of these:
+- Hoisting (rarely required if imports/constants are ordered correctly).
+- A named function for clearer stack traces in hot paths where stack readability matters.
+- Generator functions (`function*`) — arrow form has no generator equivalent.
+
 ## Logging
 
-- **Never use `console.log` for production output** — use a structured logger (`consola`, `pino`, or a minimal in-house wrapper).
+- **Never use `console.log` for production output** — use a structured logger.
 - For CLI tools, `console.log` is acceptable for *user-facing* output (the "print to stdout" channel). Errors and diagnostics go to `console.error` (stderr) so `| jq` and friends keep working.
 - Get a logger at module scope, not per-call.
 
-```typescript
-import { consola } from "consola";
-const log = consola.withTag("my-module");
+**Preferred: `pino` with `pino-pretty` for local dev.** Pino is the default structured logger; it emits JSON in production and a human-readable stream in dev.
 
-log.info("processing %d items", count);
-log.debug({ details }, "details");
-log.error({ err }, "failed to process");
+Every project gets a `utils/logger.ts` like this:
+
+```typescript
+// utils/logger.ts
+import pino from "pino";
+
+const isDev = process.env.NODE_ENV !== "production";
+
+export const logger = pino(
+  isDev ? { transport: { target: "pino-pretty" } } : {}
+);
 ```
+
+Consumers import the shared instance:
+
+```typescript
+import { logger } from "./utils/logger.ts";
+
+logger.info({ count }, "processing items");
+logger.debug({ details }, "details");
+logger.error({ err }, "failed to process");
+```
+
+`consola` remains acceptable for CLI tools where pretty output is the *only* mode (no production JSON stream needed) — but pino is the default for services and long-lived processes.
 
 ## Environment Variables
 
 Bun auto-loads `.env`, `.env.local`, and `.env.<NODE_ENV>` — **do not** add `dotenv`.
 
+**All env-var access goes through a central `utils/const.ts` registry.** Never read `process.env` (or `Bun.env`) inline elsewhere in the codebase. This mirrors the Python `cli/config.py` convention — one file owns the environment surface, so missing-variable errors surface at load time rather than on first-use deep in a request handler.
+
 ```typescript
-const apiKey = Bun.env.API_KEY ?? process.env.API_KEY;
-if (!apiKey) throw new Error("API_KEY not set");
+// utils/const.ts
+const required = (key: string): string => {
+  const value = process.env[key];
+  if (value === undefined) {
+    throw new Error(`Undefined required environment variable - ${key}`);
+  }
+  return value;
+};
+
+const optional = (key: string, fallback: string): string => process.env[key] ?? fallback;
+
+export const PORT = parseInt(optional("PORT", "3000"), 10);
+export const API_KEY = required("API_KEY");
+// Add every env var the app reads here — and nowhere else.
 ```
 
 Check for `.env.sample` at the project root to discover what variables exist.
+
+For complex env shapes (nested config, coerced types, enums), validate the final export with **zod** — see *Runtime Validation* below.
+
+## Runtime Validation
+
+**Use `zod` for any data crossing a trust boundary.** The TypeScript compiler validates shapes *inside* your code; zod validates shapes coming *into* your code. Anywhere you'd normally trust a `JSON.parse` result, a form submission, or an external API response, wrap it in a zod schema so the `unknown` becomes a typed value through a runtime check, not a cast.
+
+```typescript
+import { z } from "zod";
+
+const UserSchema = z.object({
+  id: z.string().uuid(),
+  email: z.string().email(),
+  age: z.number().int().nonnegative(),
+});
+type User = z.infer<typeof UserSchema>;
+
+const parseUser = (raw: unknown): User => UserSchema.parse(raw);
+```
+
+Apply zod at these boundaries specifically:
+
+- **HTTP request bodies / query params** — parse inside the route handler, before business logic sees the value.
+- **External API responses** — never trust response bodies to match the OpenAPI schema in production.
+- **Config files** (`*.json`, `*.yaml` loaded at startup) — validate shape at load time, fail fast on misconfiguration.
+- **Inter-service messages** (queue payloads, websocket frames) — validate on receive.
+
+Prefer `.parse()` (throws) over `.safeParse()` (returns a discriminated union) unless the calling code has a specific fallback for invalid data. A thrown `ZodError` at a boundary is the correct failure signal — same reasoning as the "no graceful degradation" rule.
+
+## HTTP & Network Services
+
+Use Bun's built-in APIs instead of adding Node-era libraries:
+
+| Instead of | Use |
+|---|---|
+| `express`, `fastify`, `koa` | `Bun.serve()` (routes + HTTPS + WebSockets, no deps) |
+| `ws` | The built-in `WebSocket` (client) and `Bun.serve({ websocket })` (server) |
+| `ioredis`, `node-redis` | `Bun.redis` |
+| `pg`, `postgres.js` | `Bun.sql` |
+| `better-sqlite3` | `bun:sqlite` |
+| `execa`, `child_process` | `` Bun.$`command` `` |
+
+### `Bun.serve()`
+
+```typescript
+import index from "./index.html";
+
+Bun.serve({
+  routes: {
+    "/": index,
+    "/api/users/:id": {
+      GET: (req) => Response.json({ id: req.params.id }),
+    },
+  },
+  websocket: {
+    open: (ws) => ws.send("connected"),
+    message: (ws, msg) => ws.send(msg),
+    close: () => {},
+  },
+  development: { hmr: true, console: true },
+});
+```
+
+Validate request bodies with zod inside the handler before doing any work.
+
+### `Bun.sql` (Postgres)
+
+```typescript
+import { sql } from "bun";
+const users = await sql`SELECT id, email FROM users WHERE active = ${true}`;
+```
+
+Tagged-template parameters are always escaped — never build SQL by string concatenation.
+
+### `bun:sqlite`
+
+```typescript
+import { Database } from "bun:sqlite";
+const db = new Database("app.db");
+```
+
+### `Bun.redis`
+
+```typescript
+import { redis } from "bun";
+await redis.set("key", "value");
+const value = await redis.get("key");
+```
 
 ## Git Integration
 
@@ -180,12 +323,5 @@ Biome is preferred for new TypeScript projects — it's a single binary that rep
 
 **Avoid CSV** unless explicitly requested. Prefer:
 - **In-memory**: plain objects, `Map`/`Set`, Arrow tables via `apache-arrow`
-- **Persistence**: JSON, SQLite (`bun:sqlite` is built-in), DuckDB, Parquet
+- **Persistence**: JSON, SQLite (`bun:sqlite` is built-in — see *HTTP & Network Services*), DuckDB, Parquet
 - **Exchange**: JSON, Arrow IPC, MessagePack
-
-```typescript
-// Bun has bun:sqlite built-in — no dep needed
-import { Database } from "bun:sqlite";
-const db = new Database(":memory:");
-db.run("CREATE TABLE items (id INTEGER, name TEXT)");
-```

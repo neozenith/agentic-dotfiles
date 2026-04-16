@@ -120,3 +120,76 @@ bun run src/script.ts
 ## Lockfile
 
 Bun uses a text lockfile: `bun.lock` (Bun ≥ 1.2). Older projects may have `bun.lockb` (binary) — migrate to text with `bun install --save-text-lockfile` on the next lock change. **Commit the lockfile**, never ignore it.
+
+## Project Scaffold: Makefile + Docker Compose
+
+Every new Bun project gets a `Makefile` as its entry point and a `docker-compose.yml` for backing services. The Makefile is the single command-and-control surface (see the global working-directory rules) — contributors run `make dev`, never remember `bun --hot src/index.ts` + `docker compose up -d` separately.
+
+### Minimum `Makefile`
+
+```makefile
+.PHONY: dev up down install test lint typecheck
+
+dev: up
+	bun --hot src/index.ts
+
+up:
+	docker compose up -d
+
+down:
+	docker compose down
+
+install:
+	bun install
+
+test:
+	bun test
+
+lint:
+	bunx --bun @biomejs/biome check .
+
+typecheck:
+	bun run tsc --noEmit
+```
+
+`make dev` depends on `up` so services are always booted before the app. Teardown is explicit via `make down`; if the app needs graceful teardown on SIGTERM, wire it inside `src/index.ts` with Bun's signal handlers, not in the Makefile.
+
+### Minimum `docker-compose.yml`
+
+Only add services the app actually needs. A typical starter:
+
+```yaml
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: secret
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+volumes:
+  postgres-data:
+```
+
+For Redis, SQLite, or other stores the app uses, add the matching service — but remember that `bun:sqlite` is embedded and doesn't need a container.
+
+### Standard Project Layout
+
+```
+project-root/
+├── Makefile
+├── docker-compose.yml
+├── package.json
+├── bun.lock
+├── tsconfig.json
+├── .env.sample
+├── src/
+│   └── index.ts
+└── utils/
+    ├── logger.ts        # pino — see RULES.md "Logging"
+    └── const.ts         # central env var registry — see RULES.md "Environment Variables"
+```
+
+The `utils/logger.ts` and `utils/const.ts` pair is mandatory — every other module imports from them rather than reading `process.env` or constructing its own logger.

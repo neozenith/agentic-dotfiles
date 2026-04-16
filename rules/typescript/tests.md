@@ -62,7 +62,7 @@ test("cache stores data", () => {
 
 ```typescript
 // ✅ CORRECT - inject real implementations
-function processData(db: Database, api: ApiClient) { ... }
+const processData = (db: Database, api: ApiClient) => { ... };
 
 // In tests, use real test instances:
 test("processData", async () => {
