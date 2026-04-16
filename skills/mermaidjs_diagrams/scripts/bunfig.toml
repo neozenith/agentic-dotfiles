@@ -1,0 +1,11 @@
+# Bun runtime configuration for the mermaidjs_diagrams skill scripts.
+#
+# The `[test]` section tightens the `bun test --coverage` contract: falling
+# below the threshold is a test failure, not a warning. Without this, the
+# make target `test-cov-ts` silently lets coverage regressions land.
+
+[test]
+coverage = true
+coverageThreshold = 0.90
+coverageReporter = ["text"]
+coverageSkipTestFiles = true

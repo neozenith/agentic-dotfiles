@@ -191,4 +191,168 @@ describe("main() CLI", () => {
   test("unknown flag returns 2", async () => {
     expect(await main(["--nonsense"])).toBe(2);
   });
+
+  test("default (non-json) output path exercises formatAssessment for passing pair", async () => {
+    // white on black — passes AA; exercises non-json formatter (line 322 branch).
+    expect(await main(["#ffffff", "#000000"])).toBe(0);
+  });
+
+  test("default (non-json) output path for failing pair exercises Fail rating color branch", async () => {
+    // red on blue — fails AA; exercises the red/Fail color branch in formatAssessment.
+    expect(await main(["red", "blue"])).toBe(1);
+  });
+
+  test("default (non-json) output for AA Large rating exercises yellow branch", async () => {
+    // Find a pair in the [3, 4.5) band: #767676 on #fff gives ~4.54 (just AA),
+    // #999 on #fff gives ~2.85 (Fail). #888 on #fff lands around 3.54 (AA Large).
+    expect(await main(["#888888", "#ffffff"])).toBe(1); // AA Large fails AA normal
+  });
+
+  test("default (non-json) output for AAA rating exercises the AAA color branch", async () => {
+    // white on black = 21:1 => AAA.
+    expect(await main(["#ffffff", "#000000"])).toBe(0);
+  });
+
+  test("one positional arg (not 2) returns 2 with error message", async () => {
+    // positionals.length === 1 → hits the "expected 2 positional args" branch (lines 307-309).
+    expect(await main(["#fff"])).toBe(2);
+  });
+
+  test("three positional args returns 2 with error message", async () => {
+    // positionals.length === 3 → also hits the "expected 2 positional args" branch.
+    expect(await main(["#fff", "#000", "#abc"])).toBe(2);
+  });
+
+  test("unparseable color in pair mode returns 2 with error", async () => {
+    // lines 315-316: wcagAssess throws → caught → return 2.
+    expect(await main(["not-a-color", "#000"])).toBe(2);
+  });
+
+  test("--stdin with empty stdin yields JSON parse error (returns 2)", async () => {
+    // Within bun:test, Bun.stdin is an empty stream at EOF, so readStdin returns ""
+    // and JSON.parse("") throws. Exercises lines 226-229 (readStdin) and 261-267
+    // (stdin read + JSON parse error branch) in-process (coverage-traced).
+    expect(await main(["--stdin"])).toBe(2);
+  });
+
+  test("--stdin --json with empty stdin yields JSON parse error (returns 2)", async () => {
+    // Same path as above but with --json; both set values.stdin before values.json.
+    expect(await main(["--stdin", "--json"])).toBe(2);
+  });
+});
+
+// ─── CLI via subprocess (exercises main-as-module bootstrap + stdin) ─────────
+
+describe("CLI subprocess — stdin mode", () => {
+  const scriptPath = new URL("./color_contrast.ts", import.meta.url).pathname;
+
+  test("--stdin with valid JSON pairs returns 0 if all pass (--json mode)", async () => {
+    const proc = Bun.spawn(["bun", "run", scriptPath, "--stdin", "--json"], {
+      stdin: "pipe",
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    proc.stdin.write('[["#ffffff","#000000"],["#ffffff","#2563eb"]]');
+    await proc.stdin.end();
+    const exitCode = await proc.exited;
+    const out = await new Response(proc.stdout).text();
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(out);
+    expect(parsed).toHaveLength(2);
+    expect(parsed[0].ratio).toBe(21);
+  });
+
+  test("--stdin with a failing pair returns 1", async () => {
+    const proc = Bun.spawn(["bun", "run", scriptPath, "--stdin", "--json"], {
+      stdin: "pipe",
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    proc.stdin.write('[["red","blue"]]');
+    await proc.stdin.end();
+    expect(await proc.exited).toBe(1);
+  });
+
+  test("--stdin with default (non-json) output path formats each assessment", async () => {
+    // Exercises the non-json for-loop inside stdin mode (lines 293-297).
+    const proc = Bun.spawn(["bun", "run", scriptPath, "--stdin"], {
+      stdin: "pipe",
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    proc.stdin.write('[["#ffffff","#000000"]]');
+    await proc.stdin.end();
+    const exitCode = await proc.exited;
+    const out = await new Response(proc.stdout).text();
+    expect(exitCode).toBe(0);
+    expect(out).toContain("WCAG 2.1");
+    expect(out).toContain("APCA Lc");
+  });
+
+  test("--stdin with invalid JSON returns 2", async () => {
+    const proc = Bun.spawn(["bun", "run", scriptPath, "--stdin"], {
+      stdin: "pipe",
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    proc.stdin.write("not-json-at-all");
+    await proc.stdin.end();
+    const exitCode = await proc.exited;
+    const err = await new Response(proc.stderr).text();
+    expect(exitCode).toBe(2);
+    expect(err).toContain("not valid JSON");
+  });
+
+  test("--stdin with non-array JSON returns 2", async () => {
+    const proc = Bun.spawn(["bun", "run", scriptPath, "--stdin"], {
+      stdin: "pipe",
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    proc.stdin.write('{"not":"an array"}');
+    await proc.stdin.end();
+    const exitCode = await proc.exited;
+    const err = await new Response(proc.stderr).text();
+    expect(exitCode).toBe(2);
+    expect(err).toContain("expects a JSON array");
+  });
+
+  test("--stdin with malformed tuple returns 2", async () => {
+    // Non-tuple entry (single-element array) triggers the "not a [string, string] tuple" branch.
+    const proc = Bun.spawn(["bun", "run", scriptPath, "--stdin"], {
+      stdin: "pipe",
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    proc.stdin.write('[["#fff"]]');
+    await proc.stdin.end();
+    const exitCode = await proc.exited;
+    const err = await new Response(proc.stderr).text();
+    expect(exitCode).toBe(2);
+    expect(err).toContain("is not a [string, string] tuple");
+  });
+
+  test("--stdin with unparseable color in a pair returns 2", async () => {
+    // Both strings, but colorjs.io rejects "not-a-color" → catch branch (lines 285-287).
+    const proc = Bun.spawn(["bun", "run", scriptPath, "--stdin"], {
+      stdin: "pipe",
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    proc.stdin.write('[["not-a-color","#000"]]');
+    await proc.stdin.end();
+    const exitCode = await proc.exited;
+    const err = await new Response(proc.stderr).text();
+    expect(exitCode).toBe(2);
+    expect(err).toContain("not-a-color");
+  });
+
+  test("CLI bootstrap: running script directly with valid pair exits 0", async () => {
+    // Exercises lines 330-334 (import.meta.main branch + .then(process.exit)).
+    const proc = Bun.spawn(["bun", "run", scriptPath, "#ffffff", "#000000", "--json"], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(await proc.exited).toBe(0);
+  });
 });

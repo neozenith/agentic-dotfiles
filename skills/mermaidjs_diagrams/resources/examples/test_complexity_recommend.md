@@ -27,7 +27,7 @@ updating.
 | `VisualComplexityExceedsAcceptable` | Delete redundant edges. Introduce a mediating node (API gateway, event bus, service mesh). Enable `elk.mergeEdges: true`. |
 | `VisualComplexityExceedsCritical` | Split by **lens** (architecture vs data-flow vs sequence), not just by component. Same nodes, different edge set per diagram. |
 | `SubgraphNestingTooDeep` | Flatten to depth <=2. Replace the innermost subgraph with a separate diagram referenced by link, or compound labels on the parent level. |
-| `ParserFailure` | Fix the syntax error, or (for valid-but-unsupported diagram kinds like `erDiagram` under the headless parser) move the fence to a doc excluded from the lint sweep. |
+| `ParserFailure` | Fix the syntax error. Cross-reference `test_complexity.md` §1–§2 and §11–§30 for the canonical syntax of each supported diagram kind. |
 | `ParserDegraded` | Warn that the canonical parser fell back to regex and metrics are approximate. Same fixes as `ParserFailure`; rewrite in a canonical form the parser handles. |
 
 > **Alternative fix pattern** for `NodeCountExceedsCognitiveLimit` and
@@ -42,17 +42,20 @@ Half of the complexity findings below originate from using a `flowchart` for
 content that *wasn't* actually a flow. Before drawing, ask what the diagram
 is *for*:
 
-| Intent | Right diagram kind | Under headless lint? |
-|--------|-------------------|----------------------|
-| Static component structure, service boundaries, module layout | `flowchart` or `architecture-beta` | Parses cleanly ✓ |
-| Temporal interaction between a small number of actors | `sequenceDiagram` | Parses cleanly ✓ |
-| Data-model entities and their relationships | `erDiagram` | **Triggers `ParserFailure`** — headless DOM limitation; see §7 |
-| Finite states + transitions | `stateDiagram-v2` | Parses cleanly ✓ |
-| Hierarchical concepts radiating from a root | `mindmap` (with `layout: tidy-tree`) | Parses cleanly ✓ |
+| Intent | Right diagram kind |
+|--------|-------------------|
+| Static component structure, service boundaries, module layout | `flowchart` or `architecture-beta` |
+| Temporal interaction between a small number of actors | `sequenceDiagram` |
+| Data-model entities and their relationships | `erDiagram` |
+| Finite states + transitions | `stateDiagram-v2` |
+| Hierarchical concepts radiating from a root | `mindmap` (with `layout: tidy-tree`) |
 
-The "right diagram kind" is a content decision independent of whether the
-headless lint pipeline happens to support it — see §7 for how to handle the
-gap when the right kind (e.g. ERD) currently fails the canonical parser.
+Every diagram kind above parses cleanly under the canonical mermaid parser
+in this skill's headless lint pipeline — see `test_complexity.md` §11–§30
+for a working fixture of each. Picking the wrong kind (e.g. drawing an ERD
+as a `flowchart` with 10 edges labelled "fk") produces a *complexity*
+finding, not a *parser* finding — because flowcharts balloon in VCS when
+they're asked to carry relational semantics.
 
 ---
 
@@ -593,9 +596,9 @@ flowchart TB
 
 ---
 
-## 7. ParserFailure / ParserDegraded — parser couldn't extract structure
+## 7. ParserFailure — genuinely unparseable fence
 
-### ❌ Negative example A — unknown diagram keyword
+### ❌ Negative example — unknown diagram keyword
 
 The canonical `@mermaid-js/parser` doesn't recognise the diagram kind and
 the fence yields 0 nodes, firing `ParserFailure` (error).
@@ -606,29 +609,10 @@ not_a_known_diagram_type
   beta
 ```
 
-### ❌ Negative example B — valid-but-unsupported diagram kind
-
-An `erDiagram` is a perfectly valid Mermaid diagram and will render
-correctly in any Mermaid renderer that ships a browser (GitHub, GitLab,
-`mmdc`). Under this skill's headless Bun + happy-dom lint pipeline,
-however, the canonical parser's ERD path needs DOM features that aren't
-available, so it yields 0 nodes and trips `ParserFailure`.
-
-```mermaid
-erDiagram
-  CUSTOMER ||--o{ ORDER : places
-  ORDER ||--|{ ORDER_LINE : contains
-  ORDER_LINE }o--|| PRODUCT : "refers to"
-  CUSTOMER ||--o{ ADDRESS : has
-  ORDER }o--|| ADDRESS : "ships to"
-  PRODUCT }o--|| CATEGORY : "belongs to"
-```
-
-### Expected findings
+### Expected finding
 
 ```text
 test_complexity_recommend.md:N-M: ParserFailure not_a_known_diagram_type yielded 0 nodes from multi-line source (parser: mermaid-core)
-test_complexity_recommend.md:N-M: ParserFailure er yielded 0 nodes from multi-line source (parser: mermaid-core)
 ```
 
 `ParserFailure` short-circuits every other check for the fence — when the
@@ -636,59 +620,38 @@ parser returns 0 nodes, node-count and VCS metrics would be meaningless, so
 the linter suppresses all other codes for that block.
 
 A sibling code, `ParserDegraded` (warning), fires when the canonical
-parser fails *but* the regex fallback still extracts a plausible
-node/edge count. Treat its numbers as approximate.
+parser extracted *something* via regex fallback but not a real AST. Treat
+its numbers as approximate.
 
 ### Recommendation
 
-Causes split into two buckets:
+Every mermaid diagram kind the skill supports parses cleanly via canonical
+parsers — see `test_complexity.md` §1–§2 and §11–§30 for working fixtures
+of each (`flowchart`, `architecture-beta`, `classDiagram`, `sequenceDiagram`,
+`stateDiagram-v2`, `erDiagram`, `journey`, `mindmap`, `gantt`, `pie`,
+`timeline`, `xychart-beta`, `sankey-beta`, `quadrantChart`, `block-beta`,
+`C4Context`, `kanban`, `gitGraph`, `packet-beta`, `radar-beta`,
+`treemap-beta`, `requirementDiagram`). If one of these trips
+`ParserFailure` in your diagram but not in the fixture, the difference is
+syntax-level — your fence has an author error, not a tooling limitation.
 
-**Author error — fix the diagram:**
+Common author-error causes:
 
 | Cause | Fix |
 |-------|-----|
 | Typo in the diagram keyword (`flochart` → `flowchart`) | Spell it right |
 | Unterminated `subgraph` / `end` blocks | Match them up |
-| Advanced / experimental syntax the canonical parser doesn't yet implement (some `block-beta`, `xychart-beta` forms) | Use the closest supported form |
+| Grammar-level syntax error (e.g. hyphen in a `requirementDiagram` id like `REQ-001` — grammar allows alphanumerics + `_` only) | Use the canonical syntax — cross-reference with the `test_complexity.md` fixture for the diagram kind |
 | Mermaid version mismatch — fence uses syntax newer than `@mermaid-js/parser` in `scripts/package.json` | Update the package, or revise the fence |
 
-**Tooling limitation — the diagram is fine, the lint pipeline isn't:**
+### ✅ Positive example — canonical flowchart
 
-| Diagram kind | Status under headless lint |
-|--------------|---------------------------|
-| `erDiagram` | Fails (see Negative B above) — renders fine in browsers / `mmdc` |
-| `block-beta` | JISON-parsed, needs real DOM — fails headless |
-| `requirementDiagram` | Similar DOM dependency |
-| `journey` | Can fail depending on version |
-
-For the tooling-limitation case, the diagram itself is correct — the
-action is to **exclude the file from the lint sweep**, not to rewrite
-the content. Either move such fences to a dedicated doc (e.g.
-`docs/data-model.md`) that isn't passed to `mermaid_complexity.ts`, or
-keep them in the README and pass only specific files to the linter.
-There is no in-fence suppression directive.
-
-### ✅ Positive example — canonical flowchart instead of unknown keyword
+The same intent as the unknown-keyword fence, expressed as a valid
+flowchart:
 
 ```mermaid
 flowchart LR
   alpha --> beta
-```
-
-### ✅ Positive example — flowchart approximation of the ERD
-
-When you need the complexity budget enforced *and* the content is
-relational, approximate the ERD as a flowchart until the lint pipeline
-catches up. Less semantically precise, but lintable:
-
-```mermaid
-flowchart LR
-  customer[CUSTOMER] --> order[ORDER]
-  order --> order_line[ORDER_LINE]
-  order_line --> product[PRODUCT]
-  customer --> address[ADDRESS]
-  order --> address
-  product --> category[CATEGORY]
 ```
 
 ---

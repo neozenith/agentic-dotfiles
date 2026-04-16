@@ -129,8 +129,33 @@ test-cov-py:
 	$(UV) test__update_examples_readme.py $(PYTEST_ARGS) \
 		--cov=_update_examples_readme --cov-report=term-missing --cov-fail-under=90
 
+# test-cov-ts enforces a 90% coverage floor on both function and line coverage.
+# Bun 1.3.7's bunfig `coverageThreshold` key is documented to fail the run
+# when unmet but is silently non-enforcing in this version, so we parse the
+# "All files" row of the text reporter and fail the target ourselves. That
+# ensures the instrumentation is loud — coverage regressions exit non-zero
+# with a clearly-labeled message, not a generic make error.
+COVERAGE_THRESHOLD = 90
 test-cov-ts:
-	bun test --cwd $(THIS_DIR) --coverage
+	@bun test --cwd $(THIS_DIR) --coverage 2>&1 | tee $(THIS_DIR)tmp-cov.log; status=$$?; \
+	line="$$(grep '^All files' $(THIS_DIR)tmp-cov.log || true)"; \
+	funcs=$$(printf '%s' "$$line" | awk -F'|' '{gsub(/ /,""); print $$2}'); \
+	lines=$$(printf '%s' "$$line" | awk -F'|' '{gsub(/ /,""); print $$3}'); \
+	rm -f $(THIS_DIR)tmp-cov.log; \
+	if [ $$status -ne 0 ]; then \
+		printf "\n[FAIL] test-cov-ts: bun test exited non-zero (tests or threshold failed)\n" >&2; \
+		exit $$status; \
+	fi; \
+	if [ -z "$$funcs" ] || [ -z "$$lines" ]; then \
+		printf "\n[FAIL] test-cov-ts: could not parse coverage totals from bun output\n" >&2; \
+		exit 1; \
+	fi; \
+	if awk -v f="$$funcs" -v l="$$lines" -v t=$(COVERAGE_THRESHOLD) 'BEGIN { exit (f+0 < t || l+0 < t) ? 1 : 0 }'; then \
+		printf "\n[PASS] test-cov-ts: funcs=%s%% lines=%s%% (threshold %s%%)\n" "$$funcs" "$$lines" "$(COVERAGE_THRESHOLD)"; \
+	else \
+		printf "\n[FAIL] test-cov-ts: coverage below %s%% -- funcs=%s%% lines=%s%%\n" "$(COVERAGE_THRESHOLD)" "$$funcs" "$$lines" >&2; \
+		exit 1; \
+	fi
 
 # ── Install / Docs / Misc ──────────────────────────────────────────────────
 

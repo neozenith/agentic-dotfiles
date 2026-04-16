@@ -35,6 +35,45 @@ checks against garbage metrics would be misleading.
 
 ---
 
+## Canonical diagram-kind support matrix
+
+Every Mermaid diagram kind the canonical parser supports has a clean fixture
+in the file:
+
+- **§1–§2** and **§11–§30**: clean, below-threshold — the linter MUST emit
+  **no findings** for these fences. If any of them start flagging, either
+  the upstream parser regressed or our extraction adapter drifted.
+- **§3–§10**: threshold-violation scenarios — each is designed to trigger
+  one specific `LintCode`. Expected findings are enumerated in the "Expected
+  lint output" table above.
+
+| Fence | Diagram kind | Parser path | Extraction adapter |
+|-------|--------------|-------------|--------------------|
+| §1    | `flowchart`          | mermaid-core | `adaptFlowchart` |
+| §2    | `architecture-beta`  | langium      | `extractLangiumStats` |
+| §11   | `classDiagram`       | mermaid-core | `adaptClass` |
+| §12   | `sequenceDiagram`    | mermaid-core | `adaptSequence` |
+| §13   | `stateDiagram-v2`    | mermaid-core | `adaptState` |
+| §14   | `erDiagram`          | mermaid-core | `adaptEr` |
+| §15   | `journey`            | mermaid-core | `adaptJourney` |
+| §16   | `mindmap`            | mermaid-core | `adaptMindmap` |
+| §17   | `gantt`              | mermaid-core | `adaptGantt` |
+| §18   | `pie`                | langium      | `extractLangiumStats` |
+| §19   | `timeline`           | mermaid-core | `adaptTimeline` |
+| §20   | `xychart-beta`       | mermaid-core | `adaptXychart` |
+| §21   | `sankey-beta`        | mermaid-core | `adaptSankey` |
+| §22   | `quadrantChart`      | mermaid-core | `adaptQuadrantChart` |
+| §23   | `block-beta`         | mermaid-core | `adaptBlock` |
+| §24   | `C4Context`          | mermaid-core | `adaptC4` |
+| §25   | `kanban`             | mermaid-core | `adaptKanban` |
+| §26   | `gitGraph`           | langium      | `extractLangiumStats` |
+| §27   | `packet-beta`        | langium      | `extractLangiumStats` |
+| §28   | `radar-beta`         | langium      | `extractLangiumStats` |
+| §29   | `treemap-beta`       | langium      | `extractLangiumStats` |
+| §30   | `requirementDiagram` | mermaid-core | `adaptRequirement` |
+
+---
+
 ## 1. Clean flowchart (no findings)
 
 A small, readable diagram well under every threshold. The linter should emit
@@ -456,4 +495,307 @@ flowchart LR
   I13 --> W1
   W13 --> P1
   P13 --> D1
+```
+
+---
+
+## 11. Clean classDiagram (no findings)
+
+`adaptClass` reads `db.classes` (Map) and `db.relations` (Array).
+
+```mermaid
+classDiagram
+  class Animal {
+    +String name
+    +eat()
+    +sleep()
+  }
+  class Dog {
+    +String breed
+    +bark()
+  }
+  class Cat {
+    +purr()
+  }
+  Animal <|-- Dog
+  Animal <|-- Cat
+```
+
+## 12. Clean sequenceDiagram (no findings)
+
+`adaptSequence` reads `db.state.records.actors` (Map) and `db.state.records.messages` (Array).
+
+```mermaid
+sequenceDiagram
+  actor User
+  participant Gateway
+  participant Service
+  participant DB
+
+  User->>Gateway: request
+  Gateway->>Service: forward
+  Service->>DB: query
+  DB-->>Service: rows
+  Service-->>Gateway: response
+  Gateway-->>User: 200 OK
+```
+
+## 13. Clean stateDiagram-v2 (no findings)
+
+`adaptState` reads the stateDiagram DB's nodes and links.
+
+```mermaid
+stateDiagram-v2
+  [*] --> Idle
+  Idle --> Loading : fetch()
+  Loading --> Ready : success
+  Loading --> Error : failure
+  Ready --> Idle : reset()
+  Error --> Idle : retry()
+  Ready --> [*]
+```
+
+## 14. Clean erDiagram (no findings)
+
+`adaptEr` reads `db.entities` (Map) and `db.relationships` (Array). ERDs parse
+cleanly under headless Bun + happy-dom — the adapter extracts the entities
+directly from the populated DB.
+
+```mermaid
+erDiagram
+  CUSTOMER ||--o{ ORDER : places
+  ORDER ||--|{ ORDER_LINE : contains
+  ORDER_LINE }o--|| PRODUCT : "refers to"
+  CUSTOMER ||--o{ ADDRESS : has
+  ORDER }o--|| ADDRESS : "ships to"
+  PRODUCT }o--|| CATEGORY : "belongs to"
+```
+
+## 15. Clean journey diagram (no findings)
+
+```mermaid
+journey
+  title Morning routine
+  section Wake up
+    Open eyes: 3: Me
+    Stretch:   4: Me
+  section Kitchen
+    Make coffee: 5: Me
+    Check email: 2: Me
+```
+
+## 16. Clean mindmap (no findings)
+
+```mermaid
+mindmap
+  root((System))
+    Ingress
+      CDN
+      Load Balancer
+    Compute
+      API
+      Worker
+    Data
+      Cache
+      Primary DB
+```
+
+## 17. Clean gantt (no findings)
+
+```mermaid
+gantt
+  title Release schedule
+  dateFormat YYYY-MM-DD
+  section Backend
+    Design       :a1, 2026-01-01, 5d
+    Implement    :a2, after a1, 10d
+  section Frontend
+    Wireframes   :b1, 2026-01-01, 4d
+    Build        :b2, after b1, 12d
+```
+
+## 18. Clean pie (no findings)
+
+Langium-parsed.
+
+```mermaid
+pie title Traffic by source
+  "Organic search" : 45
+  "Direct" : 25
+  "Referral" : 15
+  "Social" : 15
+```
+
+## 19. Clean timeline (no findings)
+
+```mermaid
+timeline
+  title Project milestones
+  2024 : Kickoff
+       : Discovery
+  2025 : Alpha release
+       : Beta release
+  2026 : GA
+```
+
+## 20. Clean xychart-beta (no findings)
+
+```mermaid
+xychart-beta
+  title "Revenue by quarter"
+  x-axis [Q1, Q2, Q3, Q4]
+  y-axis "Revenue (USD)" 0 --> 1000000
+  bar [250000, 420000, 680000, 910000]
+```
+
+## 21. Clean sankey-beta (no findings)
+
+```mermaid
+sankey-beta
+
+source,target,value
+Revenue,Salaries,400
+Revenue,Infrastructure,150
+Revenue,Marketing,120
+Revenue,Reserves,80
+```
+
+## 22. Clean quadrantChart (no findings)
+
+```mermaid
+quadrantChart
+  title Effort vs impact
+  x-axis Low effort --> High effort
+  y-axis Low impact --> High impact
+  quadrant-1 Do now
+  quadrant-2 Plan
+  quadrant-3 Defer
+  quadrant-4 Reconsider
+  "Feature A": [0.7, 0.8]
+  "Feature B": [0.3, 0.6]
+  "Feature C": [0.2, 0.2]
+  "Feature D": [0.8, 0.3]
+```
+
+## 23. Clean block-beta (no findings)
+
+`adaptBlock` walks the block tree recursively; synthetic `space`/`composite`
+wrappers are excluded from the user-visible node count.
+
+```mermaid
+block-beta
+  columns 3
+  a["Alpha"]
+  b["Beta"]
+  c["Gamma"]
+  d["Delta"]
+  e["Epsilon"]
+  f["Zeta"]
+  a --> d
+  b --> e
+  c --> f
+```
+
+## 24. Clean C4Context (no findings)
+
+`adaptC4` excludes the synthetic top-level `global` boundary.
+
+```mermaid
+C4Context
+  title System context — Acme Platform
+  Person(customer, "Customer", "Uses the web and mobile apps")
+  System(platform, "Acme Platform", "Core offering")
+  System_Ext(payments, "Stripe", "Payment processor")
+  Rel(customer, platform, "Browses & purchases")
+  Rel(platform, payments, "Charges via API", "HTTPS/JSON")
+```
+
+## 25. Clean kanban (no findings)
+
+```mermaid
+kanban
+  Todo
+    task1[Task 1]
+    task2[Task 2]
+  Doing
+    task3[Task 3]
+  Done
+    task4[Task 4]
+    task5[Task 5]
+```
+
+## 26. Clean gitGraph (no findings)
+
+Langium-parsed.
+
+```mermaid
+gitGraph
+  commit id: "initial"
+  commit id: "add tests"
+  branch feature
+  commit id: "draft impl"
+  commit id: "polish"
+  checkout main
+  merge feature
+  commit id: "release"
+```
+
+## 27. Clean packet-beta (no findings)
+
+Langium-parsed.
+
+```mermaid
+packet-beta
+  title TCP segment header (simplified)
+  0-15: "Source port"
+  16-31: "Destination port"
+  32-63: "Sequence number"
+  64-95: "Acknowledgement number"
+```
+
+## 28. Clean radar-beta (no findings)
+
+Langium-parsed.
+
+```mermaid
+radar-beta
+  axis Speed, Reliability, Cost, Security, UX
+  curve baseline["v1 baseline"]{3, 4, 2, 3, 3}
+  curve target["v2 target"]{4, 5, 3, 4, 4}
+```
+
+## 29. Clean treemap-beta (no findings)
+
+Langium-parsed.
+
+```mermaid
+treemap-beta
+  title Budget allocation
+  "Engineering": 40
+  "Product": 20
+  "Design": 15
+  "Operations": 15
+  "Marketing": 10
+```
+
+## 30. Clean requirementDiagram (no findings)
+
+`adaptRequirement` reads `db.requirements` + `db.elements` (both Maps) and
+`db.relations` (Array).
+
+```mermaid
+requirementDiagram
+
+requirement auth_req {
+id: REQ_001
+text: Users must authenticate before accessing protected resources
+risk: high
+verifymethod: test
+}
+
+element login_service {
+type: service
+}
+
+login_service - satisfies -> auth_req
 ```
