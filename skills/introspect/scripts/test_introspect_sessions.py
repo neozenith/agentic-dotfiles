@@ -3192,6 +3192,126 @@ class TestMsgKindStorage:
 
 
 # ============================================================================
+# event_calls fact-table extraction
+# ============================================================================
+# Parity smoke tests for the call-extraction helpers that are duplicated
+# verbatim in ``src/claude_code_sessions/database/sqlite/calls.py``. Full
+# coverage lives in ``tests/test_event_calls.py``; this class just pins the
+# script-local copies to the same behavior so drift is caught at CI time.
+
+
+class TestEventCallsExtraction:
+    def test_parse_cli_heads_basic(self) -> None:
+        assert iss._parse_cli_heads("gh pr view 42") == ["gh"]
+
+    def test_parse_cli_heads_pipe_chain(self) -> None:
+        assert iss._parse_cli_heads("aws s3 ls | grep foo") == ["aws", "grep"]
+
+    def test_parse_cli_heads_unwraps_sudo(self) -> None:
+        assert iss._parse_cli_heads("sudo -E make test") == ["make"]
+
+    def test_parse_cli_heads_strips_env_and_path(self) -> None:
+        assert iss._parse_cli_heads("FOO=bar /usr/bin/duckdb -c 'x'") == ["duckdb"]
+
+    def test_extract_tool_use(self) -> None:
+        ev = {
+            "type": "assistant",
+            "message": {"role": "assistant", "content": [
+                {"type": "tool_use", "name": "Read", "input": {"file_path": "/x"}},
+            ]},
+        }
+        assert iss._extract_calls(ev) == [(0, "tool", "Read")]
+
+    def test_extract_skill(self) -> None:
+        ev = {
+            "type": "assistant",
+            "message": {"role": "assistant", "content": [
+                {"type": "tool_use", "name": "Skill", "input": {"skill": "introspect"}},
+            ]},
+        }
+        assert iss._extract_calls(ev) == [(0, "skill", "introspect")]
+
+    def test_extract_subagent(self) -> None:
+        ev = {
+            "type": "assistant",
+            "message": {"role": "assistant", "content": [
+                {"type": "tool_use", "name": "Agent",
+                 "input": {"subagent_type": "Explore"}},
+            ]},
+        }
+        assert iss._extract_calls(ev) == [(0, "subagent", "Explore")]
+
+    def test_extract_bash_fans_out_cli_heads(self) -> None:
+        ev = {
+            "type": "assistant",
+            "message": {"role": "assistant", "content": [
+                {"type": "tool_use", "name": "Bash",
+                 "input": {"command": "gh pr view 7 && uv run pytest"}},
+            ]},
+        }
+        assert iss._extract_calls(ev) == [
+            (0, "tool", "Bash"),
+            (0, "cli", "gh"),
+            (0, "cli", "uv"),
+        ]
+
+    def test_extract_rule_paths(self) -> None:
+        ev = {
+            "type": "user",
+            "message": {"role": "user", "content": [
+                {"type": "text",
+                 "text": "<system-reminder>Contents of /u/.claude/rules/x.md:"
+                         " body.</system-reminder>"},
+            ]},
+        }
+        assert iss._extract_calls(ev) == [(0, "rule", "/u/.claude/rules/x.md")]
+
+    def test_ingest_file_populates_event_calls(
+        self, temp_dir: Path, temp_cache: iss.CacheManager,
+    ) -> None:
+        """End-to-end: ingest a JSONL file and verify event_calls rows."""
+        session_id = "session-s1"
+        project_id = "-Test-Project"
+        project_dir = temp_dir / "projects" / project_id
+        project_dir.mkdir(parents=True)
+        jsonl_path = project_dir / f"{session_id}.jsonl"
+        ev = {
+            "type": "assistant",
+            "uuid": "u1",
+            "parentUuid": None,
+            "timestamp": "2026-01-01T00:00:00Z",
+            "sessionId": session_id,
+            "message": {
+                "role": "assistant",
+                "model": "claude-sonnet-4-5-20250929",
+                "content": [
+                    {"type": "tool_use", "name": "Bash",
+                     "input": {"command": "gh pr view 1"}},
+                ],
+            },
+        }
+        jsonl_path.write_text(json.dumps(ev) + "\n", encoding="utf-8")
+
+        stat_result = jsonl_path.stat()
+        temp_cache.ingest_file({
+            "filepath": str(jsonl_path),
+            "project_id": project_id,
+            "session_id": session_id,
+            "file_type": "main_session",
+            "mtime": stat_result.st_mtime,
+            "size_bytes": stat_result.st_size,
+        })
+
+        rows = temp_cache.conn.execute(
+            "SELECT call_type, call_name FROM event_calls ORDER BY id"
+        ).fetchall()
+        assert [(r[0], r[1]) for r in rows] == [
+            ("tool", "Bash"),
+            ("cli", "gh"),
+        ]
+
+
+# ============================================================================
 # Entry Point
 # ============================================================================
 
