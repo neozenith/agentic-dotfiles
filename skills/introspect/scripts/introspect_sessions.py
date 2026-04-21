@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 # /// script
 # requires-python = ">=3.12"
-# dependencies = []
+# dependencies = [
+#   "sqlite-muninn>=0.3.3",
+# ]
 # ///
 """
 introspect_sessions - Query and analyze Claude Code session logs using pure Python with SQLite cache.
@@ -35,11 +37,15 @@ import os
 import re
 import sqlite3
 import subprocess
+import time
+import urllib.request
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from textwrap import dedent
 from typing import Any, Literal
+
+import sqlite_muninn
 
 # ============================================================================
 # Configuration
@@ -59,7 +65,7 @@ CACHE_DB_PATH = CACHE_DIR / "introspect_sessions.db"
 # Logging setup
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = "11"
+SCHEMA_VERSION = "12"
 
 # ML Analysis Configuration (used by reflect --engine)
 ML_DEFAULT_MODELS: dict[str, str] = {
@@ -729,7 +735,252 @@ CREATE INDEX IF NOT EXISTS idx_agg_granularity_time
     ON agg(granularity, time_bucket);
 CREATE INDEX IF NOT EXISTS idx_agg_granularity_project_time
     ON agg(granularity, project_id, time_bucket);
+
+-- =====================================================================
+-- event_message_chunks — paragraph-sized splits of event content for
+-- vector embedding. Populated by sync_chunks() at the tail of update().
+-- The companion HNSW virtual table `chunks_vec` is created at runtime
+-- (requires sqlite-muninn extension) — see setup_embedding_runtime().
+-- FK CASCADE on event_id → events.id wipes stale chunks when an event
+-- is re-ingested.
+-- =====================================================================
+
+CREATE TABLE IF NOT EXISTS event_message_chunks (
+    chunk_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+    text TEXT NOT NULL,
+    chunk_offset INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_chunks_event_id
+    ON event_message_chunks(event_id);
+
+CREATE VIRTUAL TABLE IF NOT EXISTS event_message_chunks_fts
+    USING fts5(text, content=event_message_chunks, content_rowid=chunk_id);
+
+CREATE TRIGGER IF NOT EXISTS chunks_ai AFTER INSERT ON event_message_chunks BEGIN
+    INSERT INTO event_message_chunks_fts(rowid, text)
+        VALUES (new.chunk_id, new.text);
+END;
+CREATE TRIGGER IF NOT EXISTS chunks_ad AFTER DELETE ON event_message_chunks BEGIN
+    INSERT INTO event_message_chunks_fts(event_message_chunks_fts, rowid, text)
+        VALUES('delete', old.chunk_id, old.text);
+END;
+CREATE TRIGGER IF NOT EXISTS chunks_au AFTER UPDATE ON event_message_chunks BEGIN
+    INSERT INTO event_message_chunks_fts(event_message_chunks_fts, rowid, text)
+        VALUES('delete', old.chunk_id, old.text);
+    INSERT INTO event_message_chunks_fts(rowid, text)
+        VALUES (new.chunk_id, new.text);
+END;
 """
+
+
+# ============================================================================
+# Embedding configuration (mirror of
+# src/claude_code_sessions/database/sqlite/embeddings.py — keep in sync!)
+# ============================================================================
+
+GGUF_MODEL_NAME = "NomicEmbed"
+GGUF_MODEL_FILENAME = "nomic-embed-text-v1.5.Q8_0.gguf"
+GGUF_MODEL_URL = (
+    "https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF/resolve/main/"
+    + GGUF_MODEL_FILENAME
+)
+GGUF_EMBEDDING_DIM = 768
+MODELS_DIR = CLAUDE_HOME / "cache" / "models"
+
+CHUNK_MAX_CHARS = 1200
+CHUNK_MIN_CHARS = 100
+EMBED_MAX_CHARS = 1500
+EMBEDDED_MSG_KINDS: tuple[str, ...] = ("human",)
+
+
+def ensure_model_downloaded(*, force: bool = False) -> Path:
+    """Download the NomicEmbed GGUF model to MODELS_DIR on first use."""
+    MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    target = MODELS_DIR / GGUF_MODEL_FILENAME
+    if target.exists() and not force:
+        return target
+
+    log.info("Downloading GGUF model %s → %s", GGUF_MODEL_URL, target)
+    req = urllib.request.Request(
+        GGUF_MODEL_URL,
+        headers={"User-Agent": "introspect-sessions/1.0"},
+    )
+    t0 = time.monotonic()
+    partial = target.with_suffix(target.suffix + ".partial")
+    with urllib.request.urlopen(req) as resp, partial.open("wb") as out:
+        total = int(resp.headers.get("Content-Length", 0))
+        downloaded = 0
+        last_log = t0
+        chunk_bytes = 1024 * 1024
+        while True:
+            chunk = resp.read(chunk_bytes)
+            if not chunk:
+                break
+            out.write(chunk)
+            downloaded += len(chunk)
+            now = time.monotonic()
+            if now - last_log >= 5.0:
+                pct = f"{100 * downloaded / total:.1f}%" if total else "?%"
+                log.info(
+                    "  downloaded %.1f MiB / %.1f MiB (%s)",
+                    downloaded / (1024 * 1024),
+                    total / (1024 * 1024) if total else 0,
+                    pct,
+                )
+                last_log = now
+    partial.rename(target)
+    log.info(
+        "Downloaded GGUF model (%.1f MiB in %.1f s)",
+        target.stat().st_size / (1024 * 1024),
+        time.monotonic() - t0,
+    )
+    return target
+
+
+def chunk_text(text: str) -> list[tuple[str, int]]:
+    """Split text into (chunk_text, char_offset) pairs. See embeddings.py."""
+    if not text:
+        return []
+    if len(text) < CHUNK_MIN_CHARS:
+        return [(text, 0)]
+
+    chunks: list[tuple[str, int]] = []
+    paragraphs = text.split("\n\n")
+
+    offset = 0
+    current_chunk = ""
+    current_offset = 0
+
+    for i, raw_para in enumerate(paragraphs):
+        para = raw_para.strip()
+        if not para:
+            offset += 2
+            continue
+        if not current_chunk:
+            current_chunk = para
+            current_offset = offset
+        elif len(current_chunk) + len(para) + 2 <= CHUNK_MAX_CHARS:
+            current_chunk += "\n\n" + para
+        else:
+            if len(current_chunk) >= CHUNK_MIN_CHARS:
+                chunks.append((current_chunk, current_offset))
+            current_chunk = para
+            current_offset = offset
+        offset += len(para) + (2 if i < len(paragraphs) - 1 else 0)
+
+    if current_chunk:
+        if len(current_chunk) >= CHUNK_MIN_CHARS or not chunks:
+            chunks.append((current_chunk, current_offset))
+        else:
+            prev_text, prev_offset = chunks[-1]
+            chunks[-1] = (prev_text + "\n\n" + current_chunk, prev_offset)
+
+    return chunks
+
+
+def sync_chunks(conn: sqlite3.Connection) -> int:
+    """Chunk any human-message events that don't yet have chunks."""
+    kinds_placeholders = ",".join("?" * len(EMBEDDED_MSG_KINDS))
+    total = conn.execute(
+        f"""
+        SELECT COUNT(*) FROM events e
+        WHERE e.message_content IS NOT NULL
+          AND e.message_content != ''
+          AND e.msg_kind IN ({kinds_placeholders})
+          AND e.id NOT IN (SELECT DISTINCT event_id FROM event_message_chunks)
+        """,
+        EMBEDDED_MSG_KINDS,
+    ).fetchone()[0]
+    if total == 0:
+        return 0
+    log.info("Chunking %d events", total)
+    cursor = conn.execute(
+        f"""
+        SELECT e.id, e.message_content
+        FROM events e
+        WHERE e.message_content IS NOT NULL
+          AND e.message_content != ''
+          AND e.msg_kind IN ({kinds_placeholders})
+          AND e.id NOT IN (SELECT DISTINCT event_id FROM event_message_chunks)
+        """,
+        EMBEDDED_MSG_KINDS,
+    )
+    total_chunks = 0
+    for row in cursor:
+        event_id, text = row[0], row[1]
+        for chunk, chunk_offset in chunk_text(text):
+            conn.execute(
+                "INSERT INTO event_message_chunks (event_id, text, chunk_offset) "
+                "VALUES (?, ?, ?)",
+                (event_id, chunk, chunk_offset),
+            )
+            total_chunks += 1
+    conn.commit()
+    log.info("Created %d chunks", total_chunks)
+    return total_chunks
+
+
+def setup_embedding_runtime(conn: sqlite3.Connection, model_path: Path) -> None:
+    """Load sqlite-muninn, register the GGUF model, create HNSW VT."""
+    conn.enable_load_extension(True)
+    sqlite_muninn.load(conn)
+    conn.enable_load_extension(False)
+
+    row = conn.execute(
+        "SELECT name FROM temp.muninn_models WHERE name = ?",
+        (GGUF_MODEL_NAME,),
+    ).fetchone()
+    if row is None:
+        conn.execute(
+            "INSERT INTO temp.muninn_models(name, model) "
+            "SELECT ?, muninn_embed_model(?)",
+            (GGUF_MODEL_NAME, str(model_path)),
+        )
+    conn.execute(
+        f"CREATE VIRTUAL TABLE IF NOT EXISTS chunks_vec "
+        f"USING hnsw_index(dimensions={GGUF_EMBEDDING_DIM}, metric='cosine')"
+    )
+    conn.commit()
+
+
+def sync_embeddings(conn: sqlite3.Connection) -> int:
+    """Embed any chunks missing a vector in chunks_vec_nodes."""
+    total = conn.execute(
+        """
+        SELECT COUNT(*) FROM event_message_chunks c
+        WHERE c.chunk_id NOT IN (SELECT id FROM chunks_vec_nodes)
+        """,
+    ).fetchone()[0]
+    if total == 0:
+        return 0
+    log.info("Embedding %d chunks", total)
+    cursor = conn.execute(
+        """
+        SELECT c.chunk_id, c.text
+        FROM event_message_chunks c
+        WHERE c.chunk_id NOT IN (SELECT id FROM chunks_vec_nodes)
+        """,
+    )
+    total_embedded = 0
+    for row in cursor:
+        chunk_id, text = row[0], row[1]
+        try:
+            result = conn.execute(
+                "SELECT muninn_embed(?, ?)",
+                (GGUF_MODEL_NAME, text[:EMBED_MAX_CHARS]),
+            ).fetchone()
+            if result and result[0]:
+                conn.execute(
+                    "INSERT INTO chunks_vec(rowid, vector) VALUES (?, ?)",
+                    (chunk_id, result[0]),
+                )
+                total_embedded += 1
+        except sqlite3.OperationalError as e:
+            log.warning("Failed to embed chunk %d: %s", chunk_id, e)
+    conn.commit()
+    log.info("Embedded %d/%d chunks", total_embedded, total)
+    return total_embedded
 
 
 # ============================================================================
@@ -1535,7 +1786,24 @@ class CacheManager:
 
         if not files_to_update:
             log.info("Cache is up to date")
-            return {"files_updated": 0, "events_added": 0}
+            # Still run downstream syncs — chunks / HNSW may be behind
+            # the events table after a schema version bump. Both calls
+            # are incremental and cheap no-ops when everything is in
+            # step.
+            chunks_added = sync_chunks(self.conn)
+            embeddings_added = 0
+            if os.environ.get(
+                "CLAUDE_SESSIONS_DISABLE_EMBEDDINGS", "",
+            ).strip().lower() not in {"1", "true", "yes", "on"}:
+                model_path = ensure_model_downloaded()
+                setup_embedding_runtime(self.conn, model_path)
+                embeddings_added = sync_embeddings(self.conn)
+            return {
+                "files_updated": 0,
+                "events_added": 0,
+                "chunks_added": chunks_added,
+                "embeddings_added": embeddings_added,
+            }
 
         # Ingest updated files, tracking which sessions were touched
         total_events = 0
@@ -1584,6 +1852,20 @@ class CacheManager:
             if row and row[0]:
                 self.refresh_aggregates_for_range(str(row[0]), str(row[1]))
 
+        # Chunking + embeddings. Incremental; no-op when nothing is stale.
+        # First-run embedding downloads ~150 MB GGUF model and processes
+        # the backlog — takes minutes. Set the env var to skip in tests
+        # or when the introspect script is only used for its other
+        # subcommands.
+        chunks_added = sync_chunks(self.conn)
+        embeddings_added = 0
+        if os.environ.get(
+            "CLAUDE_SESSIONS_DISABLE_EMBEDDINGS", "",
+        ).strip().lower() not in {"1", "true", "yes", "on"}:
+            model_path = ensure_model_downloaded()
+            setup_embedding_runtime(self.conn, model_path)
+            embeddings_added = sync_embeddings(self.conn)
+
         # Update metadata
         self.conn.execute(
             "INSERT OR REPLACE INTO cache_metadata (key, value) VALUES (?, ?)",
@@ -1591,8 +1873,16 @@ class CacheManager:
         )
         self.conn.commit()
 
-        log.info(f"Updated {len(files_to_update)} files, {total_events} events")
-        return {"files_updated": len(files_to_update), "events_added": total_events}
+        log.info(
+            f"Updated {len(files_to_update)} files, {total_events} events, "
+            f"{chunks_added} chunks, {embeddings_added} embeddings"
+        )
+        return {
+            "files_updated": len(files_to_update),
+            "events_added": total_events,
+            "chunks_added": chunks_added,
+            "embeddings_added": embeddings_added,
+        }
 
 
 # ============================================================================
