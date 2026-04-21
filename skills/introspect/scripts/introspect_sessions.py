@@ -59,7 +59,7 @@ CACHE_DB_PATH = CACHE_DIR / "introspect_sessions.db"
 # Logging setup
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = "10"
+SCHEMA_VERSION = "11"
 
 # ML Analysis Configuration (used by reflect --engine)
 ML_DEFAULT_MODELS: dict[str, str] = {
@@ -235,6 +235,16 @@ _SHELL_SEGMENT_REJECT: frozenset[str] = frozenset({
 _MAKE_FLAGS_WITH_ARG: frozenset[str] = frozenset({
     "-C", "-f", "-I", "-j", "-l", "-o", "-W",
 })
+_UV_RUN_FLAGS_WITH_ARG: frozenset[str] = frozenset({
+    "--directory", "--with", "--with-editable", "--with-requirements",
+    "--python", "-p", "--group", "--extra", "--index-url",
+    "--extra-index-url", "--find-links", "--package", "--prerelease",
+    "--index-strategy", "--resolution", "--exclude-newer",
+    "--keyring-provider", "--refresh-package",
+})
+_BUN_RUN_FLAGS_WITH_ARG: frozenset[str] = frozenset({
+    "--cwd", "--config", "-c",
+})
 
 
 def _is_env_assignment(token: str) -> bool:
@@ -338,6 +348,35 @@ def _parse_make_targets(tokens_after_make: list[str]) -> list[str]:
     return targets
 
 
+def _parse_runner_script(
+    tokens_after_runner: list[str],
+    flags_with_arg: frozenset[str],
+) -> str | None:
+    """First positional after ``<runner> run …`` (skips flags + arg pairs)."""
+    if not tokens_after_runner or tokens_after_runner[0] != "run":
+        return None
+    i = 1
+    while i < len(tokens_after_runner):
+        tok = tokens_after_runner[i]
+        if tok.startswith("--") and "=" in tok:
+            i += 1
+            continue
+        if tok in flags_with_arg:
+            i += 2
+            continue
+        if tok.startswith("-"):
+            i += 1
+            continue
+        if _is_env_assignment(tok):
+            i += 1
+            continue
+        if _is_shell_redirection(tok):
+            i += 1
+            continue
+        return tok.rsplit("/", 1)[-1] or None
+    return None
+
+
 def _extract_rule_paths(text: str) -> list[str]:
     """Return every rule-file path cited in <system-reminder> blocks in ``text``."""
     paths: list[str] = []
@@ -387,6 +426,14 @@ def _extract_tool_use_calls(idx: int, block: dict[str, Any]) -> list[tuple[int, 
             if head == "make":
                 for target in _parse_make_targets(rest):
                     rows.append((idx, "make_target", target))
+            elif head == "uv":
+                script = _parse_runner_script(rest, _UV_RUN_FLAGS_WITH_ARG)
+                if script:
+                    rows.append((idx, "uv_script", script))
+            elif head == "bun":
+                script = _parse_runner_script(rest, _BUN_RUN_FLAGS_WITH_ARG)
+                if script:
+                    rows.append((idx, "bun_script", script))
 
     return rows
 
@@ -577,7 +624,10 @@ CREATE TABLE IF NOT EXISTS event_calls (
     event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
     ord INTEGER NOT NULL DEFAULT 0,
     call_type TEXT NOT NULL CHECK (
-        call_type IN ('tool', 'skill', 'subagent', 'cli', 'rule', 'make_target')
+        call_type IN (
+            'tool', 'skill', 'subagent', 'cli', 'rule',
+            'make_target', 'uv_script', 'bun_script'
+        )
     ),
     call_name TEXT NOT NULL,
     timestamp TEXT,
