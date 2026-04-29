@@ -35,6 +35,40 @@ const writeFile = (filePath: string, content: string): void => {
   writeFileSync(filePath, `${content.trim()}\n`);
 };
 
+// Snapshot existing README.md / CONTRIBUTING.md BEFORE scaffolding.
+//
+// `bun create vite` writes its own generic "React + TypeScript + Vite" README
+// into tmp/vite-setup/, which the move loop in Step 1 would otherwise rename
+// over the project's existing README — destroying the project's reason-to-exist
+// description that nobody else can recover.
+//
+// Rule (per SKILL.md → "Documentation split"):
+//   - README.md     = users (project overview, value prop, how-to-consume)
+//   - CONTRIBUTING.md = developers (Make targets, dev/build/test workflow)
+//
+// Behaviour:
+//   - README.md exists       -> preserve verbatim, discard scaffold version.
+//   - README.md missing      -> Step 20 writes a minimal user-facing template.
+//   - CONTRIBUTING.md exists -> preserve verbatim, user has likely curated it.
+//   - CONTRIBUTING.md missing -> Step 20 generates a fresh developer doc.
+//
+// Snapshots are taken in the working directory the script was invoked from. For
+// a `bun ... frontend/` invocation the snapshot intentionally targets `.`,
+// because the new subdirectory cannot have pre-existing docs to preserve.
+const snapshotIfExists = (path: string): string | null =>
+  existsSync(path) ? readFileSync(path, "utf8") : null;
+
+const preservedReadme = isCurrentDir ? snapshotIfExists("README.md") : null;
+const preservedContributing = isCurrentDir
+  ? snapshotIfExists("CONTRIBUTING.md")
+  : null;
+if (preservedReadme !== null) {
+  console.log("Preserving existing README.md (project-overview content)");
+}
+if (preservedContributing !== null) {
+  console.log("Preserving existing CONTRIBUTING.md");
+}
+
 // Step 1: Create Vite project
 console.log("\nStep 1: Creating Vite project...");
 if (isCurrentDir) {
@@ -53,6 +87,19 @@ if (isCurrentDir) {
   }
   rmdirSync(tempDir);
   console.log("Moved files to current directory");
+
+  // Restore preserved README.md / CONTRIBUTING.md immediately, so any later
+  // step that reads them sees the project's content rather than the Vite
+  // template's placeholder text. Templates for missing files are written in
+  // Step 22 once package.json (project name) is finalised.
+  if (preservedReadme !== null) {
+    writeFileSync("README.md", preservedReadme);
+    console.log("Restored preserved README.md");
+  }
+  if (preservedContributing !== null) {
+    writeFileSync("CONTRIBUTING.md", preservedContributing);
+    console.log("Restored preserved CONTRIBUTING.md");
+  }
 } else {
   await $`bun create vite@latest ${targetDir} --template react-ts`;
   process.chdir(targetDir);
@@ -740,12 +787,194 @@ await $`bunx --bun shadcn@latest init -d`;
 console.log("\nStep 19: Running Biome check on generated files...");
 await $`bunx --bun biome check --write --unsafe . || true`;
 
-// Step 20: Verify build
-console.log("\nStep 20: Testing build...");
+// Step 20: Documentation split — README.md (users) + CONTRIBUTING.md (devs).
+//
+// See SKILL.md → "Documentation split". README is the landing page for anyone
+// evaluating the project; CONTRIBUTING is the on-ramp for contributors. They
+// MUST NOT overlap.
+//
+// Templates below are intentionally minimal:
+//   - README:       a value-prop stub that the project owner is expected to
+//                   expand. Names the project from package.json so a brand-new
+//                   repo isn't pointlessly anonymous.
+//   - CONTRIBUTING: the developer-facing reference for THIS scaffold — Make
+//                   targets, the `make fix ci` inner-loop, project structure,
+//                   ports, e2e pattern. This is durable docs, not transient
+//                   skill output.
+//
+// We only write a template if no doc was preserved at the very top of the
+// script. Preserved docs win. Templates are skipped silently otherwise.
+console.log("\nStep 20: Writing README.md / CONTRIBUTING.md templates...");
+const pkgForDocs: PackageJson = JSON.parse(readFileSync("package.json", "utf8"));
+const projectName =
+  typeof pkgForDocs.name === "string" && pkgForDocs.name.length > 0
+    ? pkgForDocs.name
+    : "project";
+
+if (preservedReadme === null) {
+  const readmeTemplate = `# ${projectName}
+
+> One-sentence value proposition for this project.
+
+## Overview
+
+Describe the problem this project solves and the value it provides to its
+users. Keep this section focused on the *why* — keep dev/build instructions
+out of this file (see [CONTRIBUTING.md](./CONTRIBUTING.md) for those).
+
+## Usage
+
+How end users consume this project — a deployed URL, an install command, an
+import statement, an API call. Adapt to the project's distribution model.
+
+## License
+
+TBD.
+`;
+  writeFile("README.md", readmeTemplate);
+} else {
+  console.log("README.md preserved — skipping template write");
+}
+
+if (preservedContributing === null) {
+  const contributingTemplate = `# Contributing to ${projectName}
+
+Developer reference for working in this repository. End-user docs live in
+[README.md](./README.md) — keep that file focused on the project's value
+proposition and how to consume it.
+
+## Tech stack
+
+- **Build**: Vite + React 19 + TypeScript
+- **Styling**: Tailwind CSS v4 + shadcn/ui
+- **Lint + format**: Biome (single tool, replaces ESLint + Prettier)
+- **Unit tests**: Vitest + jsdom + Testing Library
+- **E2e tests**: Playwright (chromium)
+- **Runtime + package manager**: Bun
+
+## Getting started
+
+\`\`\`bash
+bun install            # install dependencies
+make dev               # start the dev server on port 5173 (human profile)
+make agentic-dev       # start the dev server on port 5174 (AI agent profile)
+\`\`\`
+
+The two ports allow a human and an AI agent to run dev servers in parallel
+without colliding on \`5173\`.
+
+## Make target catalogue
+
+Run \`make help\` for the auto-discovered list. Common targets:
+
+| Target               | Purpose                                                  |
+|----------------------|----------------------------------------------------------|
+| \`make dev\`           | Vite dev server, port 5173 (human profile)               |
+| \`make agentic-dev\`   | Vite dev server, port 5174 (AI agent profile)            |
+| \`make build\`         | Production build → \`dist/\`                               |
+| \`make test\`          | Vitest unit tests                                        |
+| \`make test-e2e\`      | Playwright e2e tests (auto-starts dev server)            |
+| \`make lint\`          | Strict Biome check (warnings fail)                       |
+| \`make format\`        | Auto-format with Biome                                   |
+| \`make fix\`           | Meta-target: install + format + lint-fix (autofix all)   |
+| \`make ci\`            | Strict gate: audit + build + format-check + typecheck + lint + test + test-e2e |
+| \`make clean\`         | Remove \`dist/\`, \`node_modules/\`, test outputs, \`tmp/\`     |
+
+## Canonical inner-loop: \`make fix ci\`
+
+Before committing, run **\`make fix ci\`**:
+
+1. \`make fix\` — autoformats every file and applies all auto-fixable lint issues.
+2. \`make ci\` — strict gate. Fails on warnings, format drift, type errors,
+   broken builds, failing tests, broken e2e routes, or vulnerable dependencies.
+
+If \`fix\` couldn't autofix something, \`ci\`'s \`lint\` step catches it.
+
+## Strict no-warnings policy
+
+The \`lint\` script runs \`biome ci .\` (not \`biome lint .\`). \`biome ci\` fails on
+warnings AND info-level findings AND format drift — same as the GitHub Actions
+workflow. Warnings that linger turn into yellow noise nobody reads.
+
+## Project structure
+
+\`\`\`
+${projectName}/
+├── src/
+│   ├── App.tsx               # main app shell
+│   ├── main.tsx              # React root mount
+│   ├── components/           # app-level components
+│   │   └── ui/               # shadcn-generated primitives (do not hand-edit)
+│   ├── pages/                # route components
+│   ├── lib/                  # shared utilities (e.g. cn())
+│   └── hooks/
+├── e2e/
+│   └── routes.spec.ts        # site-map smoke test (slug-taxonomy pattern)
+├── e2e-screenshots/          # generated artifacts (gitignored)
+├── public/                   # static assets served as-is
+├── .github/workflows/build.yml  # CI: build → audit → biome ci → unit → e2e → Pages deploy
+├── Makefile                  # command-and-control surface (DAG)
+├── biome.json                # lint + format + assist config
+├── components.json           # shadcn/ui config
+├── playwright.config.ts
+├── vite.config.ts            # also configures Vitest
+└── tmp/                      # scratch (gitignored; \`make clean\` reclaims)
+\`\`\`
+
+## Adding shadcn/ui components
+
+\`\`\`bash
+bunx --bun shadcn@latest add button card dialog
+\`\`\`
+
+Components land in \`src/components/ui/\`. Do not hand-edit them — \`shadcn add\`
+overwrites on update. If a rule trips on shadcn-generated code, add a path
+override in \`biome.json\` (\`overrides[].includes\` for \`src/components/ui/**\`).
+
+## E2e test pattern
+
+The e2e suite uses a **slug-taxonomy + coverage-matrix** pattern. Every route
+is declared once in \`SECTIONS\`:
+
+\`\`\`ts
+const SECTIONS = [
+  { id: 0, slug: "home", name: "Home", path: "/" },
+] as const;
+\`\`\`
+
+To smoke-test a new route, append an entry to \`SECTIONS\`. Each test produces
+three paired artifacts keyed by a deterministic slug:
+
+\`\`\`
+e2e-screenshots/E01_DEFAULT-S00_HOME.png         # full-page screenshot
+e2e-screenshots/E01_DEFAULT-S00_HOME.log         # console + page errors
+e2e-screenshots/E01_DEFAULT-S00_HOME.network.json  # request timing
+\`\`\`
+
+## GitHub Pages deployment
+
+The CI workflow auto-deploys \`main\` to GitHub Pages. **One-time setup**: in
+repo Settings → Pages, set **Source: GitHub Actions**. The
+\`deploy-pages\` job registers the \`github-pages\` environment automatically on
+the first push.
+
+## Note on \`bun run test\`
+
+Always use \`bun run test\`, NOT \`bun test\`. The latter invokes Bun's built-in
+test runner instead of Vitest, which silently passes (Bun finds no \`.test.ts\`
+files written in its dialect).
+`;
+  writeFile("CONTRIBUTING.md", contributingTemplate);
+} else {
+  console.log("CONTRIBUTING.md preserved — skipping template write");
+}
+
+// Step 21: Verify build
+console.log("\nStep 21: Testing build...");
 await $`bun run build`;
 
-// Step 21: Verify e2e (smoke test the home route).
-console.log("\nStep 21: Running e2e smoke test...");
+// Step 22: Verify e2e (smoke test the home route).
+console.log("\nStep 22: Running e2e smoke test...");
 await $`bun run test:e2e`;
 
 console.log("\nSetup complete.");
