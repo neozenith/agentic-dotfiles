@@ -65,7 +65,7 @@ CACHE_DB_PATH = CACHE_DIR / "introspect_sessions.db"
 # Logging setup
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = "12"
+SCHEMA_VERSION = "13"
 
 # ML Analysis Configuration (used by reflect --engine)
 ML_DEFAULT_MODELS: dict[str, str] = {
@@ -771,6 +771,101 @@ CREATE TRIGGER IF NOT EXISTS chunks_au AFTER UPDATE ON event_message_chunks BEGI
     INSERT INTO event_message_chunks_fts(rowid, text)
         VALUES (new.chunk_id, new.text);
 END;
+
+-- =====================================================================
+-- Knowledge-graph layer (schema v13)
+-- =====================================================================
+-- Mirrors src/claude_code_sessions/database/sqlite/schema.py — keep in sync.
+-- The HNSW virtual table ``entities_vec`` is created at runtime by the
+-- entity-embeddings phase (requires the sqlite-muninn extension to be
+-- loaded first).
+-- =====================================================================
+
+CREATE TABLE IF NOT EXISTS entities (
+    entity_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    entity_type TEXT,
+    source TEXT NOT NULL,
+    chunk_id INTEGER REFERENCES event_message_chunks(chunk_id) ON DELETE CASCADE,
+    confidence REAL DEFAULT 1.0
+);
+CREATE INDEX IF NOT EXISTS idx_entities_name ON entities(name);
+CREATE INDEX IF NOT EXISTS idx_entities_chunk ON entities(chunk_id);
+
+CREATE TABLE IF NOT EXISTS ner_chunks_log (
+    chunk_id INTEGER PRIMARY KEY,
+    processed_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS relations (
+    relation_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    src TEXT NOT NULL,
+    dst TEXT NOT NULL,
+    rel_type TEXT,
+    weight REAL DEFAULT 1.0,
+    chunk_id INTEGER,
+    source TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_relations_src ON relations(src);
+CREATE INDEX IF NOT EXISTS idx_relations_dst ON relations(dst);
+
+CREATE TABLE IF NOT EXISTS re_chunks_log (
+    chunk_id INTEGER PRIMARY KEY,
+    processed_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS entity_vec_map (
+    rowid INTEGER PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE
+);
+
+CREATE TABLE IF NOT EXISTS entity_clusters (
+    name TEXT PRIMARY KEY,
+    canonical TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS nodes (
+    node_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT UNIQUE NOT NULL,
+    entity_type TEXT,
+    mention_count INTEGER DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS edges (
+    src TEXT NOT NULL,
+    dst TEXT NOT NULL,
+    rel_type TEXT,
+    weight REAL DEFAULT 1.0,
+    PRIMARY KEY (src, dst, rel_type)
+);
+
+CREATE TABLE IF NOT EXISTS leiden_communities (
+    node TEXT NOT NULL,
+    resolution REAL NOT NULL,
+    community_id INTEGER NOT NULL,
+    modularity REAL,
+    PRIMARY KEY (node, resolution)
+);
+CREATE INDEX IF NOT EXISTS idx_leiden_communities_resolution
+    ON leiden_communities(resolution, community_id);
+
+CREATE TABLE IF NOT EXISTS entity_cluster_labels (
+    canonical TEXT PRIMARY KEY,
+    label TEXT NOT NULL,
+    member_count INTEGER NOT NULL,
+    model TEXT NOT NULL,
+    generated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS community_labels (
+    resolution REAL NOT NULL,
+    community_id INTEGER NOT NULL,
+    label TEXT NOT NULL,
+    member_count INTEGER NOT NULL,
+    model TEXT NOT NULL,
+    generated_at TEXT NOT NULL,
+    PRIMARY KEY (resolution, community_id)
+);
 """
 
 
