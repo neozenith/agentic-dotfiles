@@ -189,6 +189,29 @@ const patchTsconfig = (filePath: string): void => {
   // Drop deprecated baseUrl line.
   content = content.replace(/^\s*"baseUrl"\s*:\s*"[^"]*"\s*,?\s*\n/m, "");
 
+  // Vite's root tsconfig.json is `files` + `references` only — no
+  // compilerOptions block to patch into. shadcn-cli reads the root file
+  // for the `@/*` alias, so synthesise a fresh compilerOptions block at the
+  // top of the object instead of falling through to the regex-driven
+  // branches below (which silently no-op without a target).
+  if (!/"compilerOptions"\s*:\s*\{/.test(content)) {
+    const optsLines = [
+      '"baseUrl": "."',
+      '"paths": { "@/*": ["./src/*"] }',
+      ...STRICT_FAMILY,
+    ]
+      .map(
+        (line, i, arr) =>
+          `    ${line}${i < arr.length - 1 ? "," : ""}`,
+      )
+      .join("\n");
+    const block = `  "compilerOptions": {\n${optsLines}\n  },`;
+    content = content.replace(/^\s*\{\s*\n/, (m: string) => `${m}${block}\n`);
+    writeFileSync(filePath, content);
+    console.log(`  patched ${filePath} (inserted compilerOptions block)`);
+    return;
+  }
+
   // Patch / insert paths.
   const pathsLine = '    "paths": { "@/*": ["./src/*"] }';
   if (/"paths"\s*:\s*\{[^}]*\}/.test(content)) {
@@ -292,8 +315,21 @@ writeFileSync("package.json", `${JSON.stringify(pkg, null, 2)}\n`);
 console.log("  merged scripts into package.json");
 
 // ============================================================================
+// Step 8.5: Pre-stage Tailwind v4 wiring before shadcn init.
+// shadcn-cli's preflight checks `vite.config.ts` for the @tailwindcss/vite
+// plugin and `src/index.css` for the `@import "tailwindcss"` directive.
+// Without these, "Validating Tailwind CSS" fails. The same resources are
+// re-copied in Step 10 — that pass becomes a no-op for these two files.
+// ============================================================================
+
+console.log("\nStep 8.5: Pre-staging Tailwind v4 wiring...");
+copyResource("frontend/vite.config.ts");
+copyResource("frontend/src/index.css");
+
+// ============================================================================
 // Step 9: Initialize shadcn/ui (with defaults). Adds src/lib/utils.ts (cn()).
-// Must run AFTER package.json is patched because shadcn reads it.
+// Must run AFTER package.json is patched (shadcn reads it) and AFTER Step 8.5
+// so the Tailwind v4 wiring is in place for the preflight check.
 // ============================================================================
 
 console.log("\nStep 9: Initializing shadcn/ui...");

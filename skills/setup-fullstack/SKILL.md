@@ -1,6 +1,7 @@
 ---
 name: setup-fullstack
 description: Automated setup for a fullstack web app — Python (FastAPI + uv) backend + React/Vite/TypeScript/Tailwind/shadcn/Biome/Vitest/Playwright frontend, sibling `backend/` and `frontend/` directories under a top-level Makefile that delegates per-language targets (`format-ts`/`format-py`, `lint-ts`/`lint-py`, `typecheck-ts`/`typecheck-py`, `test-ts`/`test-py`) and rolls them up into `format`, `lint`, `typecheck`, `test`, with `make fix ci` as the canonical inner-loop. Use when scaffolding a new fullstack web application with a Python API backend and a React frontend, initializing the standard `backend/` + `frontend/` project layout, or asking for "Python + React fullstack".
+user-invocable: true
 ---
 
 # Setup Fullstack
@@ -21,11 +22,13 @@ This skill is the fullstack extension of `vite-react-setup`. The frontend half i
 
 ## Usage
 
+**Default behavior: scaffold into the current working directory of the session that invoked the skill.** Do not ask the user to confirm the target — the working tree is recoverable via `git reset --hard` (or by deleting the subdir, if one was given). Only deviate from CWD when the user explicitly names a target directory in their prompt.
+
 ```bash
-# Setup in current directory
+# Default — scaffold into the current working directory (no argument required)
 bun .claude/skills/setup-fullstack/setup-fullstack.ts
 
-# Setup in a named subdirectory
+# Only when the user explicitly asks for a named subdirectory
 bun .claude/skills/setup-fullstack/setup-fullstack.ts my-fullstack-app
 ```
 
