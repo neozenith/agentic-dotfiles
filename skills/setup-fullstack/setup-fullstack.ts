@@ -253,33 +253,36 @@ patchTsconfig("tsconfig.app.json");
 
 console.log("\nStep 7: Patching biome.json...");
 if (existsSync("biome.json")) {
-  let bio = readFileSync("biome.json", "utf8");
-  bio = bio.replace(
-    /"includes":\s*\[[^\]]*\]/,
-    `"includes": [
-		"**",
-		"!!**/.claude",
-		"!!**/dist",
-		"!!**/coverage",
-		"!!**/e2e-screenshots",
-		"!!**/playwright-report",
-		"!!**/test-results",
-		"!!**/tmp"
-	]`,
-  );
-  if (!/"css"\s*:/.test(bio)) {
-    bio = bio.replace(
-      /("javascript"\s*:\s*\{[^}]*\}\s*,?)/,
-      `$1
-	"css": {
-		"parser": {
-			"cssModules": true,
-			"tailwindDirectives": true
-		}
-	},`,
-    );
+  // Parse-mutate-stringify avoids the nested-brace pitfall of regex patching.
+  // (A previous regex-based approach captured only the inner `}` of the
+  // `"javascript": { "formatter": {...} }` block, leaving the outer `}`
+  // dangling after the appended `css` block.)
+  type BiomeConfig = {
+    files?: { includes?: string[] };
+    css?: { parser?: { cssModules?: boolean } };
+    [k: string]: unknown;
+  };
+  const bio: BiomeConfig = JSON.parse(readFileSync("biome.json", "utf8"));
+  bio.files = {
+    ...(bio.files ?? {}),
+    includes: [
+      "**",
+      "!!**/.claude",
+      "!!**/dist",
+      "!!**/coverage",
+      "!!**/e2e-screenshots",
+      "!!**/playwright-report",
+      "!!**/test-results",
+      "!!**/tmp",
+    ],
+  };
+  // Biome 2.x does not have a `tailwindDirectives` key — Tailwind v4 uses
+  // `@import "tailwindcss"` rather than `@tailwind` directives, so the parser
+  // option is unnecessary. `cssModules: true` is the only knob we need.
+  if (bio.css === undefined) {
+    bio.css = { parser: { cssModules: true } };
   }
-  writeFileSync("biome.json", bio);
+  writeFileSync("biome.json", `${JSON.stringify(bio, null, 2)}\n`);
   console.log("  patched biome.json");
 }
 
@@ -352,6 +355,77 @@ copyResource("frontend/src/vite-env.d.ts");
 copyResource("frontend/src/setupTests.ts");
 copyResource("frontend/src/lib/utils.test.ts");
 copyResourceTree("frontend/e2e");
+
+// ============================================================================
+// Step 10.5: Patch Vite-generated files that the Vite scaffold owns but
+// would otherwise fail the strict gate.
+//
+//   (a) frontend/.gitignore — Vite's default omits coverage/, test-results/,
+//       playwright-report/. Biome's `vcs.useIgnoreFile: true` reads the
+//       .gitignore relative to its CWD; since `make -C frontend ...` invokes
+//       biome from frontend/, the repo-root .gitignore is invisible to it
+//       and biome ends up scanning the istanbul HTML coverage report.
+//
+//   (b) frontend/src/main.tsx — Vite's default uses
+//       `document.getElementById("root")!` (non-null assertion), which
+//       biome's `noNonNullAssertion` flags as a warning. Because the project
+//       runs `biome ci` (warnings-are-errors), the warning fails the gate.
+//       Replace with an explicit null-check that throws — matches the
+//       project's "no graceful degradation" rule.
+// ============================================================================
+
+console.log("\nStep 10.5: Patching Vite-generated frontend files...");
+
+const frontendGitignore = join(projectRoot, "frontend", ".gitignore");
+if (existsSync(frontendGitignore)) {
+  const existing = readFileSync(frontendGitignore, "utf8");
+  const additions = [
+    "coverage/",
+    "test-results/",
+    "playwright-report/",
+    "e2e-screenshots/",
+    ".vite/",
+  ];
+  const missing = additions.filter((line) => !existing.includes(line));
+  if (missing.length > 0) {
+    const block = [
+      "",
+      "# Test + coverage artifacts (also in repo-root .gitignore;",
+      "# duplicated here so biome's useIgnoreFile sees them under frontend/)",
+      ...missing,
+      "",
+    ].join("\n");
+    writeFileSync(frontendGitignore, existing.trimEnd() + "\n" + block);
+    console.log(
+      `  patched frontend/.gitignore (added ${missing.length} entries)`,
+    );
+  }
+}
+
+const mainTsx = join(projectRoot, "frontend", "src", "main.tsx");
+if (existsSync(mainTsx)) {
+  const original = readFileSync(mainTsx, "utf8");
+  const safeMainTsx = `import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import "./index.css";
+import App from "./App.tsx";
+
+const rootElement = document.getElementById("root");
+if (!rootElement) {
+\tthrow new Error("Root element #root not found in document");
+}
+
+createRoot(rootElement).render(
+\t<StrictMode>
+\t\t<App />
+\t</StrictMode>,
+);
+`;
+  if (original !== safeMainTsx) {
+    writeFileSync(mainTsx, safeMainTsx);
+    console.log("  patched frontend/src/main.tsx (removed non-null assertion)");
+  }
+}
 
 // ============================================================================
 // Step 11: Copy the entire backend tree (server/ + tests/ + Makefile +
