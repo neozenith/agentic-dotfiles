@@ -1,0 +1,126 @@
+# Contributing to {{projectName}}
+
+Developer reference for working in this repository. End-user docs live in
+[README.md](./README.md) — keep that file focused on the project's value
+proposition and how to consume it.
+
+## Tech stack
+
+- **Build**: Vite + React 19 + TypeScript
+- **Styling**: Tailwind CSS v4 + shadcn/ui
+- **Lint + format**: Biome (single tool, replaces ESLint + Prettier)
+- **Unit tests**: Vitest + jsdom + Testing Library
+- **E2e tests**: Playwright (chromium)
+- **Runtime + package manager**: Bun
+
+## Getting started
+
+```bash
+bun install            # install dependencies
+make dev               # start the dev server on port 5173 (human profile)
+make agentic-dev       # start the dev server on port 5174 (AI agent profile)
+```
+
+The two ports allow a human and an AI agent to run dev servers in parallel
+without colliding on `5173`.
+
+## Make target catalogue
+
+Run `make help` for the auto-discovered list. Common targets:
+
+| Target               | Purpose                                                  |
+|----------------------|----------------------------------------------------------|
+| `make dev`           | Vite dev server, port 5173 (human profile)               |
+| `make agentic-dev`   | Vite dev server, port 5174 (AI agent profile)            |
+| `make build`         | Production build → `dist/`                               |
+| `make test`          | Vitest unit tests                                        |
+| `make test-e2e`      | Playwright e2e tests (auto-starts dev server)            |
+| `make lint`          | Strict Biome check (warnings fail)                       |
+| `make format`        | Auto-format with Biome                                   |
+| `make fix`           | Meta-target: install + format + lint-fix (autofix all)   |
+| `make ci`            | Strict gate: audit + build + format-check + typecheck + lint + test + test-e2e |
+| `make clean`         | Remove `dist/`, `node_modules/`, test outputs, `tmp/`     |
+
+## Canonical inner-loop: `make fix ci`
+
+Before committing, run **`make fix ci`**:
+
+1. `make fix` — autoformats every file and applies all auto-fixable lint issues.
+2. `make ci` — strict gate. Fails on warnings, format drift, type errors,
+   broken builds, failing tests, broken e2e routes, or vulnerable dependencies.
+
+If `fix` couldn't autofix something, `ci`'s `lint` step catches it.
+
+## Strict no-warnings policy
+
+The `lint` script runs `biome ci .` (not `biome lint .`). `biome ci` fails on
+warnings AND info-level findings AND format drift — same as the GitHub Actions
+workflow. Warnings that linger turn into yellow noise nobody reads.
+
+## Project structure
+
+```
+{{projectName}}/
+├── src/
+│   ├── App.tsx               # main app shell
+│   ├── main.tsx              # React root mount
+│   ├── components/           # app-level components
+│   │   └── ui/               # shadcn-generated primitives (do not hand-edit)
+│   ├── pages/                # route components
+│   ├── lib/                  # shared utilities (e.g. cn())
+│   └── hooks/
+├── e2e/
+│   └── routes.spec.ts        # site-map smoke test (slug-taxonomy pattern)
+├── e2e-screenshots/          # generated artifacts (gitignored)
+├── public/                   # static assets served as-is
+├── .github/workflows/build.yml  # CI: build → audit → biome ci → unit → e2e → Pages deploy
+├── Makefile                  # command-and-control surface (DAG)
+├── biome.json                # lint + format + assist config
+├── components.json           # shadcn/ui config
+├── playwright.config.ts
+├── vite.config.ts            # also configures Vitest
+└── tmp/                      # scratch (gitignored; `make clean` reclaims)
+```
+
+## Adding shadcn/ui components
+
+```bash
+bunx --bun shadcn@latest add button card dialog
+```
+
+Components land in `src/components/ui/`. Do not hand-edit them — `shadcn add`
+overwrites on update. If a rule trips on shadcn-generated code, add a path
+override in `biome.json` (`overrides[].includes` for `src/components/ui/**`).
+
+## E2e test pattern
+
+The e2e suite uses a **slug-taxonomy + coverage-matrix** pattern. Every route
+is declared once in `SECTIONS`:
+
+```ts
+const SECTIONS = [
+  { id: 0, slug: "home", name: "Home", path: "/" },
+] as const;
+```
+
+To smoke-test a new route, append an entry to `SECTIONS`. Each test produces
+three paired artifacts keyed by a deterministic slug:
+
+```
+e2e-screenshots/E01_DEFAULT-S00_HOME.png         # full-page screenshot
+e2e-screenshots/E01_DEFAULT-S00_HOME.log         # console + page errors
+e2e-screenshots/E01_DEFAULT-S00_HOME.network.json  # request timing
+```
+
+## GitHub Pages deployment
+
+The CI workflow auto-deploys `main` to GitHub Pages. **One-time setup**: in
+repo Settings → Pages, set **Source: GitHub Actions**. The
+`deploy-pages` job registers the `github-pages` environment automatically on
+the first push.
+
+## Note on `bun run test`
+
+Always use `bun run test`, NOT `bun test`. The latter invokes Bun's built-in
+test runner instead of Vitest, which silently passes (Bun finds no `.test.ts`
+files written in its dialect).
