@@ -1,5 +1,12 @@
 import { useEffect, useState } from "react";
 
+import {
+	Card,
+	CardContent,
+	CardDescription,
+	CardHeader,
+	CardTitle,
+} from "@/components/ui/card";
 import { type Item, listItems } from "@/lib/api";
 
 type LoadState =
@@ -19,38 +26,61 @@ export const ItemsPage = () => {
 			});
 	}, []);
 
-	if (state.status === "loading") {
-		return (
-			<div data-testid="items-loading" className="text-muted-foreground">
-				Loading items…
-			</div>
-		);
-	}
-	if (state.status === "error") {
-		return (
-			<div data-testid="items-error" className="text-destructive">
-				Failed to load items: {state.message}
-			</div>
-		);
-	}
-
 	return (
-		<div data-testid="items-page" className="space-y-3">
-			<h1 className="text-2xl font-semibold">Items</h1>
-			{state.items.length === 0 ? (
-				<p data-testid="items-empty" className="text-muted-foreground">
-					No items yet. POST to <code>/api/items</code> to add one.
+		<div data-testid="items-page" className="space-y-6">
+			<header className="space-y-2">
+				<h1 className="text-3xl font-semibold tracking-tight">Items</h1>
+				<p className="text-muted-foreground">
+					Records persisted by the FastAPI backend at{" "}
+					<code className="text-xs">/api/items</code>.
 				</p>
-			) : (
-				<ul data-testid="items-list" className="space-y-2">
+			</header>
+
+			{state.status === "loading" && (
+				<p data-testid="items-loading" className="text-sm text-muted-foreground">
+					Loading items…
+				</p>
+			)}
+
+			{state.status === "error" && (
+				<Card data-testid="items-error" className="border-destructive">
+					<CardHeader>
+						<CardTitle className="text-destructive">
+							Failed to load items
+						</CardTitle>
+						<CardDescription>{state.message}</CardDescription>
+					</CardHeader>
+				</Card>
+			)}
+
+			{state.status === "ok" && state.items.length === 0 && (
+				<Card data-testid="items-empty">
+					<CardHeader>
+						<CardTitle>No items yet</CardTitle>
+						<CardDescription>
+							POST to <code className="text-xs">/api/items</code> to add one.
+						</CardDescription>
+					</CardHeader>
+				</Card>
+			)}
+
+			{state.status === "ok" && state.items.length > 0 && (
+				<ul data-testid="items-list" className="grid gap-3">
 					{state.items.map((item) => (
-						<li key={item.id} className="rounded border p-3">
-							<div className="font-medium">{item.name}</div>
-							{item.description && (
-								<div className="text-sm text-muted-foreground">
-									{item.description}
-								</div>
-							)}
+						<li key={item.id}>
+							<Card>
+								<CardHeader>
+									<CardTitle>{item.name}</CardTitle>
+									{item.description && (
+										<CardDescription>{item.description}</CardDescription>
+									)}
+								</CardHeader>
+								<CardContent>
+									<p className="text-xs text-muted-foreground">
+										id: {item.id}
+									</p>
+								</CardContent>
+							</Card>
 						</li>
 					))}
 				</ul>

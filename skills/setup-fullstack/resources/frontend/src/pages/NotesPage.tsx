@@ -1,5 +1,12 @@
 import { useEffect, useState } from "react";
 
+import {
+	Card,
+	CardContent,
+	CardDescription,
+	CardHeader,
+	CardTitle,
+} from "@/components/ui/card";
 import { listNotes, type Note } from "@/lib/api";
 
 type LoadState =
@@ -19,38 +26,60 @@ export const NotesPage = () => {
 			});
 	}, []);
 
-	if (state.status === "loading") {
-		return (
-			<div data-testid="notes-loading" className="text-muted-foreground">
-				Loading notes…
-			</div>
-		);
-	}
-	if (state.status === "error") {
-		return (
-			<div data-testid="notes-error" className="text-destructive">
-				Failed to load notes: {state.message}
-			</div>
-		);
-	}
-
 	return (
-		<div data-testid="notes-page" className="space-y-3">
-			<h1 className="text-2xl font-semibold">Notes</h1>
-			{state.notes.length === 0 ? (
-				<p data-testid="notes-empty" className="text-muted-foreground">
-					No notes yet. POST to <code>/api/notes</code> to add one.
+		<div data-testid="notes-page" className="space-y-6">
+			<header className="space-y-2">
+				<h1 className="text-3xl font-semibold tracking-tight">Notes</h1>
+				<p className="text-muted-foreground">
+					Records persisted by the FastAPI backend at{" "}
+					<code className="text-xs">/api/notes</code>.
 				</p>
-			) : (
-				<ul data-testid="notes-list" className="space-y-2">
+			</header>
+
+			{state.status === "loading" && (
+				<p data-testid="notes-loading" className="text-sm text-muted-foreground">
+					Loading notes…
+				</p>
+			)}
+
+			{state.status === "error" && (
+				<Card data-testid="notes-error" className="border-destructive">
+					<CardHeader>
+						<CardTitle className="text-destructive">
+							Failed to load notes
+						</CardTitle>
+						<CardDescription>{state.message}</CardDescription>
+					</CardHeader>
+				</Card>
+			)}
+
+			{state.status === "ok" && state.notes.length === 0 && (
+				<Card data-testid="notes-empty">
+					<CardHeader>
+						<CardTitle>No notes yet</CardTitle>
+						<CardDescription>
+							POST to <code className="text-xs">/api/notes</code> to add one.
+						</CardDescription>
+					</CardHeader>
+				</Card>
+			)}
+
+			{state.status === "ok" && state.notes.length > 0 && (
+				<ul data-testid="notes-list" className="grid gap-3">
 					{state.notes.map((note) => (
-						<li key={note.id} className="rounded border p-3">
-							<div className="font-medium">{note.title}</div>
-							{note.body && (
-								<pre className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
-									{note.body}
-								</pre>
-							)}
+						<li key={note.id}>
+							<Card>
+								<CardHeader>
+									<CardTitle>{note.title}</CardTitle>
+								</CardHeader>
+								{note.body && (
+									<CardContent>
+										<pre className="whitespace-pre-wrap text-sm text-muted-foreground">
+											{note.body}
+										</pre>
+									</CardContent>
+								)}
+							</Card>
 						</li>
 					))}
 				</ul>

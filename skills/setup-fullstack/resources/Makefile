@@ -11,13 +11,21 @@ export DEV_PORT          ?= 5173
 export AGENTIC_DEV_PORT  ?= 5174
 export DOCKER_API_PORT   ?= 8210
 
+# DATABASE_BACKEND selects which overlay compose file to layer on top of the
+# base docker-compose.yml. Override via `make DATABASE_BACKEND=postgres docker-up`
+# (or any other docker-* target). Recursive expansion (`=`, not `:=`) so the
+# variable is re-evaluated on every use — picks up command-line overrides.
+DATABASE_BACKEND ?= sqlite
+COMPOSE_FILES = -f docker-compose.yml -f docker-compose.$(DATABASE_BACKEND).yml
+
 .PHONY: help install dev agentic-dev \
         format format-ts format-py format-check format-check-ts format-check-py \
         lint lint-ts lint-py lint-fix lint-fix-ts lint-fix-py \
         typecheck typecheck-ts typecheck-py \
         test test-ts test-py test-e2e \
         fix ci ci-docker clean port-debug port-clean \
-        docker-build docker-up docker-up-fg docker-down docker-logs docker-restart docker-status \
+        docker-build docker-up docker-dev docker-down docker-logs docker-restart docker-status \
+        docker-up-sqlite docker-up-postgres \
         test-api-docker test-e2e-docker
 
 help: ## Show this help
@@ -105,17 +113,19 @@ fix: format lint-fix ## Auto-fix everything fixable (format + lint-fix, both hal
 ci: format-check lint typecheck test test-e2e ## Strict gate (format-check + lint + typecheck + test + e2e)
 
 # =============================================================================
-# Docker (deploy-parity testing — image bundles frontend SPA + FastAPI backend)
+# Docker (deploy-parity testing — image bundles SPA + FastAPI; DB choice
+# layered on top via DATABASE_BACKEND={sqlite,postgres})
 # =============================================================================
 
 docker-build: ## Build the bundled (frontend + backend) Docker image
-	docker compose build
+	docker compose $(COMPOSE_FILES) build
 
-docker-up: ## Start the Docker stack DETACHED, wait for /api/health, print URL
-	docker compose up -d --wait
+docker-up: ## Start DETACHED with $(DATABASE_BACKEND) backend, wait for /api/health, print URL
+	docker compose $(COMPOSE_FILES) up -d --wait
 	@echo ""
 	@echo "  ┌──────────────────────────────────────────────────────────┐"
 	@echo "  │  App ready at: http://localhost:$(DOCKER_API_PORT)                       │"
+	@echo "  │    Backend:     $(DATABASE_BACKEND)                                       │"
 	@echo "  │    SPA:         http://localhost:$(DOCKER_API_PORT)/                      │"
 	@echo "  │    API health:  http://localhost:$(DOCKER_API_PORT)/api/health            │"
 	@echo "  │    OpenAPI:     http://localhost:$(DOCKER_API_PORT)/docs                  │"
@@ -123,24 +133,30 @@ docker-up: ## Start the Docker stack DETACHED, wait for /api/health, print URL
 	@echo "  └──────────────────────────────────────────────────────────┘"
 	@echo ""
 
-docker-up-fg: ## Start the Docker stack in the FOREGROUND (Ctrl+C to stop)
+docker-dev: ## Start in the FOREGROUND with $(DATABASE_BACKEND) backend (Ctrl+C to stop)
 	@echo ""
-	@echo "  Starting Docker stack in foreground..."
+	@echo "  Starting Docker stack in foreground (DATABASE_BACKEND=$(DATABASE_BACKEND))..."
 	@echo "  Once healthy: http://localhost:$(DOCKER_API_PORT)"
 	@echo "  Press Ctrl+C to stop."
 	@echo ""
-	docker compose up
+	docker compose $(COMPOSE_FILES) up
+
+docker-up-sqlite: ## Convenience: docker-up with DATABASE_BACKEND=sqlite (the default)
+	$(MAKE) DATABASE_BACKEND=sqlite docker-up
+
+docker-up-postgres: ## Convenience: docker-up with DATABASE_BACKEND=postgres
+	$(MAKE) DATABASE_BACKEND=postgres docker-up
 
 docker-down: ## Stop and remove the Docker stack (incl. volumes)
-	docker compose down -v --remove-orphans
+	docker compose $(COMPOSE_FILES) down -v --remove-orphans
 
 docker-logs: ## Tail the docker compose logs
-	docker compose logs -f
+	docker compose $(COMPOSE_FILES) logs -f
 
-docker-restart: docker-down docker-up ## Restart the docker stack
+docker-restart: docker-down docker-up ## Restart the docker stack with the current $(DATABASE_BACKEND)
 
 docker-status: ## Show docker compose ps
-	docker compose ps
+	docker compose $(COMPOSE_FILES) ps
 
 test-api-docker: docker-up ## Run pytest against the dockerized backend (port $(DOCKER_API_PORT))
 	BACKEND_BASE_URL=http://localhost:$(DOCKER_API_PORT) $(MAKE) -C backend test-docker
@@ -153,7 +169,7 @@ ci-docker: docker-build ## Strict gate vs the dockerized backend (api + e2e); cl
 		$(MAKE) test-api-docker && \
 		$(MAKE) test-e2e-docker && \
 		echo "" && \
-		echo "  ci-docker: PASS" && \
+		echo "  ci-docker: PASS (DATABASE_BACKEND=$(DATABASE_BACKEND))" && \
 		echo ""
 
 # =============================================================================

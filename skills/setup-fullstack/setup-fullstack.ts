@@ -166,8 +166,8 @@ process.chdir(join(projectRoot, "frontend"));
 console.log("\nStep 3: Installing all dependencies...");
 await runQuiet("scaffold deps installed", $`bun install`);
 await runQuiet(
-  "Tailwind + shadcn + react-router deps installed",
-  $`bun add tailwindcss @tailwindcss/vite class-variance-authority clsx tailwind-merge react-router-dom`,
+  "Tailwind + shadcn + react-router + lucide deps installed",
+  $`bun add tailwindcss @tailwindcss/vite class-variance-authority clsx tailwind-merge react-router-dom lucide-react`,
 );
 await runQuiet(
   "dev deps installed (biome, playwright, vitest, etc.)",
@@ -313,6 +313,11 @@ if (existsSync("biome.json")) {
       "!!**/playwright-report",
       "!!**/test-results",
       "!!**/tmp",
+      // Tailwind v4 + shadcn use `@custom-variant`, `@theme inline`, etc.
+      // which Biome's CSS parser doesn't yet understand. Excluding the
+      // theme-token entry point sidesteps the parsing errors without
+      // disabling Biome on actual app code.
+      "!!**/src/index.css",
     ],
   };
   // Biome 2.x does not have a `tailwindDirectives` key — Tailwind v4 uses
@@ -376,6 +381,19 @@ copyResource("frontend/src/index.css");
 
 console.log("\nStep 9: Initializing shadcn/ui...");
 await runQuiet("shadcn/ui initialized", $`bunx --bun shadcn@latest init -d`);
+
+// ============================================================================
+// Step 9.5: Add the shadcn components the layout + pages depend on (button,
+// card). The `--yes` flag suppresses the "ready to add?" confirmation prompt;
+// `--overwrite` is the safe choice because nothing should exist at the target
+// paths yet. shadcn-cli auto-installs any required Radix peer-deps.
+// ============================================================================
+
+console.log("\nStep 9.5: Adding shadcn components (button, card)...");
+await runQuiet(
+  "shadcn components added (button, card)",
+  $`bunx --bun shadcn@latest add button card --yes --overwrite`,
+);
 
 // ============================================================================
 // Step 10: Copy frontend resources on top of the scaffold. These OVERWRITE
@@ -509,7 +527,11 @@ copyResource("Makefile");
 copyResource("gitignore", ".gitignore");
 copyResource(".github/workflows/build.yml");
 copyResource("CLAUDE.md");
+// Layered docker-compose: the base + one overlay per DB backend. The Makefile
+// picks which overlay to layer in via DATABASE_BACKEND={sqlite,postgres}.
 copyResource("docker-compose.yml");
+copyResource("docker-compose.sqlite.yml");
+copyResource("docker-compose.postgres.yml");
 // Multi-stage Dockerfile bundling the React SPA + FastAPI backend; build
 // context is project root, so it must live alongside docker-compose.yml.
 copyResource("Dockerfile");

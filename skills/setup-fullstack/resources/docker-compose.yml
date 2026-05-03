@@ -1,11 +1,12 @@
-# Docker Compose: single service that bundles the FastAPI backend + the
-# built React SPA. From the project root:
+# BASE compose: defines the backend service shape. No DB-specific config.
 #
-#   make docker-build         # build the image (bun + vite build, then uv sync)
-#   make docker-up            # start detached, wait for healthcheck, print URL
-#   make docker-up-fg         # start in foreground (Ctrl+C to stop)
-#   make docker-down          # tear down + remove volume
-#   make ci-docker            # full deploy-parity gate (api + e2e against the container)
+# Stack as layered files via `-f`:
+#   docker compose -f docker-compose.yml -f docker-compose.sqlite.yml ...
+#   docker compose -f docker-compose.yml -f docker-compose.postgres.yml ...
+#
+# The Makefile builds $(COMPOSE_FILES) from $(DATABASE_BACKEND) (sqlite|postgres),
+# so `make docker-up` defaults to sqlite and `make DATABASE_BACKEND=postgres docker-up`
+# layers in the postgres service + connection string.
 #
 # Container listens on 8000; host port is DOCKER_API_PORT (default 8210),
 # separate from `make dev` (8200) and `make agentic-dev` (8201) so all three
@@ -14,7 +15,6 @@
 services:
   backend:
     build:
-      # Build context = project root (the Dockerfile pulls from frontend/ AND backend/).
       context: .
       dockerfile: Dockerfile
     image: ${COMPOSE_PROJECT_NAME:-fullstack}-app

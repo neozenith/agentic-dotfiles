@@ -1,7 +1,7 @@
 """Configuration helpers — single point of env-var access.
 
-Only one helper for now; expand as the app grows. Keeping all
-`os.environ.get(...)` calls in this module makes config drift easy to audit.
+Only env-var reads in the codebase live here; everything else takes config as
+a parameter. Keeps config drift easy to audit.
 """
 
 from __future__ import annotations
@@ -9,7 +9,12 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-DEFAULT_DATABASE_URL = "sqlite:///./tmp/app.db"
+# Default to async SQLite for local dev. Override via DATABASE_URL.
+# Examples:
+#   sqlite+aiosqlite:///./tmp/app.db                 (local file, default)
+#   sqlite+aiosqlite:////app/data/app.db             (Docker absolute path)
+#   postgresql+asyncpg://user:pass@host:5432/dbname  (Postgres)
+DEFAULT_DATABASE_URL = "sqlite+aiosqlite:///./tmp/app.db"
 
 
 def get_database_url() -> str:

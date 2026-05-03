@@ -1,4 +1,4 @@
-"""HTTP routes.
+"""HTTP routes — all handlers async, all DB I/O via AsyncSession.
 
 The wire layer. Pure-logic transformations live in `server.core`; persistence
 goes through SQLAlchemy via the `get_session` dependency. Each route should
@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from server import models
 from server.api.schemas import (
@@ -32,12 +32,12 @@ router = APIRouter()
 # ============================================================================
 
 @router.get("/health", response_model=HealthResponse)
-def health() -> HealthResponse:
+async def health() -> HealthResponse:
     return HealthResponse(status="ok")
 
 
 @router.post("/echo", response_model=EchoResponse)
-def post_echo(payload: EchoRequest) -> EchoResponse:
+async def post_echo(payload: EchoRequest) -> EchoResponse:
     return EchoResponse(message=echo(payload.message))
 
 
@@ -46,41 +46,43 @@ def post_echo(payload: EchoRequest) -> EchoResponse:
 # ============================================================================
 
 @router.get("/items", response_model=list[Item])
-def list_items(session: Session = Depends(get_session)) -> list[models.Item]:
-    rows = session.scalars(
+async def list_items(session: AsyncSession = Depends(get_session)) -> list[models.Item]:
+    result = await session.scalars(
         select(models.Item).order_by(models.Item.id.desc())
-    ).all()
-    return list(rows)
+    )
+    return list(result.all())
 
 
 @router.post("/items", response_model=Item, status_code=status.HTTP_201_CREATED)
-def create_item(
-    payload: ItemCreate, session: Session = Depends(get_session)
+async def create_item(
+    payload: ItemCreate, session: AsyncSession = Depends(get_session)
 ) -> models.Item:
     item = models.Item(name=payload.name, description=payload.description)
     session.add(item)
-    session.commit()
-    session.refresh(item)
+    await session.commit()
+    await session.refresh(item)
     return item
 
 
 @router.get("/items/{item_id}", response_model=Item)
-def get_item(
-    item_id: int, session: Session = Depends(get_session)
+async def get_item(
+    item_id: int, session: AsyncSession = Depends(get_session)
 ) -> models.Item:
-    item = session.get(models.Item, item_id)
+    item = await session.get(models.Item, item_id)
     if item is None:
         raise HTTPException(status_code=404, detail="Item not found")
     return item
 
 
 @router.delete("/items/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_item(item_id: int, session: Session = Depends(get_session)) -> None:
-    item = session.get(models.Item, item_id)
+async def delete_item(
+    item_id: int, session: AsyncSession = Depends(get_session)
+) -> None:
+    item = await session.get(models.Item, item_id)
     if item is None:
         raise HTTPException(status_code=404, detail="Item not found")
-    session.delete(item)
-    session.commit()
+    await session.delete(item)
+    await session.commit()
 
 
 # ============================================================================
@@ -88,38 +90,40 @@ def delete_item(item_id: int, session: Session = Depends(get_session)) -> None:
 # ============================================================================
 
 @router.get("/notes", response_model=list[Note])
-def list_notes(session: Session = Depends(get_session)) -> list[models.Note]:
-    rows = session.scalars(
+async def list_notes(session: AsyncSession = Depends(get_session)) -> list[models.Note]:
+    result = await session.scalars(
         select(models.Note).order_by(models.Note.id.desc())
-    ).all()
-    return list(rows)
+    )
+    return list(result.all())
 
 
 @router.post("/notes", response_model=Note, status_code=status.HTTP_201_CREATED)
-def create_note(
-    payload: NoteCreate, session: Session = Depends(get_session)
+async def create_note(
+    payload: NoteCreate, session: AsyncSession = Depends(get_session)
 ) -> models.Note:
     note = models.Note(title=payload.title, body=payload.body)
     session.add(note)
-    session.commit()
-    session.refresh(note)
+    await session.commit()
+    await session.refresh(note)
     return note
 
 
 @router.get("/notes/{note_id}", response_model=Note)
-def get_note(
-    note_id: int, session: Session = Depends(get_session)
+async def get_note(
+    note_id: int, session: AsyncSession = Depends(get_session)
 ) -> models.Note:
-    note = session.get(models.Note, note_id)
+    note = await session.get(models.Note, note_id)
     if note is None:
         raise HTTPException(status_code=404, detail="Note not found")
     return note
 
 
 @router.delete("/notes/{note_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_note(note_id: int, session: Session = Depends(get_session)) -> None:
-    note = session.get(models.Note, note_id)
+async def delete_note(
+    note_id: int, session: AsyncSession = Depends(get_session)
+) -> None:
+    note = await session.get(models.Note, note_id)
     if note is None:
         raise HTTPException(status_code=404, detail="Note not found")
-    session.delete(note)
-    session.commit()
+    await session.delete(note)
+    await session.commit()

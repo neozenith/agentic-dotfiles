@@ -1,7 +1,8 @@
-"""FastAPI app factory.
+"""FastAPI app factory — async lifespan-driven init/dispose of the DB engine.
 
 Tests build isolated apps per fixture by calling `create_app(database_url=...)`
-directly, which is why uvicorn is configured with `factory=True` in __main__.py.
+directly. asgi-lifespan's LifespanManager drives the lifespan in tests.
+Production / dev: uvicorn invokes the lifespan when it boots the app.
 
 When STATIC_DIR is set (Docker image bundles the built frontend), the factory
 mounts the SPA at `/`. API routes under `/api/*` keep precedence because they
@@ -9,6 +10,9 @@ are registered BEFORE the catchall mount.
 """
 
 from __future__ import annotations
+
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -23,9 +27,16 @@ from server.db import DatabaseProvider
 
 def create_app(database_url: str | None = None) -> FastAPI:
     db = DatabaseProvider(database_url or get_database_url())
-    db.create_all()
 
-    app = FastAPI(title="server", version="0.1.0")
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        await db.create_all()
+        try:
+            yield
+        finally:
+            await db.dispose()
+
+    app = FastAPI(title="server", version="0.1.0", lifespan=lifespan)
     app.state.db = db
 
     app.add_middleware(
