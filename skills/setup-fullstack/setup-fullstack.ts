@@ -85,6 +85,30 @@ const writeTemplate = (
 const snapshotIfExists = (path: string): string | null =>
   existsSync(path) ? readFileSync(path, "utf8") : null;
 
+/**
+ * Run a Bun.$ shell promise with stdout/stderr suppressed, printing one short
+ * label on success and dumping the captured output on failure (then re-throwing
+ * so the script exits non-zero).
+ *
+ * The reliability case for verbose output is failure — when everything works,
+ * the per-package install lists / preflight banners / coverage tables are pure
+ * noise that just inflates Claude's context budget on every invocation.
+ */
+// biome-ignore lint/suspicious/noExplicitAny: Bun's ShellPromise typing isn't loaded
+const runQuiet = async (label: string, p: any): Promise<void> => {
+  try {
+    await p.quiet();
+    console.log(`  ${label}`);
+  } catch (err) {
+    console.error(`  ${label}: FAILED`);
+    // biome-ignore lint/suspicious/noExplicitAny: ShellError is loosely typed
+    const e = err as any;
+    if (e?.stdout) console.error(e.stdout.toString());
+    if (e?.stderr) console.error(e.stderr.toString());
+    throw err;
+  }
+};
+
 // ============================================================================
 // Step 0: Snapshot existing user-curated docs BEFORE scaffolding.
 // Only meaningful for the in-place / current-dir flow — a fresh subdir
@@ -125,7 +149,10 @@ if (existsSync("frontend")) {
 // ============================================================================
 
 console.log("\nStep 2: Scaffolding Vite + React + TypeScript into frontend/...");
-await $`bun create vite@latest frontend --template react-ts`;
+await runQuiet(
+  "Vite scaffold complete",
+  $`bun create vite@latest frontend --template react-ts`,
+);
 
 // All subsequent frontend steps run with cwd = frontend/.
 process.chdir(join(projectRoot, "frontend"));
@@ -137,11 +164,17 @@ process.chdir(join(projectRoot, "frontend"));
 // ============================================================================
 
 console.log("\nStep 3: Installing all dependencies...");
-await $`bun install`;
-await $`bun add tailwindcss @tailwindcss/vite class-variance-authority clsx tailwind-merge`;
-await $`bun add -d @types/node @biomejs/biome @playwright/test concurrently \
+await runQuiet("scaffold deps installed", $`bun install`);
+await runQuiet(
+  "Tailwind + shadcn deps installed",
+  $`bun add tailwindcss @tailwindcss/vite class-variance-authority clsx tailwind-merge`,
+);
+await runQuiet(
+  "dev deps installed (biome, playwright, vitest, etc.)",
+  $`bun add -d @types/node @biomejs/biome @playwright/test concurrently \
         vitest @vitest/ui @vitest/coverage-v8 jsdom \
-        @testing-library/react @testing-library/jest-dom`;
+        @testing-library/react @testing-library/jest-dom`,
+);
 
 // ============================================================================
 // Step 4: Replace ESLint with Biome (project rule: pick ONE — never combine
@@ -149,12 +182,15 @@ await $`bun add -d @types/node @biomejs/biome @playwright/test concurrently \
 // ============================================================================
 
 console.log("\nStep 4: Switching from ESLint to Biome...");
-await $`bun remove @eslint/js eslint eslint-plugin-react-hooks eslint-plugin-react-refresh globals typescript-eslint`;
+await runQuiet(
+  "removed eslint deps",
+  $`bun remove @eslint/js eslint eslint-plugin-react-hooks eslint-plugin-react-refresh globals typescript-eslint`,
+);
 if (existsSync("eslint.config.js")) {
   unlinkSync("eslint.config.js");
   console.log("  removed eslint.config.js");
 }
-await $`bunx --bun biome init`;
+await runQuiet("biome initialized", $`bunx --bun biome init`);
 
 // ============================================================================
 // Step 5: Install Playwright browsers (Chromium only — the Make/CI flow
@@ -162,7 +198,10 @@ await $`bunx --bun biome init`;
 // ============================================================================
 
 console.log("\nStep 5: Installing Playwright Chromium...");
-await $`bunx --bun playwright install --with-deps chromium`;
+await runQuiet(
+  "Chromium installed",
+  $`bunx --bun playwright install --with-deps chromium`,
+);
 
 // ============================================================================
 // Step 6: Patch tsconfig.json + tsconfig.app.json with the strict family +
@@ -336,7 +375,7 @@ copyResource("frontend/src/index.css");
 // ============================================================================
 
 console.log("\nStep 9: Initializing shadcn/ui...");
-await $`bunx --bun shadcn@latest init -d`;
+await runQuiet("shadcn/ui initialized", $`bunx --bun shadcn@latest init -d`);
 
 // ============================================================================
 // Step 10: Copy frontend resources on top of the scaffold. These OVERWRITE
@@ -491,7 +530,7 @@ if (preservedContributing !== null) {
 // ============================================================================
 
 console.log("\nStep 14: Running uv sync in backend/...");
-await $`uv --directory backend sync`;
+await runQuiet("backend deps installed", $`uv --directory backend sync`);
 
 // ============================================================================
 // Step 15: One-shot autofix pass (best effort) so the verification step in
@@ -500,7 +539,8 @@ await $`uv --directory backend sync`;
 
 console.log("\nStep 15: Running `make fix`...");
 try {
-  await $`make fix`;
+  await $`make fix`.quiet();
+  console.log("  autofix complete");
 } catch {
   console.log("  (some autofix steps had warnings — moving on)");
 }
@@ -512,8 +552,8 @@ try {
 // ============================================================================
 
 console.log("\nStep 16: Verifying typecheck + tests on both halves...");
-await $`make typecheck`;
-await $`make test`;
+await runQuiet("typecheck green (mypy + tsc)", $`make typecheck`);
+await runQuiet("tests green (pytest + vitest)", $`make test`);
 
 // ============================================================================
 // Done.
