@@ -1,0 +1,41 @@
+# === project-local scratch ===
+tmp/
+
+# === Python ===
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# === Node / Bun / Vite ===
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/coverage/
+frontend/.vite/
+
+# === e2e artefacts ===
+frontend/test-results/
+frontend/playwright-report/
+frontend/e2e-screenshots/
+
+# === editor ===
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# === uv lock can be committed; venv must not ===
+# (uv.lock is intentionally NOT in this list)
