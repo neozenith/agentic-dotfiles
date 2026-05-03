@@ -31,6 +31,11 @@ frontend/test-results/
 frontend/playwright-report/
 frontend/e2e-screenshots/
 
+# === Docker ===
+# Compose volumes / state created by `docker compose up`; the build cache and
+# images live in the daemon, not the project, so nothing else to ignore here.
+.docker/
+
 # === editor ===
 .vscode/
 .idea/

@@ -1,0 +1,31 @@
+# Docker Compose: backend service for local + CI deploy-parity testing.
+#
+# - Build context is ./backend (uses backend/Dockerfile).
+# - Container listens on 8000; host port is DOCKER_API_PORT (default 8210)
+#   so it doesn't collide with `make dev` (8200) or `make agentic-dev` (8201).
+# - Healthcheck hits /api/health; `docker compose up --wait` blocks until healthy.
+# - No frontend service: the frontend remains a Vite dev server in tests
+#   (`make test-e2e-docker` points the Vite proxy at port 8210).
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: ${COMPOSE_PROJECT_NAME:-fullstack}-backend
+    container_name: ${COMPOSE_PROJECT_NAME:-fullstack}-backend
+    ports:
+      - "${DOCKER_API_PORT:-8210}:8000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/health', timeout=2).status == 200 else 1)",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped

@@ -8,13 +8,18 @@ export API_PORT          ?= 8200
 export AGENTIC_API_PORT  ?= 8201
 export DEV_PORT          ?= 5173
 export AGENTIC_DEV_PORT  ?= 5174
+# Docker host-port for the dockerized backend (different from human/agent
+# so the container can run alongside `make dev` / `make agentic-dev`).
+export DOCKER_API_PORT   ?= 8210
 
 .PHONY: help install dev agentic-dev \
         format format-ts format-py format-check format-check-ts format-check-py \
         lint lint-ts lint-py lint-fix lint-fix-ts lint-fix-py \
         typecheck typecheck-ts typecheck-py \
         test test-ts test-py test-e2e \
-        fix ci clean port-debug port-clean
+        fix ci clean port-debug port-clean \
+        docker-build docker-up docker-down docker-logs docker-restart docker-status \
+        test-api-docker test-e2e-docker
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z][a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-22s\033[0m %s\n", $$1, $$2}'
@@ -101,18 +106,49 @@ fix: format lint-fix ## Auto-fix everything fixable (format + lint-fix, both hal
 ci: format-check lint typecheck test test-e2e ## Strict gate (format-check + lint + typecheck + test + e2e)
 
 # =============================================================================
+# Docker (deploy-parity testing)
+# =============================================================================
+# The backend ships with a multi-stage Dockerfile. Compose orchestrates a
+# single backend service. Frontend stays as Vite (proxies /api -> docker).
+#
+# Port: container 8000 -> host $(DOCKER_API_PORT) (default 8210).
+
+docker-build: ## Build the backend Docker image
+	docker compose build
+
+docker-up: ## Start backend in Docker (detached, waits for healthcheck)
+	docker compose up -d --wait
+
+docker-down: ## Stop and remove the Docker stack
+	docker compose down -v --remove-orphans
+
+docker-logs: ## Tail the docker compose logs
+	docker compose logs -f
+
+docker-restart: docker-down docker-up ## Restart the docker stack
+
+docker-status: ## Show docker compose ps
+	docker compose ps
+
+test-api-docker: docker-up ## Run pytest against the dockerized backend (port $(DOCKER_API_PORT))
+	BACKEND_BASE_URL=http://localhost:$(DOCKER_API_PORT) $(MAKE) -C backend test-docker
+
+test-e2e-docker: docker-up ## Run Playwright with the Vite frontend pointed at the dockerized backend
+	PLAYWRIGHT_API_PORT=$(DOCKER_API_PORT) PLAYWRIGHT_FRONTEND_ONLY=1 $(MAKE) -C frontend test-e2e
+
+# =============================================================================
 # Port management
 # =============================================================================
 
 port-debug: ## Show which dev ports are in use
-	@for port in $(API_PORT) $(AGENTIC_API_PORT) $(DEV_PORT) $(AGENTIC_DEV_PORT); do \
+	@for port in $(API_PORT) $(AGENTIC_API_PORT) $(DEV_PORT) $(AGENTIC_DEV_PORT) $(DOCKER_API_PORT); do \
 		pid=$$(lsof -ti:$$port 2>/dev/null || true); \
 		if [ -n "$$pid" ]; then echo "  port $$port: in use by PID $$pid"; \
 		else echo "  port $$port: free"; fi; \
 	done
 
-port-clean: ## Kill processes on all 4 dev ports
-	@for port in $(API_PORT) $(AGENTIC_API_PORT) $(DEV_PORT) $(AGENTIC_DEV_PORT); do \
+port-clean: ## Kill processes on all 5 dev/docker ports
+	@for port in $(API_PORT) $(AGENTIC_API_PORT) $(DEV_PORT) $(AGENTIC_DEV_PORT) $(DOCKER_API_PORT); do \
 		pid=$$(lsof -ti:$$port 2>/dev/null || true); \
 		if [ -n "$$pid" ]; then kill -9 $$pid && echo "  killed PID $$pid on port $$port"; fi; \
 	done

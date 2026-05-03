@@ -389,6 +389,7 @@ process.chdir(projectRoot); // copy helpers expect project-root-relative paths
 copyResource("frontend/vite.config.ts");
 copyResource("frontend/playwright.config.ts");
 copyResource("frontend/Makefile");
+copyResource("frontend/CLAUDE.md");
 copyResource("frontend/src/index.css");
 copyResource("frontend/src/vite-env.d.ts");
 copyResource("frontend/src/setupTests.ts");
@@ -475,15 +476,24 @@ console.log("\nStep 11: Copying backend resources...");
 copyResourceTree("backend");
 
 // ============================================================================
-// Step 12: Top-level orchestration files (Makefile + .gitignore + GH Actions).
-// `gitignore` (no leading dot) lives in resources/ so it doesn't accidentally
-// gitignore the resource tree itself when the skill repo is checked out.
+// Step 12: Top-level orchestration files.
+//   - Makefile: top-level make targets (delegates via `make -C ...`).
+//   - .gitignore: covers Python, Node/Bun/Vite, e2e artefacts, Docker. The
+//     resource is named `gitignore` (no leading dot) so it doesn't accidentally
+//     gitignore the resource tree itself in the skill repo.
+//   - .github/workflows/build.yml: bun + uv + `make ci` + Playwright cache.
+//   - CLAUDE.md: project-root agent memory (inner-loop, ports, Docker, anti-
+//     patterns). The backend/CLAUDE.md and frontend/CLAUDE.md are copied with
+//     their respective resource trees in Steps 10 / 11.
+//   - docker-compose.yml: backend service for deploy-parity testing.
 // ============================================================================
 
 console.log("\nStep 12: Copying top-level orchestration files...");
 copyResource("Makefile");
 copyResource("gitignore", ".gitignore");
 copyResource(".github/workflows/build.yml");
+copyResource("CLAUDE.md");
+copyResource("docker-compose.yml");
 
 // ============================================================================
 // Step 13: README.md + CONTRIBUTING.md.
