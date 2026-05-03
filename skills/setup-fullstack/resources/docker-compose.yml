@@ -1,19 +1,24 @@
-# Docker Compose: backend service for local + CI deploy-parity testing.
+# Docker Compose: single service that bundles the FastAPI backend + the
+# built React SPA. From the project root:
 #
-# - Build context is ./backend (uses backend/Dockerfile).
-# - Container listens on 8000; host port is DOCKER_API_PORT (default 8210)
-#   so it doesn't collide with `make dev` (8200) or `make agentic-dev` (8201).
-# - Healthcheck hits /api/health; `docker compose up --wait` blocks until healthy.
-# - No frontend service: the frontend remains a Vite dev server in tests
-#   (`make test-e2e-docker` points the Vite proxy at port 8210).
+#   make docker-build         # build the image (bun + vite build, then uv sync)
+#   make docker-up            # start detached, wait for healthcheck, print URL
+#   make docker-up-fg         # start in foreground (Ctrl+C to stop)
+#   make docker-down          # tear down + remove volume
+#   make ci-docker            # full deploy-parity gate (api + e2e against the container)
+#
+# Container listens on 8000; host port is DOCKER_API_PORT (default 8210),
+# separate from `make dev` (8200) and `make agentic-dev` (8201) so all three
+# can coexist.
 
 services:
   backend:
     build:
-      context: ./backend
+      # Build context = project root (the Dockerfile pulls from frontend/ AND backend/).
+      context: .
       dockerfile: Dockerfile
-    image: ${COMPOSE_PROJECT_NAME:-fullstack}-backend
-    container_name: ${COMPOSE_PROJECT_NAME:-fullstack}-backend
+    image: ${COMPOSE_PROJECT_NAME:-fullstack}-app
+    container_name: ${COMPOSE_PROJECT_NAME:-fullstack}-app
     ports:
       - "${DOCKER_API_PORT:-8210}:8000"
     healthcheck:
@@ -26,6 +31,6 @@ services:
         ]
       interval: 5s
       timeout: 3s
-      retries: 5
-      start_period: 5s
+      retries: 6
+      start_period: 8s
     restart: unless-stopped

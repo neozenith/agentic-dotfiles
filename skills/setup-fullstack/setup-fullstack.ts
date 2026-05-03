@@ -166,8 +166,8 @@ process.chdir(join(projectRoot, "frontend"));
 console.log("\nStep 3: Installing all dependencies...");
 await runQuiet("scaffold deps installed", $`bun install`);
 await runQuiet(
-  "Tailwind + shadcn deps installed",
-  $`bun add tailwindcss @tailwindcss/vite class-variance-authority clsx tailwind-merge`,
+  "Tailwind + shadcn + react-router deps installed",
+  $`bun add tailwindcss @tailwindcss/vite class-variance-authority clsx tailwind-merge react-router-dom`,
 );
 await runQuiet(
   "dev deps installed (biome, playwright, vitest, etc.)",
@@ -393,7 +393,13 @@ copyResource("frontend/CLAUDE.md");
 copyResource("frontend/src/index.css");
 copyResource("frontend/src/vite-env.d.ts");
 copyResource("frontend/src/setupTests.ts");
-copyResource("frontend/src/lib/utils.test.ts");
+copyResource("frontend/src/App.tsx");
+// Tree copies merge into existing dirs — shadcn-init's `lib/utils.ts` and any
+// `components/ui/*` it adds later survive; our `lib/api.ts`, the Layout
+// component, and the page modules slot in alongside.
+copyResourceTree("frontend/src/lib");
+copyResourceTree("frontend/src/components");
+copyResourceTree("frontend/src/pages");
 copyResourceTree("frontend/e2e");
 
 // ============================================================================
@@ -468,12 +474,22 @@ createRoot(rootElement).render(
 }
 
 // ============================================================================
-// Step 11: Copy the entire backend tree (server/ + tests/ + Makefile +
-// pyproject.toml) into backend/.
+// Step 11: Copy backend resources file-by-file.
+//
+// Note: we deliberately DO NOT use `copyResourceTree("backend")` here even
+// though it would work — it would also copy the stale `backend/Dockerfile`
+// and `backend/.dockerignore` from earlier iterations. The bundled Docker
+// image now builds from a project-root Dockerfile (see Step 12), so the
+// per-backend ones must not land in the user's tree.
 // ============================================================================
 
 console.log("\nStep 11: Copying backend resources...");
-copyResourceTree("backend");
+copyResource("backend/pyproject.toml");
+copyResource("backend/Makefile");
+copyResource("backend/README.md");
+copyResource("backend/CLAUDE.md");
+copyResourceTree("backend/server");
+copyResourceTree("backend/tests");
 
 // ============================================================================
 // Step 12: Top-level orchestration files.
@@ -494,6 +510,10 @@ copyResource("gitignore", ".gitignore");
 copyResource(".github/workflows/build.yml");
 copyResource("CLAUDE.md");
 copyResource("docker-compose.yml");
+// Multi-stage Dockerfile bundling the React SPA + FastAPI backend; build
+// context is project root, so it must live alongside docker-compose.yml.
+copyResource("Dockerfile");
+copyResource(".dockerignore");
 
 // ============================================================================
 // Step 13: README.md + CONTRIBUTING.md.

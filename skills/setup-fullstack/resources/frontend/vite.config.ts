@@ -35,15 +35,14 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "html", "lcov"],
-      include: ["src/**/*.{ts,tsx}"],
-      exclude: [
-        "src/**/*.test.{ts,tsx}",
-        "src/main.tsx",
-        "src/App.tsx",
-        "src/setupTests.ts",
-        "src/vite-env.d.ts",
-        "src/components/ui/**",
-      ],
+      // Coverage focuses on src/lib/** — the deterministic, unit-testable
+      // surface. UI components and pages are covered by the Playwright e2e
+      // suite (slug-taxonomy + coverage-matrix), not Vitest.
+      // src/lib/api.ts is excluded because testing it at the unit level
+      // would require mocking fetch (against the project's no-mocks ethos);
+      // the Playwright e2e exercises it end-to-end against the real backend.
+      include: ["src/lib/**/*.{ts,tsx}"],
+      exclude: ["src/lib/**/*.test.{ts,tsx}", "src/lib/api.ts"],
       thresholds: {
         lines: 90,
         functions: 90,

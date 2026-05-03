@@ -1,19 +1,33 @@
 """FastAPI app factory.
 
-Tests build isolated apps per fixture by calling `create_app()` directly,
-which is why uvicorn is configured with `factory=True` in __main__.py.
+Tests build isolated apps per fixture by calling `create_app(database_url=...)`
+directly, which is why uvicorn is configured with `factory=True` in __main__.py.
+
+When STATIC_DIR is set (Docker image bundles the built frontend), the factory
+mounts the SPA at `/`. API routes under `/api/*` keep precedence because they
+are registered BEFORE the catchall mount.
 """
 
 from __future__ import annotations
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
+# Import models so they register with Base BEFORE create_all is called.
+from server import models  # noqa: F401
 from server.api.routes import router
+from server.config import get_database_url, get_static_dir
+from server.db import DatabaseProvider
 
 
-def create_app() -> FastAPI:
+def create_app(database_url: str | None = None) -> FastAPI:
+    db = DatabaseProvider(database_url or get_database_url())
+    db.create_all()
+
     app = FastAPI(title="server", version="0.1.0")
+    app.state.db = db
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[
@@ -27,4 +41,13 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     app.include_router(router, prefix="/api")
+
+    # Mount the built SPA at `/` if STATIC_DIR is configured. `html=True`
+    # serves index.html for paths that don't match a file (SPA routing).
+    static_dir = get_static_dir()
+    if static_dir is not None:
+        if not static_dir.is_dir():
+            raise RuntimeError(f"STATIC_DIR={static_dir} does not exist")
+        app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="spa")
+
     return app

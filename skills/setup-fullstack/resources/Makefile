@@ -3,13 +3,12 @@ SHELL := /bin/bash
 
 # Ports — exported so child Makefiles + processes inherit them.
 # Both backend AND frontend ports split across human/agent profiles so two
-# concurrent dev sessions never collide.
+# concurrent dev sessions never collide. Docker uses a third pair so the
+# container can run alongside `make dev` / `make agentic-dev`.
 export API_PORT          ?= 8200
 export AGENTIC_API_PORT  ?= 8201
 export DEV_PORT          ?= 5173
 export AGENTIC_DEV_PORT  ?= 5174
-# Docker host-port for the dockerized backend (different from human/agent
-# so the container can run alongside `make dev` / `make agentic-dev`).
 export DOCKER_API_PORT   ?= 8210
 
 .PHONY: help install dev agentic-dev \
@@ -17,8 +16,8 @@ export DOCKER_API_PORT   ?= 8210
         lint lint-ts lint-py lint-fix lint-fix-ts lint-fix-py \
         typecheck typecheck-ts typecheck-py \
         test test-ts test-py test-e2e \
-        fix ci clean port-debug port-clean \
-        docker-build docker-up docker-down docker-logs docker-restart docker-status \
+        fix ci ci-docker clean port-debug port-clean \
+        docker-build docker-up docker-up-fg docker-down docker-logs docker-restart docker-status \
         test-api-docker test-e2e-docker
 
 help: ## Show this help
@@ -106,20 +105,33 @@ fix: format lint-fix ## Auto-fix everything fixable (format + lint-fix, both hal
 ci: format-check lint typecheck test test-e2e ## Strict gate (format-check + lint + typecheck + test + e2e)
 
 # =============================================================================
-# Docker (deploy-parity testing)
+# Docker (deploy-parity testing — image bundles frontend SPA + FastAPI backend)
 # =============================================================================
-# The backend ships with a multi-stage Dockerfile. Compose orchestrates a
-# single backend service. Frontend stays as Vite (proxies /api -> docker).
-#
-# Port: container 8000 -> host $(DOCKER_API_PORT) (default 8210).
 
-docker-build: ## Build the backend Docker image
+docker-build: ## Build the bundled (frontend + backend) Docker image
 	docker compose build
 
-docker-up: ## Start backend in Docker (detached, waits for healthcheck)
+docker-up: ## Start the Docker stack DETACHED, wait for /api/health, print URL
 	docker compose up -d --wait
+	@echo ""
+	@echo "  ┌──────────────────────────────────────────────────────────┐"
+	@echo "  │  App ready at: http://localhost:$(DOCKER_API_PORT)                       │"
+	@echo "  │    SPA:         http://localhost:$(DOCKER_API_PORT)/                      │"
+	@echo "  │    API health:  http://localhost:$(DOCKER_API_PORT)/api/health            │"
+	@echo "  │    OpenAPI:     http://localhost:$(DOCKER_API_PORT)/docs                  │"
+	@echo "  │  Stop with: make docker-down                              │"
+	@echo "  └──────────────────────────────────────────────────────────┘"
+	@echo ""
 
-docker-down: ## Stop and remove the Docker stack
+docker-up-fg: ## Start the Docker stack in the FOREGROUND (Ctrl+C to stop)
+	@echo ""
+	@echo "  Starting Docker stack in foreground..."
+	@echo "  Once healthy: http://localhost:$(DOCKER_API_PORT)"
+	@echo "  Press Ctrl+C to stop."
+	@echo ""
+	docker compose up
+
+docker-down: ## Stop and remove the Docker stack (incl. volumes)
 	docker compose down -v --remove-orphans
 
 docker-logs: ## Tail the docker compose logs
@@ -136,11 +148,19 @@ test-api-docker: docker-up ## Run pytest against the dockerized backend (port $(
 test-e2e-docker: docker-up ## Run Playwright with the Vite frontend pointed at the dockerized backend
 	PLAYWRIGHT_API_PORT=$(DOCKER_API_PORT) PLAYWRIGHT_FRONTEND_ONLY=1 $(MAKE) -C frontend test-e2e
 
+ci-docker: docker-build ## Strict gate vs the dockerized backend (api + e2e); cleans up on exit
+	@trap "$(MAKE) docker-down >/dev/null 2>&1 || true" EXIT INT TERM; \
+		$(MAKE) test-api-docker && \
+		$(MAKE) test-e2e-docker && \
+		echo "" && \
+		echo "  ci-docker: PASS" && \
+		echo ""
+
 # =============================================================================
 # Port management
 # =============================================================================
 
-port-debug: ## Show which dev ports are in use
+port-debug: ## Show which dev/docker ports are in use
 	@for port in $(API_PORT) $(AGENTIC_API_PORT) $(DEV_PORT) $(AGENTIC_DEV_PORT) $(DOCKER_API_PORT); do \
 		pid=$$(lsof -ti:$$port 2>/dev/null || true); \
 		if [ -n "$$pid" ]; then echo "  port $$port: in use by PID $$pid"; \
