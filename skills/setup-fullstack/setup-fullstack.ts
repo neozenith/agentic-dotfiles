@@ -534,6 +534,7 @@ copyResource("docker-compose.yml");
 copyResource("docker-compose.sqlite.yml");
 copyResource("docker-compose.postgres.yml");
 copyResource("docker-compose.minio.yml");
+copyResource("docker-compose.local-storage.yml");
 // Multi-stage Dockerfile bundling the React SPA + FastAPI backend; build
 // context is project root, so it must live alongside docker-compose.yml.
 copyResource("Dockerfile");

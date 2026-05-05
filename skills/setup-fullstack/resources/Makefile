@@ -17,15 +17,21 @@ export DOCKER_API_PORT   ?= 8210
 # variable is re-evaluated on every use — picks up command-line overrides.
 DATABASE_BACKEND ?= sqlite
 
-# BACKUP_BACKEND optionally layers an object-store service for the postgres
-# backup feature. `none` (default) skips it; `minio` adds a local S3-compatible
-# bucket + an init sidecar that creates the target bucket. AWS-S3 mode wants
-# `none` here and AWS_* env vars on the backend.
+# BACKUP_BACKEND optionally layers an overlay for the postgres backup feature:
+#   none     — default; backup feature stays OFF
+#   local    — filesystem-backed StorageBackend (volume-mounted)
+#   minio    — local S3-compatible service + bucket-init sidecar
+#
+# AWS S3 mode wants BACKUP_BACKEND=none and the host shell to export
+# STORAGE_BACKEND=s3 + STORAGE_BUCKET + S3_REGION + AWS_* — the base compose
+# threads those through to the backend container via env passthrough.
 BACKUP_BACKEND ?= none
 
 COMPOSE_FILES_BASE = -f docker-compose.yml -f docker-compose.$(DATABASE_BACKEND).yml
 ifeq ($(BACKUP_BACKEND),minio)
   COMPOSE_FILES = $(COMPOSE_FILES_BASE) -f docker-compose.minio.yml
+else ifeq ($(BACKUP_BACKEND),local)
+  COMPOSE_FILES = $(COMPOSE_FILES_BASE) -f docker-compose.local-storage.yml
 else
   COMPOSE_FILES = $(COMPOSE_FILES_BASE)
 endif
@@ -37,7 +43,7 @@ endif
         test test-ts test-py test-e2e \
         fix ci ci-docker clean port-debug port-clean \
         docker-build docker-up docker-dev docker-down docker-logs docker-restart docker-status \
-        docker-up-sqlite docker-up-postgres docker-up-postgres-minio minio-logs \
+        docker-up-sqlite docker-up-postgres docker-up-postgres-minio docker-up-postgres-local minio-logs \
         test-api-docker test-e2e-docker test-backup-roundtrip
 
 help: ## Show this help
@@ -165,6 +171,13 @@ docker-up-postgres-minio: ## Postgres + MinIO stack — full local backup/restor
 	@echo "  MinIO console:   http://localhost:9001 (minioadmin / minioadmin)"
 	@echo "  MinIO S3 API:    http://localhost:9000"
 	@echo "  Bucket:          app-backups"
+	@echo ""
+
+docker-up-postgres-local: ## Postgres + filesystem-backed LocalStorage backup
+	$(MAKE) DATABASE_BACKEND=postgres BACKUP_BACKEND=local docker-up
+	@echo ""
+	@echo "  Backup target:   filesystem (named volume local-storage-data)"
+	@echo "  In-container:    /app/data/storage/"
 	@echo ""
 
 minio-logs: ## Tail just the minio + minio-init container logs

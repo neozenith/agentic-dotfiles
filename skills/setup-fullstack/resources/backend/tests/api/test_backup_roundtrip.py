@@ -73,7 +73,14 @@ async def test_backup_status_shows_feature_enabled(
     assert response.status_code == 200
     body = response.json()
     assert body["enabled"] is True
-    assert body["bucket"] == "s3://app-backups"
+    # The bucket label is variation-specific:
+    #   S3Backend  -> "s3://<bucket>"   (MinIO uses "s3://app-backups", AWS uses
+    #                                    whatever STORAGE_BUCKET names)
+    #   LocalStorage -> "LocalStorage"
+    # Just check it's a non-empty string — the matrix tests run against multiple
+    # backends, all of which honor this floor.
+    assert isinstance(body["bucket"], str) and body["bucket"]
+    assert body["key_prefix"], "key_prefix must be set (defaults to 'backups/')"
 
 
 async def test_full_backup_restore_roundtrip(

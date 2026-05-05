@@ -2,12 +2,27 @@
 
 Only env-var reads in the codebase live here; everything else takes config as
 a parameter. Keeps config drift easy to audit.
+
+Env-var lookup uses `_env_or_default` — present-but-empty is treated as
+missing. This matters because docker-compose's `${VAR:-}` passthrough always
+SETS the variable (to an empty string when the host hasn't exported it),
+which would otherwise bypass any Python-side default.
 """
 
 from __future__ import annotations
 
 import os
 from pathlib import Path
+
+
+def _env_or_default(name: str, default: str) -> str:
+    """Read an env var, treating empty/whitespace-only values as missing.
+
+    `os.environ.get(name, default)` only returns the default when the key
+    is ABSENT. With compose's `${VAR:-}` passthrough, the key is always
+    PRESENT (just empty), so the default never fires unless we strip-and-check.
+    """
+    return os.environ.get(name, "").strip() or default
 
 # Default to async SQLite for local dev. Override via DATABASE_URL.
 # Examples:
@@ -25,12 +40,12 @@ DEFAULT_BACKUP_KEY_PREFIX = "backups/"
 
 def get_database_url() -> str:
     """Return the configured DATABASE_URL, or a sensible local default."""
-    return os.environ.get("DATABASE_URL", DEFAULT_DATABASE_URL)
+    return _env_or_default("DATABASE_URL", DEFAULT_DATABASE_URL)
 
 
 def get_static_dir() -> Path | None:
     """If STATIC_DIR is set, return it as a Path. Used by create_app to mount the SPA."""
-    raw = os.environ.get("STATIC_DIR")
+    raw = os.environ.get("STATIC_DIR", "").strip()
     if not raw:
         return None
     return Path(raw)
@@ -46,7 +61,7 @@ def get_backup_interval_seconds() -> int:
 
 def get_backup_key_prefix() -> str:
     """Object-key prefix for all backup files (timestamped + latest pointer)."""
-    return os.environ.get("BACKUP_KEY_PREFIX", DEFAULT_BACKUP_KEY_PREFIX)
+    return _env_or_default("BACKUP_KEY_PREFIX", DEFAULT_BACKUP_KEY_PREFIX)
 
 
 def is_backup_enabled() -> bool:
