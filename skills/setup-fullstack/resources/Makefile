@@ -16,7 +16,19 @@ export DOCKER_API_PORT   ?= 8210
 # (or any other docker-* target). Recursive expansion (`=`, not `:=`) so the
 # variable is re-evaluated on every use — picks up command-line overrides.
 DATABASE_BACKEND ?= sqlite
-COMPOSE_FILES = -f docker-compose.yml -f docker-compose.$(DATABASE_BACKEND).yml
+
+# BACKUP_BACKEND optionally layers an object-store service for the postgres
+# backup feature. `none` (default) skips it; `minio` adds a local S3-compatible
+# bucket + an init sidecar that creates the target bucket. AWS-S3 mode wants
+# `none` here and AWS_* env vars on the backend.
+BACKUP_BACKEND ?= none
+
+COMPOSE_FILES_BASE = -f docker-compose.yml -f docker-compose.$(DATABASE_BACKEND).yml
+ifeq ($(BACKUP_BACKEND),minio)
+  COMPOSE_FILES = $(COMPOSE_FILES_BASE) -f docker-compose.minio.yml
+else
+  COMPOSE_FILES = $(COMPOSE_FILES_BASE)
+endif
 
 .PHONY: help install dev agentic-dev \
         format format-ts format-py format-check format-check-ts format-check-py \
@@ -25,8 +37,8 @@ COMPOSE_FILES = -f docker-compose.yml -f docker-compose.$(DATABASE_BACKEND).yml
         test test-ts test-py test-e2e \
         fix ci ci-docker clean port-debug port-clean \
         docker-build docker-up docker-dev docker-down docker-logs docker-restart docker-status \
-        docker-up-sqlite docker-up-postgres \
-        test-api-docker test-e2e-docker
+        docker-up-sqlite docker-up-postgres docker-up-postgres-minio minio-logs \
+        test-api-docker test-e2e-docker test-backup-roundtrip
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z][a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-22s\033[0m %s\n", $$1, $$2}'
@@ -147,6 +159,17 @@ docker-up-sqlite: ## Convenience: docker-up with DATABASE_BACKEND=sqlite (the de
 docker-up-postgres: ## Convenience: docker-up with DATABASE_BACKEND=postgres
 	$(MAKE) DATABASE_BACKEND=postgres docker-up
 
+docker-up-postgres-minio: ## Postgres + MinIO stack — full local backup/restore round-trip
+	$(MAKE) DATABASE_BACKEND=postgres BACKUP_BACKEND=minio docker-up
+	@echo ""
+	@echo "  MinIO console:   http://localhost:9001 (minioadmin / minioadmin)"
+	@echo "  MinIO S3 API:    http://localhost:9000"
+	@echo "  Bucket:          app-backups"
+	@echo ""
+
+minio-logs: ## Tail just the minio + minio-init container logs
+	docker compose $(COMPOSE_FILES) logs -f minio minio-init
+
 docker-down: ## Stop and remove the Docker stack (incl. volumes)
 	docker compose $(COMPOSE_FILES) down -v --remove-orphans
 
@@ -163,6 +186,12 @@ test-api-docker: docker-up ## Run pytest against the dockerized backend (port $(
 
 test-e2e-docker: docker-up ## Run Playwright with the Vite frontend pointed at the dockerized backend
 	PLAYWRIGHT_API_PORT=$(DOCKER_API_PORT) PLAYWRIGHT_FRONTEND_ONLY=1 $(MAKE) -C frontend test-e2e
+
+test-backup-roundtrip: ## Postgres+MinIO backup/restore integration test (boots stack, runs test, tears down)
+	@trap "$(MAKE) DATABASE_BACKEND=postgres BACKUP_BACKEND=minio docker-down >/dev/null 2>&1 || true" EXIT INT TERM; \
+		$(MAKE) DATABASE_BACKEND=postgres BACKUP_BACKEND=minio docker-up && \
+		BACKEND_BASE_URL=http://localhost:$(DOCKER_API_PORT) \
+		  $(MAKE) -C backend test-backup-roundtrip
 
 ci-docker: docker-build ## Strict gate vs the dockerized backend (api + e2e); cleans up on exit
 	@trap "$(MAKE) docker-down >/dev/null 2>&1 || true" EXIT INT TERM; \

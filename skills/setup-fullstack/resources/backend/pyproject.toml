@@ -14,6 +14,8 @@ dependencies = [
     "aiosqlite>=0.20",
     # Async Postgres driver — used when DATABASE_URL starts with `postgresql+asyncpg://`.
     "asyncpg>=0.29",
+    "boto3>=1.43.2",
+    "botocore>=1.43.2",
 ]
 
 [dependency-groups]
@@ -26,6 +28,7 @@ dev = [
     "mypy>=1.13",
     # Drives FastAPI lifespan in tests using AsyncClient + ASGITransport.
     "asgi-lifespan>=2.1",
+    "boto3-stubs[s3]>=1.43.2",
 ]
 
 [build-system]
@@ -88,7 +91,15 @@ branch = true
 # tracking greenlet context switches, coverage misses every line AFTER an
 # `await session.X()` call inside route handlers.
 concurrency = ["greenlet", "thread"]
-omit = ["server/__main__.py"]
+omit = [
+    "server/__main__.py",
+    # S3Backend operations call boto3 against a real bucket. They are exercised
+    # by the dockerized integration test (tests/api/test_backup_roundtrip.py)
+    # and by InMemoryBackend's contract tests (which honor the same Protocol).
+    # No way to unit-test the boto3-driven branch without a running endpoint
+    # under the no-mocks rule.
+    "server/storage/s3.py",
+]
 
 [tool.coverage.report]
 fail_under = 90

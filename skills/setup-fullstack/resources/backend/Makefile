@@ -5,7 +5,7 @@ API_PORT         ?= 8200
 AGENTIC_API_PORT ?= 8201
 
 .PHONY: install dev agentic-dev format format-check lint lint-fix typecheck \
-        test test-cov test-docker clean
+        test test-cov test-docker test-backup-roundtrip clean
 
 # uv sync materialises the venv from uv.lock; the conditional handles the
 # fresh-checkout case where there's no lockfile yet (first install creates it).
@@ -55,6 +55,15 @@ test-docker:
 		exit 1; \
 	fi
 	uv run pytest tests/api --no-cov -v
+
+# Run only the backup/restore roundtrip test; expects the dockerized stack
+# (Postgres + MinIO) to be up and BACKEND_BASE_URL set by the caller.
+test-backup-roundtrip:
+	@if [ -z "$${BACKEND_BASE_URL:-}" ]; then \
+		echo "ERROR: BACKEND_BASE_URL must be set (e.g. http://localhost:8210)" >&2; \
+		exit 1; \
+	fi
+	uv run pytest tests/api/test_backup_roundtrip.py --no-cov -v
 
 clean:
 	rm -rf .pytest_cache .mypy_cache .ruff_cache htmlcov .coverage dist build

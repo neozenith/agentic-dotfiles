@@ -527,11 +527,13 @@ copyResource("Makefile");
 copyResource("gitignore", ".gitignore");
 copyResource(".github/workflows/build.yml");
 copyResource("CLAUDE.md");
-// Layered docker-compose: the base + one overlay per DB backend. The Makefile
-// picks which overlay to layer in via DATABASE_BACKEND={sqlite,postgres}.
+// Layered docker-compose: the base + one overlay per DB backend, plus an
+// optional storage overlay. The Makefile picks which to layer via
+// DATABASE_BACKEND={sqlite,postgres} and BACKUP_BACKEND={none,minio}.
 copyResource("docker-compose.yml");
 copyResource("docker-compose.sqlite.yml");
 copyResource("docker-compose.postgres.yml");
+copyResource("docker-compose.minio.yml");
 // Multi-stage Dockerfile bundling the React SPA + FastAPI backend; build
 // context is project root, so it must live alongside docker-compose.yml.
 copyResource("Dockerfile");

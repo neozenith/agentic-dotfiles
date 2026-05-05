@@ -43,6 +43,14 @@ RUN uv sync --frozen --no-dev --no-install-project
 FROM python:3.12-slim AS runtime
 WORKDIR /app
 
+# postgresql-client provides pg_dump / pg_restore for the backup feature.
+# `--no-install-recommends` keeps the image small (~30MB added vs. several
+# hundred without). Install BEFORE copying the venv so apt's pip-cache
+# eviction never touches our prebuilt env.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy the built artefacts: backend venv, backend source, and the built SPA.
 COPY --from=backend-builder /work/.venv /app/.venv
 COPY backend/server /app/server
