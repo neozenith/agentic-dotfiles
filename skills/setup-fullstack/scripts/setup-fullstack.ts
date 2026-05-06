@@ -200,16 +200,41 @@ if (existsSync("frontend")) {
 
 // ============================================================================
 // Step 2: Scaffold Vite + React + TypeScript into frontend/.
+//
+// Three invariants make this non-hanging in interactive TTY (zsh) sessions:
+//
+//   1. `bunx --bun create-vite@latest` (not `bun create vite@latest`) — bunx
+//      forwards args directly to create-vite without bun-create's wrapping
+//      that occasionally drops `--template` and forces a framework prompt.
+//   2. `< /dev/null` redirects stdin so create-vite's prompt library reads
+//      EOF and falls back to defaults instead of blocking forever waiting
+//      on a TTY the user can't see (stdout is captured + invisible).
+//   3. NO `.quiet()` — create-vite's progress + any error/prompt is allowed
+//      to flow through so you can SEE what it's doing. The trade-off is
+//      ~30 lines of npm-install noise on success; worth it to never have
+//      a 93-minute silent deadlock again.
+//
+// Post-validation: assert frontend/ exists. Older bug: create-vite exited 0
+// after a TTY interrupt without creating the directory; the script then
+// ENOENT'd on the next chdir. Fail loudly here instead.
 // ============================================================================
 
 log("\nStep 2: Scaffolding Vite + React + TypeScript into frontend/...");
-await runQuiet(
-  "Vite scaffold complete",
-  $`bun create vite@latest frontend --template react-ts`,
-);
+const viteResult = await $`bunx --bun create-vite@latest frontend --template react-ts < /dev/null`.nothrow();
+if (viteResult.exitCode !== 0) {
+  elog(`  Vite scaffold FAILED (exit ${viteResult.exitCode})`);
+  process.exit(1);
+}
+const viteScaffoldDir = join(projectRoot, "frontend");
+if (!existsSync(viteScaffoldDir)) {
+  elog(`  Vite scaffold reported success but ${viteScaffoldDir} does not exist.`);
+  elog(`  create-vite may have been TTY-interrupted; check above output.`);
+  process.exit(1);
+}
+log("  Vite scaffold complete");
 
 // All subsequent frontend steps run with cwd = frontend/.
-process.chdir(join(projectRoot, "frontend"));
+process.chdir(viteScaffoldDir);
 
 // ============================================================================
 // Step 3: Install all the deps the scaffold needs (base + Tailwind + shadcn
@@ -434,7 +459,11 @@ copyResource("frontend/src/index.css");
 // ============================================================================
 
 log("\nStep 9: Initializing shadcn/ui...");
-await runQuiet("shadcn/ui initialized", $`bunx --bun shadcn@latest init -d`);
+// `< /dev/null` defends against TTY-driven prompts in shadcn-cli — same
+// hardening pattern as Step 2. The `-d` flag uses defaults, so the redirect
+// is a belt-and-suspenders measure that costs nothing if shadcn is already
+// fully non-interactive.
+await runQuiet("shadcn/ui initialized", $`bunx --bun shadcn@latest init -d < /dev/null`);
 
 // ============================================================================
 // Step 9.5: Add the shadcn components the layout + pages depend on (button,
@@ -446,7 +475,7 @@ await runQuiet("shadcn/ui initialized", $`bunx --bun shadcn@latest init -d`);
 log("\nStep 9.5: Adding shadcn components (button, card)...");
 await runQuiet(
   "shadcn components added (button, card)",
-  $`bunx --bun shadcn@latest add button card --yes --overwrite`,
+  $`bunx --bun shadcn@latest add button card --yes --overwrite < /dev/null`,
 );
 
 // ============================================================================
