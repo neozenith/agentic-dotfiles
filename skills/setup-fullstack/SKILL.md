@@ -28,10 +28,10 @@ This skill is the fullstack extension of `vite-react-setup`. The frontend half i
 
 ```bash
 # Default — scaffold into the current working directory (no argument required)
-bun .claude/skills/setup-fullstack/setup-fullstack.ts
+bun .claude/skills/setup-fullstack/scripts/setup-fullstack.ts
 
 # Only when the user explicitly asks for a named subdirectory
-bun .claude/skills/setup-fullstack/setup-fullstack.ts my-fullstack-app
+bun .claude/skills/setup-fullstack/scripts/setup-fullstack.ts my-fullstack-app
 ```
 
 The script must run under `bun` — it uses `Bun.$` (typed tagged-template shell) and top-level await.

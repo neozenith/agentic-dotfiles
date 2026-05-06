@@ -37,10 +37,10 @@ Automated setup script for a fullstack web application — Python (FastAPI + uv)
 
 ```bash
 # Set up in the current directory
-bun .claude/skills/setup-fullstack/setup-fullstack.ts
+bun .claude/skills/setup-fullstack/scripts/setup-fullstack.ts
 
 # Set up in a named subdirectory
-bun .claude/skills/setup-fullstack/setup-fullstack.ts my-fullstack-app
+bun .claude/skills/setup-fullstack/scripts/setup-fullstack.ts my-fullstack-app
 ```
 
 ### From Claude Code

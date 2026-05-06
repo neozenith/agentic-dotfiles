@@ -18,8 +18,8 @@
  * copy the resource tree on top.
  *
  * Usage:
- *   bun .claude/skills/setup-fullstack/setup-fullstack.ts                 # current dir
- *   bun .claude/skills/setup-fullstack/setup-fullstack.ts my-fullstack-app  # subdirectory
+ *   bun .claude/skills/setup-fullstack/scripts/setup-fullstack.ts                 # current dir
+ *   bun .claude/skills/setup-fullstack/scripts/setup-fullstack.ts my-fullstack-app  # subdirectory
  */
 
 // @ts-ignore — `bun` is a runtime-provided module
@@ -35,15 +35,57 @@ import {
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+// Script lives at .../setup-fullstack/scripts/setup-fullstack.ts; resources
+// are one directory up at .../setup-fullstack/resources/.
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
-const RESOURCES = join(SCRIPT_DIR, "resources");
+const SKILL_ROOT = dirname(SCRIPT_DIR);
+const RESOURCES = join(SKILL_ROOT, "resources");
 
 const targetDir = process.argv[2] ?? ".";
 const isCurrentDir = targetDir === ".";
 const projectRoot = resolve(targetDir);
 const displayName = isCurrentDir ? "current directory" : targetDir;
 
-console.log(`Setting up fullstack app in ${displayName}...`);
+// ============================================================================
+// Logger — every line gets a [HH:MM:SS +Ns] prefix so a hang shows up as a
+// long elapsed-time gap between adjacent lines. Replaces all direct
+// console.log / console.error in this script.
+//
+// runQuiet additionally emits a heartbeat every 5s for long-running shell
+// calls (bun create vite, bun install, uv sync, …) so the user has proof of
+// life when the underlying tool is silent — addressing the "Step 2 hangs
+// with no updates" symptom on cold caches.
+// ============================================================================
+
+const SCRIPT_START_MS = Date.now();
+const HEARTBEAT_INTERVAL_MS = 5000;
+
+const tsPrefix = (): string => {
+  const now = new Date();
+  const hms = now.toTimeString().slice(0, 8); // "HH:MM:SS"
+  const elapsed = ((Date.now() - SCRIPT_START_MS) / 1000).toFixed(1);
+  return `[${hms} +${elapsed}s]`;
+};
+
+// biome-ignore lint/suspicious/noExplicitAny: process.stdout/stderr loose typing
+const writeStamped = (stream: any, args: unknown[]): void => {
+  const text = args
+    .map((a) => (typeof a === "string" ? a : String(a)))
+    .join(" ");
+  const prefix = tsPrefix();
+  for (const line of text.split("\n")) {
+    if (line === "") {
+      stream.write("\n");
+    } else {
+      stream.write(`${prefix} ${line}\n`);
+    }
+  }
+};
+
+const log = (...args: unknown[]): void => writeStamped(process.stdout, args);
+const elog = (...args: unknown[]): void => writeStamped(process.stderr, args);
+
+log(`Setting up fullstack app in ${displayName}...`);
 
 // ============================================================================
 // Helpers — all resource I/O routes through these.
@@ -55,7 +97,7 @@ const copyResource = (rel: string, dest: string = rel): void => {
   const target = join(projectRoot, dest);
   mkdirSync(dirname(target), { recursive: true });
   cpSync(source, target);
-  console.log(`  copied resources/${rel} -> ${dest}`);
+  log(`  copied resources/${rel} -> ${dest}`);
 };
 
 /** Copy a directory tree recursively. */
@@ -64,7 +106,7 @@ const copyResourceTree = (relDir: string, destDir: string = relDir): void => {
   const target = join(projectRoot, destDir);
   mkdirSync(dirname(target), { recursive: true });
   cpSync(source, target, { recursive: true });
-  console.log(`  copied resources/${relDir}/ -> ${destDir}/`);
+  log(`  copied resources/${relDir}/ -> ${destDir}/`);
 };
 
 /** Read a template file, substitute {{var}} placeholders, write to dest. */
@@ -78,7 +120,7 @@ const writeTemplate = (
     content = content.replaceAll(`{{${k}}}`, v);
   }
   writeFileSync(join(projectRoot, dest), content);
-  console.log(`  wrote ${dest} from template ${rel}`);
+  log(`  wrote ${dest} from template ${rel}`);
 };
 
 /** Snapshot a file's contents if it exists; null otherwise. */
@@ -90,21 +132,33 @@ const snapshotIfExists = (path: string): string | null =>
  * label on success and dumping the captured output on failure (then re-throwing
  * so the script exits non-zero).
  *
- * The reliability case for verbose output is failure — when everything works,
- * the per-package install lists / preflight banners / coverage tables are pure
- * noise that just inflates Claude's context budget on every invocation.
+ * Emits a heartbeat every HEARTBEAT_INTERVAL_MS so a slow underlying call
+ * (e.g. cold-cache `bun create vite` pulling packages) shows progress instead
+ * of looking like a hang. The heartbeat is timestamped, so the user sees:
+ *
+ *   [14:23:45 +0.1s] Step 2: Scaffolding Vite + React + TypeScript ...
+ *   [14:23:50 +5.1s]   ... still running: Vite scaffold complete
+ *   [14:23:55 +10.1s]   ... still running: Vite scaffold complete
+ *   [14:24:01 +16.3s]   Vite scaffold complete
+ *
+ * — fully visible whether the call took 1s or 90s.
  */
 // biome-ignore lint/suspicious/noExplicitAny: Bun's ShellPromise typing isn't loaded
 const runQuiet = async (label: string, p: any): Promise<void> => {
+  const heartbeat = setInterval(() => {
+    log(`  ... still running: ${label}`);
+  }, HEARTBEAT_INTERVAL_MS);
   try {
     await p.quiet();
-    console.log(`  ${label}`);
+    clearInterval(heartbeat);
+    log(`  ${label}`);
   } catch (err) {
-    console.error(`  ${label}: FAILED`);
+    clearInterval(heartbeat);
+    elog(`  ${label}: FAILED`);
     // biome-ignore lint/suspicious/noExplicitAny: ShellError is loosely typed
     const e = err as any;
-    if (e?.stdout) console.error(e.stdout.toString());
-    if (e?.stderr) console.error(e.stderr.toString());
+    if (e?.stdout) elog(e.stdout.toString());
+    if (e?.stderr) elog(e.stderr.toString());
     throw err;
   }
 };
@@ -122,23 +176,23 @@ const preservedContributing = isCurrentDir
   ? snapshotIfExists(join(projectRoot, "CONTRIBUTING.md"))
   : null;
 if (preservedReadme !== null) {
-  console.log("Preserving existing README.md (project-overview content)");
+  log("Preserving existing README.md (project-overview content)");
 }
 if (preservedContributing !== null) {
-  console.log("Preserving existing CONTRIBUTING.md");
+  log("Preserving existing CONTRIBUTING.md");
 }
 
 // ============================================================================
 // Step 1: Create project root + backend dir; abort if frontend already exists.
 // ============================================================================
 
-console.log("\nStep 1: Creating project structure...");
+log("\nStep 1: Creating project structure...");
 mkdirSync(projectRoot, { recursive: true });
 process.chdir(projectRoot);
 mkdirSync("backend", { recursive: true });
 
 if (existsSync("frontend")) {
-  console.error(
+  elog(
     "Error: frontend/ already exists. Aborting to avoid clobbering an existing scaffold.",
   );
   process.exit(1);
@@ -148,7 +202,7 @@ if (existsSync("frontend")) {
 // Step 2: Scaffold Vite + React + TypeScript into frontend/.
 // ============================================================================
 
-console.log("\nStep 2: Scaffolding Vite + React + TypeScript into frontend/...");
+log("\nStep 2: Scaffolding Vite + React + TypeScript into frontend/...");
 await runQuiet(
   "Vite scaffold complete",
   $`bun create vite@latest frontend --template react-ts`,
@@ -163,7 +217,7 @@ process.chdir(join(projectRoot, "frontend"));
 // pays the network cost once, not per-package.
 // ============================================================================
 
-console.log("\nStep 3: Installing all dependencies...");
+log("\nStep 3: Installing all dependencies...");
 await runQuiet("scaffold deps installed", $`bun install`);
 await runQuiet(
   "Tailwind + shadcn + react-router + lucide deps installed",
@@ -181,14 +235,14 @@ await runQuiet(
 // Biome with ESLint+Prettier; their rule sets fight on the same files).
 // ============================================================================
 
-console.log("\nStep 4: Switching from ESLint to Biome...");
+log("\nStep 4: Switching from ESLint to Biome...");
 await runQuiet(
   "removed eslint deps",
   $`bun remove @eslint/js eslint eslint-plugin-react-hooks eslint-plugin-react-refresh globals typescript-eslint`,
 );
 if (existsSync("eslint.config.js")) {
   unlinkSync("eslint.config.js");
-  console.log("  removed eslint.config.js");
+  log("  removed eslint.config.js");
 }
 await runQuiet("biome initialized", $`bunx --bun biome init`);
 
@@ -197,7 +251,7 @@ await runQuiet("biome initialized", $`bunx --bun biome init`);
 // uses chromium for the e2e webServer config).
 // ============================================================================
 
-console.log("\nStep 5: Installing Playwright Chromium...");
+log("\nStep 5: Installing Playwright Chromium...");
 await runQuiet(
   "Chromium installed",
   $`bunx --bun playwright install --with-deps chromium`,
@@ -210,7 +264,7 @@ await runQuiet(
 // build actually consults.
 // ============================================================================
 
-console.log("\nStep 6: Patching tsconfigs with the strict family...");
+log("\nStep 6: Patching tsconfigs with the strict family...");
 
 const STRICT_FAMILY = [
   '"strict": true',
@@ -247,7 +301,7 @@ const patchTsconfig = (filePath: string): void => {
     const block = `  "compilerOptions": {\n${optsLines}\n  },`;
     content = content.replace(/^\s*\{\s*\n/, (m: string) => `${m}${block}\n`);
     writeFileSync(filePath, content);
-    console.log(`  patched ${filePath} (inserted compilerOptions block)`);
+    log(`  patched ${filePath} (inserted compilerOptions block)`);
     return;
   }
 
@@ -278,7 +332,7 @@ const patchTsconfig = (filePath: string): void => {
   }
 
   writeFileSync(filePath, content);
-  console.log(`  patched ${filePath}`);
+  log(`  patched ${filePath}`);
 };
 
 patchTsconfig("tsconfig.json");
@@ -290,7 +344,7 @@ patchTsconfig("tsconfig.app.json");
 // CSS parser. Biome's init writes a JSONC file with tabs.
 // ============================================================================
 
-console.log("\nStep 7: Patching biome.json...");
+log("\nStep 7: Patching biome.json...");
 if (existsSync("biome.json")) {
   // Parse-mutate-stringify avoids the nested-brace pitfall of regex patching.
   // (A previous regex-based approach captured only the inner `}` of the
@@ -327,7 +381,7 @@ if (existsSync("biome.json")) {
     bio.css = { parser: { cssModules: true } };
   }
   writeFileSync("biome.json", `${JSON.stringify(bio, null, 2)}\n`);
-  console.log("  patched biome.json");
+  log("  patched biome.json");
 }
 
 // ============================================================================
@@ -337,7 +391,7 @@ if (existsSync("biome.json")) {
 // re-escaping the dollar signs.
 // ============================================================================
 
-console.log("\nStep 8: Merging package.json scripts...");
+log("\nStep 8: Merging package.json scripts...");
 type PackageJson = { scripts?: Record<string, string>; [k: string]: unknown };
 const pkg: PackageJson = JSON.parse(readFileSync("package.json", "utf8"));
 
@@ -359,7 +413,7 @@ pkg.scripts = {
   typecheck: "tsc -b --noEmit",
 };
 writeFileSync("package.json", `${JSON.stringify(pkg, null, 2)}\n`);
-console.log("  merged scripts into package.json");
+log("  merged scripts into package.json");
 
 // ============================================================================
 // Step 8.5: Pre-stage Tailwind v4 wiring before shadcn init.
@@ -369,7 +423,7 @@ console.log("  merged scripts into package.json");
 // re-copied in Step 10 — that pass becomes a no-op for these two files.
 // ============================================================================
 
-console.log("\nStep 8.5: Pre-staging Tailwind v4 wiring...");
+log("\nStep 8.5: Pre-staging Tailwind v4 wiring...");
 copyResource("frontend/vite.config.ts");
 copyResource("frontend/src/index.css");
 
@@ -379,7 +433,7 @@ copyResource("frontend/src/index.css");
 // so the Tailwind v4 wiring is in place for the preflight check.
 // ============================================================================
 
-console.log("\nStep 9: Initializing shadcn/ui...");
+log("\nStep 9: Initializing shadcn/ui...");
 await runQuiet("shadcn/ui initialized", $`bunx --bun shadcn@latest init -d`);
 
 // ============================================================================
@@ -389,7 +443,7 @@ await runQuiet("shadcn/ui initialized", $`bunx --bun shadcn@latest init -d`);
 // paths yet. shadcn-cli auto-installs any required Radix peer-deps.
 // ============================================================================
 
-console.log("\nStep 9.5: Adding shadcn components (button, card)...");
+log("\nStep 9.5: Adding shadcn components (button, card)...");
 await runQuiet(
   "shadcn components added (button, card)",
   $`bunx --bun shadcn@latest add button card --yes --overwrite`,
@@ -401,7 +455,7 @@ await runQuiet(
 // add the e2e suite + Playwright config + frontend Makefile.
 // ============================================================================
 
-console.log("\nStep 10: Copying frontend resources...");
+log("\nStep 10: Copying frontend resources...");
 process.chdir(projectRoot); // copy helpers expect project-root-relative paths
 
 copyResource("frontend/vite.config.ts");
@@ -438,7 +492,7 @@ copyResourceTree("frontend/e2e");
 //       project's "no graceful degradation" rule.
 // ============================================================================
 
-console.log("\nStep 10.5: Patching Vite-generated frontend files...");
+log("\nStep 10.5: Patching Vite-generated frontend files...");
 
 const frontendGitignore = join(projectRoot, "frontend", ".gitignore");
 if (existsSync(frontendGitignore)) {
@@ -460,7 +514,7 @@ if (existsSync(frontendGitignore)) {
       "",
     ].join("\n");
     writeFileSync(frontendGitignore, existing.trimEnd() + "\n" + block);
-    console.log(
+    log(
       `  patched frontend/.gitignore (added ${missing.length} entries)`,
     );
   }
@@ -487,7 +541,7 @@ createRoot(rootElement).render(
 `;
   if (original !== safeMainTsx) {
     writeFileSync(mainTsx, safeMainTsx);
-    console.log("  patched frontend/src/main.tsx (removed non-null assertion)");
+    log("  patched frontend/src/main.tsx (removed non-null assertion)");
   }
 }
 
@@ -501,7 +555,7 @@ createRoot(rootElement).render(
 // per-backend ones must not land in the user's tree.
 // ============================================================================
 
-console.log("\nStep 11: Copying backend resources...");
+log("\nStep 11: Copying backend resources...");
 copyResource("backend/pyproject.toml");
 copyResource("backend/Makefile");
 copyResource("backend/README.md");
@@ -522,7 +576,7 @@ copyResourceTree("backend/tests");
 //   - docker-compose.yml: backend service for deploy-parity testing.
 // ============================================================================
 
-console.log("\nStep 12: Copying top-level orchestration files...");
+log("\nStep 12: Copying top-level orchestration files...");
 copyResource("Makefile");
 copyResource("gitignore", ".gitignore");
 copyResource(".github/workflows/build.yml");
@@ -546,7 +600,7 @@ copyResource(".dockerignore");
 // templates under resources/templates/.
 // ============================================================================
 
-console.log("\nStep 13: Writing README.md / CONTRIBUTING.md...");
+log("\nStep 13: Writing README.md / CONTRIBUTING.md...");
 
 const projectName = (() => {
   try {
@@ -563,14 +617,14 @@ const projectName = (() => {
 
 if (preservedReadme !== null) {
   writeFileSync(join(projectRoot, "README.md"), preservedReadme);
-  console.log("  README.md preserved verbatim");
+  log("  README.md preserved verbatim");
 } else {
   writeTemplate("templates/README.md.template", "README.md", { projectName });
 }
 
 if (preservedContributing !== null) {
   writeFileSync(join(projectRoot, "CONTRIBUTING.md"), preservedContributing);
-  console.log("  CONTRIBUTING.md preserved verbatim");
+  log("  CONTRIBUTING.md preserved verbatim");
 } else {
   writeTemplate("templates/CONTRIBUTING.md.template", "CONTRIBUTING.md", {
     projectName,
@@ -584,20 +638,37 @@ if (preservedContributing !== null) {
 // against `cd`-ing in shell commands.
 // ============================================================================
 
-console.log("\nStep 14: Running uv sync in backend/...");
+log("\nStep 14: Running uv sync in backend/...");
 await runQuiet("backend deps installed", $`uv --directory backend sync`);
 
 // ============================================================================
-// Step 15: One-shot autofix pass (best effort) so the verification step in
-// Step 16 starts from clean files.
+// Step 15: One-shot autofix pass so the verification step in Step 16 starts
+// from clean files.
+//
+// This MUST surface failures loudly. Older versions of this script had a
+// blanket `catch {}` that printed "moving on" — that swallowed real lint
+// failures (e.g. ruff PT018 has no auto-fix and exits non-zero), then Step 16
+// passed (it doesn't run lint), and the script printed "Setup complete" on a
+// scaffold that would fail `make ci`. Loud-but-recoverable beats
+// silent-but-broken: print the last N lines of output and re-raise.
 // ============================================================================
 
-console.log("\nStep 15: Running `make fix`...");
-try {
-  await $`make fix`.quiet();
-  console.log("  autofix complete");
-} catch {
-  console.log("  (some autofix steps had warnings — moving on)");
+log("\nStep 15: Running `make fix`...");
+const fixResult = await $`make fix`.nothrow().quiet();
+if (fixResult.exitCode === 0) {
+  log("  autofix complete");
+} else {
+  const combined = (fixResult.stdout.toString() + fixResult.stderr.toString()).trim();
+  const tail = combined.split("\n").slice(-25).join("\n");
+  elog(`\n  ✗ make fix FAILED (exit ${fixResult.exitCode})`);
+  elog("  ─── last 25 lines ───");
+  elog(tail.split("\n").map((l: string) => `    ${l}`).join("\n"));
+  elog("  ─────────────────────");
+  elog(
+    "\n  Setup aborted. Resolve the issue above (typically a ruff/biome rule\n" +
+    "  with no auto-fix) and re-run the setup script.",
+  );
+  process.exit(1);
 }
 
 // ============================================================================
@@ -606,7 +677,7 @@ try {
 // to verify the full strict gate.
 // ============================================================================
 
-console.log("\nStep 16: Verifying typecheck + tests on both halves...");
+log("\nStep 16: Verifying typecheck + tests on both halves...");
 await runQuiet("typecheck green (mypy + tsc)", $`make typecheck`);
 await runQuiet("tests green (pytest + vitest)", $`make test`);
 
@@ -614,20 +685,20 @@ await runQuiet("tests green (pytest + vitest)", $`make test`);
 // Done.
 // ============================================================================
 
-console.log("\nSetup complete.\n");
-console.log("Canonical inner-loop:");
+log("\nSetup complete.\n");
+log("Canonical inner-loop:");
 if (!isCurrentDir) {
-  console.log(`  cd ${targetDir}`);
+  log(`  cd ${targetDir}`);
 }
-console.log("  make fix ci          # autofix everything, then run the strict gate");
-console.log("\nDev:");
-console.log("  make dev             # backend 8200 + frontend 5173 (human profile)");
-console.log("  make agentic-dev     # backend 8201 + frontend 5174 (agent profile)");
-console.log("\nNarrow inner-loops:");
-console.log("  make test-py         # backend pytest only");
-console.log("  make test-ts         # frontend vitest only");
-console.log("  make typecheck-py    # mypy only");
-console.log("  make typecheck-ts    # tsc only");
-console.log("  make test-e2e        # Playwright (auto-launches both halves)");
-console.log("\nDiscover everything:");
-console.log("  make help");
+log("  make fix ci          # autofix everything, then run the strict gate");
+log("\nDev:");
+log("  make dev             # backend 8200 + frontend 5173 (human profile)");
+log("  make agentic-dev     # backend 8201 + frontend 5174 (agent profile)");
+log("\nNarrow inner-loops:");
+log("  make test-py         # backend pytest only");
+log("  make test-ts         # frontend vitest only");
+log("  make typecheck-py    # mypy only");
+log("  make typecheck-ts    # tsc only");
+log("  make test-e2e        # Playwright (auto-launches both halves)");
+log("\nDiscover everything:");
+log("  make help");

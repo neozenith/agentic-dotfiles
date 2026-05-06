@@ -77,9 +77,10 @@ async def test_backup_status_shows_feature_enabled(
     #   S3Backend  -> "s3://<bucket>"   (MinIO uses "s3://app-backups", AWS uses
     #                                    whatever STORAGE_BUCKET names)
     #   LocalStorage -> "LocalStorage"
-    # Just check it's a non-empty string — the matrix tests run against multiple
-    # backends, all of which honor this floor.
-    assert isinstance(body["bucket"], str) and body["bucket"]
+    # Two assertions (not one composite) so a failure narrows the diagnosis to
+    # "wrong type" vs "empty string" rather than a single PT018-style boolean.
+    assert isinstance(body["bucket"], str)
+    assert body["bucket"], "bucket label must be non-empty for any enabled backend"
     assert body["key_prefix"], "key_prefix must be set (defaults to 'backups/')"
 
 

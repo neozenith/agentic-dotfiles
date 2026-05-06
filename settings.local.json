@@ -47,6 +47,7 @@
     ],
     "deny": [
       "Read(.env)",
+      "Bash(aws configure export-credentials:*)",
       "Bash(timeout:*)",
       "Bash(python:*)",
       "Bash(python3:*)",
