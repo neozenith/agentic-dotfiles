@@ -28,13 +28,23 @@ This skill is the fullstack extension of `vite-react-setup`. The frontend half i
 
 ```bash
 # Default — scaffold into the current working directory (no argument required)
-bun .claude/skills/setup-fullstack/scripts/setup-fullstack.ts
+bun .claude/skills/setup-fullstack/scripts/setup-fullstack.ts scaffold
 
 # Only when the user explicitly asks for a named subdirectory
-bun .claude/skills/setup-fullstack/scripts/setup-fullstack.ts my-fullstack-app
+bun .claude/skills/setup-fullstack/scripts/setup-fullstack.ts scaffold my-fullstack-app
 ```
 
 The script must run under `bun` — it uses `Bun.$` (typed tagged-template shell) and top-level await.
+
+The CLI also exposes the runtime variation matrix as first-class subcommands so you can drive a single variation, the full matrix, or list every option without writing a wrapper:
+
+```bash
+bun .claude/skills/setup-fullstack/scripts/setup-fullstack.ts list-variations
+bun .claude/skills/setup-fullstack/scripts/setup-fullstack.ts variation sqlite-memory --root .
+bun .claude/skills/setup-fullstack/scripts/setup-fullstack.ts matrix --root . --skip-scaffold
+bun .claude/skills/setup-fullstack/scripts/setup-fullstack.ts --help          # top-level
+bun .claude/skills/setup-fullstack/scripts/setup-fullstack.ts <cmd> --help    # per-command
+```
 
 ## Project layout produced
 

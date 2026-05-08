@@ -1,174 +1,147 @@
 #!/usr/bin/env bun
 
 /**
- * setup-fullstack: scaffold a Python (FastAPI + uv) backend + React (Vite)
- * frontend, sibling backend/ + frontend/ under a top-level Makefile that
- * orchestrates both halves.
+ * setup-fullstack — standalone CLI for scaffolding a Python (FastAPI + uv)
+ * backend + React (Vite) frontend, and for exercising the runtime variation
+ * matrix the scaffold supports.
  *
- * This file is a thin CLI dispatcher. Each scaffolding phase lives in its
- * own module under steps/ and reuses helpers from lib/. The whole pipeline
- * is just calling each step in order, with a Ctx object plumbed through.
+ * Subcommands:
+ *   scaffold           Produce the project (the original behavior).
+ *   variation <name>   Boot the stack for one variation, run its tests.
+ *   matrix             Scaffold once + run every variation in sequence.
+ *   list-variations    Print every known variation.
  *
- * For the full description of what gets scaffolded (tooling, ports, strict
- * policies, matrix variations), see the sibling SKILL.md.
+ * The CLI is self-contained: nothing in this tree assumes it lives under
+ * .claude/skills/. Drop the `scripts/` + `resources/` pair anywhere on disk
+ * and the orchestrator works (path resolution is anchored to the script's
+ * own location, not the project's git root).
  */
 
-import { parseArgs } from "node:util";
+import { elog } from "./lib/logger.ts";
+import { matrixMain, MATRIX_HELP } from "./commands/matrix.ts";
+import { scaffoldMain, SCAFFOLD_HELP } from "./commands/scaffold.ts";
+import { variationMain, VARIATION_HELP } from "./commands/variation.ts";
+import {
+  listVariationsMain,
+  LIST_VARIATIONS_HELP,
+} from "./commands/list-variations.ts";
 
-import { elog, log } from "./lib/logger.ts";
-import { resolveProjectPaths } from "./lib/paths.ts";
-import { applyResources } from "./steps/05-apply-resources.ts";
-import { writeDocs } from "./steps/06-docs.ts";
-import { finalize } from "./steps/07-finalize.ts";
-import { prepare } from "./steps/01-prepare.ts";
-import { scaffoldVite } from "./steps/02-vite-scaffold.ts";
-import { installFrontendTooling } from "./steps/03-frontend-tooling.ts";
-import { setupTailwindAndShadcn } from "./steps/04-tailwind-shadcn.ts";
-
-const HELP = `\
-setup-fullstack — scaffold a Python (FastAPI + uv) backend + React (Vite)
-                  frontend with shared Makefile orchestration.
+const TOP_LEVEL_HELP = `\
+setup-fullstack — scaffold + exercise a Python (FastAPI + uv) backend +
+                  React (Vite) frontend project.
 
 USAGE
-  bun .claude/skills/setup-fullstack/scripts/setup-fullstack.ts [target]
+  setup-fullstack <command> [options]
+  setup-fullstack <command> --help     # detailed help for one command
+  setup-fullstack --help               # this message
 
-ARGUMENTS
-  target              Project root for the scaffold. Defaults to "." (the
-                      current working directory). May be relative or absolute.
-                      A non-existent path is created.
+COMMANDS
+  scaffold           Produce the fullstack project. Defaults to the current
+                     working directory; pass an explicit target to scaffold
+                     elsewhere. This is what you want when starting fresh.
 
-OPTIONS
-  -h, --help          Show this help and exit.
-  --no-fix            Skip Step 15 (\`make fix\` autofix pass).
-  --no-verify         Skip Step 16 (typecheck + tests verification). Implies
-                      that the user will run \`make ci\` themselves.
-                      \`make fix\` still runs unless --no-fix is also passed.
+  variation <name>   Boot the docker stack for one named variation
+                     (database × storage × backup combo), run that variation's
+                     assertions + tests, then tear down. Exits 0 on PASS,
+                     1 on FAIL, 77 on SKIP. See \`list-variations\`.
 
-PIPELINE (each step is one module under scripts/steps/)
-  Step 0   Snapshot user-curated docs (in-place flow only)
-  Step 1   Create project structure
-  Step 2   Vite + React + TypeScript scaffold (TTY-hardened)
-  Step 3   Install frontend deps (Tailwind, shadcn deps, dev tooling)
-  Step 4   Replace ESLint with Biome
-  Step 5   Install Playwright Chromium
-  Step 6   Patch tsconfig.json + tsconfig.app.json (strict family + @/*)
-  Step 7   Patch biome.json (excludes + cssModules)
-  Step 8   Merge package.json scripts
-  Step 8.5 Pre-stage Tailwind v4 wiring
-  Step 9   Initialize shadcn/ui
-  Step 9.5 Add shadcn components (button, card)
-  Step 10  Copy frontend resources on top of the Vite scaffold
-  Step 10.5 Patch Vite-generated frontend files (.gitignore, main.tsx)
-  Step 11  Copy backend resources
-  Step 12  Copy top-level orchestration files (Makefile, .github, compose, …)
-  Step 13  Write README.md + CONTRIBUTING.md
-  Step 14  uv sync to materialise the backend venv
-  Step 15  make fix (autofix) — surfaces failures loudly
-  Step 16  Verify: make typecheck + make test
+  matrix             Scaffold once + iterate every variation. Exits 0 if every
+                     variation either PASSed or SKIPped, else 1.
 
-OUTPUT
-  Every line is prefixed with [HH:MM:SS +Ns] showing wall-clock time and
-  elapsed seconds since script start. A hang shows up as a long elapsed-time
-  gap between adjacent lines. Long-running shell calls also emit a heartbeat
-  (\`... still running: <label>\`) every 5 seconds.
+  list-variations    Print every known variation. \`--names-only\` for pipelines.
 
-EXIT CODES
-   0  Setup complete.
-   1  Any step failed (the failed step's output is dumped to stderr).
-   2  Bad arguments (caught by parseArgs in strict mode).
+GLOBAL FLAGS
+  -h, --help         Show this message (when used with no subcommand) or the
+                     subcommand's help (when after a subcommand).
+
+INVOCATION
+  This is a standalone Bun CLI. The recommended invocation is:
+
+    bun setup-fullstack.ts <command> [options]
+
+  Or, if executed directly with a shebang on a +x file:
+
+    ./setup-fullstack.ts <command> [options]
 
 EXAMPLES
-  # Scaffold into the current directory
-  bun .claude/skills/setup-fullstack/scripts/setup-fullstack.ts
+  # Scaffold a fresh project into a new subdirectory
+  bun setup-fullstack.ts scaffold ./my-fullstack-app
 
-  # Scaffold into a new subdirectory
-  bun .claude/skills/setup-fullstack/scripts/setup-fullstack.ts my-fullstack-app
+  # Run the in-process unit suite for the sqlite-memory variation
+  bun setup-fullstack.ts variation sqlite-memory --root ./my-fullstack-app
 
-  # Scaffold but skip the verification step (faster for iteration)
-  bun .claude/skills/setup-fullstack/scripts/setup-fullstack.ts --no-verify
+  # Run every variation against an existing scaffold (skip re-scaffolding)
+  bun setup-fullstack.ts matrix --root ./my-fullstack-app --skip-scaffold
 
-DOCS
-  See SKILL.md (sibling to scripts/) for the produced project's matrix of
-  database backends, storage backends, and backup variations.
+  # Pipeline-style: iterate every variation by name
+  bun setup-fullstack.ts list-variations --names-only \\
+    | xargs -n1 bun setup-fullstack.ts variation --root ./my-fullstack-app
+
+EXIT CODES
+   0  Success
+   1  Runtime error (failed step, FAIL verdict, scaffold or build failure)
+   2  Usage error (unknown subcommand, bad flag — caught by parseArgs)
+  77  SKIP (variation only)
 `;
 
-const printSummary = (targetArg: string, isCurrentDir: boolean): void => {
-  log("\nSetup complete.\n");
-  log("Canonical inner-loop:");
-  if (!isCurrentDir) {
-    log(`  cd ${targetArg}`);
-  }
-  log("  make fix ci          # autofix everything, then run the strict gate");
-  log("\nDev:");
-  log("  make dev             # backend 8200 + frontend 5173 (human profile)");
-  log("  make agentic-dev     # backend 8201 + frontend 5174 (agent profile)");
-  log("\nNarrow inner-loops:");
-  log("  make test-py         # backend pytest only");
-  log("  make test-ts         # frontend vitest only");
-  log("  make typecheck-py    # mypy only");
-  log("  make typecheck-ts    # tsc only");
-  log("  make test-e2e        # Playwright (auto-launches both halves)");
-  log("\nDiscover everything:");
-  log("  make help");
+const HELP_BY_COMMAND: Record<string, string> = {
+  scaffold: SCAFFOLD_HELP,
+  variation: VARIATION_HELP,
+  matrix: MATRIX_HELP,
+  "list-variations": LIST_VARIATIONS_HELP,
 };
 
-const main = async (): Promise<void> => {
-  const { values, positionals } = parseArgs({
-    args: Bun.argv.slice(2),
-    options: {
-      help: { type: "boolean", short: "h", default: false },
-      "no-fix": { type: "boolean", default: false },
-      "no-verify": { type: "boolean", default: false },
-    },
-    allowPositionals: true,
-    strict: true,
-  });
+const main = async (): Promise<number> => {
+  const argv = Bun.argv.slice(2);
+  const cmd = argv[0];
 
-  if (values.help) {
-    process.stdout.write(`${HELP}\n`);
-    return;
+  if (!cmd || cmd === "-h" || cmd === "--help") {
+    process.stdout.write(TOP_LEVEL_HELP);
+    return 0;
   }
 
-  const target = positionals[0] ?? ".";
-  if (positionals.length > 1) {
-    elog(`error: too many positional arguments (got ${positionals.length}, expected 0–1)`);
-    process.exit(2);
+  if (cmd === "help") {
+    const sub = argv[1];
+    if (!sub) {
+      process.stdout.write(TOP_LEVEL_HELP);
+      return 0;
+    }
+    const help = HELP_BY_COMMAND[sub];
+    if (!help) {
+      elog(`error: unknown command '${sub}'`);
+      return 2;
+    }
+    process.stdout.write(help);
+    return 0;
   }
 
-  const paths = resolveProjectPaths(target);
-  log(`Setting up fullstack app in ${paths.displayName}...`);
+  const rest = argv.slice(1);
 
-  // Step 0 + 1: snapshot existing docs and create the project structure.
-  const ctx = prepare(paths);
-
-  // Step 2: Vite scaffold. Chdirs into frontend/ on success.
-  await scaffoldVite(ctx);
-
-  // Steps 3–8: deps, biome, playwright, configs.
-  await installFrontendTooling();
-
-  // Steps 8.5, 9, 9.5: Tailwind v4 + shadcn.
-  await setupTailwindAndShadcn(ctx);
-
-  // Steps 10–12: copy frontend, backend, top-level resources.
-  applyResources(ctx);
-
-  // Step 13: docs.
-  writeDocs(ctx);
-
-  // Steps 14–16: install backend, autofix, verify (with skip flags).
-  await finalize({
-    skipFix: values["no-fix"],
-    skipVerify: values["no-verify"],
-  });
-
-  printSummary(paths.targetArg, paths.isCurrentDir);
+  switch (cmd) {
+    case "scaffold":
+      await scaffoldMain(rest);
+      return 0;
+    case "variation":
+      return variationMain(rest);
+    case "matrix":
+      return matrixMain(rest);
+    case "list-variations":
+      return listVariationsMain(rest);
+    default:
+      elog(`error: unknown command '${cmd}'`);
+      elog(
+        "Valid: scaffold, variation, matrix, list-variations. Try `--help`.",
+      );
+      return 2;
+  }
 };
 
 if (import.meta.main) {
-  main().catch((err: unknown) => {
-    const msg = err instanceof Error ? err.message : String(err);
-    elog(`setup-fullstack: ${msg}`);
-    process.exit(1);
-  });
+  main()
+    .then((code) => process.exit(code))
+    .catch((err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      elog(`setup-fullstack: ${msg}`);
+      process.exit(1);
+    });
 }

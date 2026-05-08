@@ -12,5 +12,5 @@
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["*.ts", "lib/*.ts", "steps/*.ts"]
+  "include": ["*.ts", "lib/*.ts", "steps/*.ts", "commands/*.ts"]
 }
