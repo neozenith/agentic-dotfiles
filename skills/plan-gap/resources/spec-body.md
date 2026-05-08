@@ -6,12 +6,13 @@ file or as the body of a GitHub issue.
 
 ## Section Order
 
-The document MUST contain exactly these six sections in this order. When stored as a
+The document MUST contain exactly these seven sections in this order. When stored as a
 GitHub issue, the issue title serves as the `# [Title]` — do not duplicate it in the
 body.
 
 ```
 # [Title]
+## Execution Plan          ← populated in Phase 4 (TDD decomposition); placeholder before
 ## Overview
 ## Current State
 ## Desired State
@@ -19,12 +20,88 @@ body.
   ### Gap Map
   ### Dependencies
   ### G1: ...
+    #### Tickets           ← populated in Phase 4; one row per TDD vertical slice
   ### G2: ...
+    #### Tickets
 ## Success Measures
 ## Negative Measures
 ```
 
 ## Section Specifications
+
+### Execution Plan
+
+The first section in the body. It is the entry point for autonomous spec execution
+via the `/loop` construct. Until Phase 4 (TDD Ticket Decomposition) runs, this section
+is a placeholder — once Phase 4 completes it contains the runner prompt, a progress
+roll-up, and explicit done criteria.
+
+MUST include three subsections, in order:
+
+#### Loop Runner Prompt
+
+A self-contained prompt that an agent in a fresh context can execute. The prompt
+embeds the spec's own location so the loop can re-enter without external arguments.
+
+The exact prompt template (substitute `<SPEC_PATH>` with the document's path or
+`<owner/repo#N>` with the issue reference):
+
+````markdown
+```
+/loop Read the gap analysis spec at <SPEC_PATH>.
+
+1. Read `resources/tdd/tdd.md` and apply its red-green-refactor workflow.
+2. Find the next ticket whose status is `[ ]` and whose `Depends on` are all `[x]`.
+   If none exists, write "spec complete" and exit the loop.
+3. RED — write the test described in the ticket's `Test outline`. Run the test
+   suite. Confirm the new test fails.
+4. GREEN — write the minimum code described in `Implementation outline`. Run the
+   test suite. Confirm the new test passes and no existing tests regressed.
+5. REFACTOR (optional) — apply the ticket's `Refactor candidates` while staying
+   green. Re-run the test suite after each refactor step.
+6. Mark the ticket's status checkbox `[x]` in <SPEC_PATH>.
+7. Update the Progress table in the Execution Plan section.
+8. Commit the changes with message `T<N>.<M>: <ticket title>`.
+9. Return — the loop will fire again for the next eligible ticket.
+
+If you encounter an ambiguity that the spec does not resolve, STOP the loop:
+add an `<!-- UNRESOLVED -->` ADR placeholder under the relevant `G<N>`,
+write a short status note explaining what blocked progress, and exit.
+The user must re-enter Phase 2 refinement to resolve the ADR before the
+loop can resume.
+```
+````
+
+When the document is a GitHub issue, replace the file path with `<owner/repo#N>`
+and instruct the runner to read the body via `gh issue view N --repo owner/repo
+--json body` and write back via `gh issue edit`.
+
+#### Progress
+
+A roll-up table of ticket status across all gaps. One row per gap. Columns:
+
+| Gap | Tickets total | `[x]` done | `[ ]` todo | Next eligible | Blocked on |
+|-----|---------------|-----------|-----------|---------------|------------|
+| G1  | 4             | 0         | 4         | T1.1          | —          |
+| G2  | 3             | 0         | 3         | —             | T1.2       |
+
+The runner updates this table after every completed ticket. "Next eligible" is the
+lowest-numbered `[ ]` ticket whose `Depends on` are all `[x]`. "Blocked on" lists
+the dependencies still `[ ]`.
+
+#### Done Criteria
+
+A short checklist that the runner uses to detect "spec complete":
+
+- [ ] Every ticket in every `G<N>` is marked `[x]`
+- [ ] Every Success Measure (Project Quality Bar + Domain-Specific) passes when
+      executed (commands listed in the Success Measures table)
+- [ ] No `<!-- UNRESOLVED -->` ADR markers remain
+- [ ] No `<!-- LINK_NOT_VERIFIED -->`, `<!-- ASSUMPTION -->`, or `<!-- PAYWALLED -->`
+      markers requiring user resolution
+
+When all four are true, the spec is complete. The runner emits "spec complete" and
+exits.
 
 ### Overview
 
@@ -97,6 +174,57 @@ with these fields:
   Include: function signatures, SQL queries, algorithm pseudocode, API call patterns,
   grammar definitions, or configuration templates. Annotate with comments explaining
   non-obvious choices.
+
+- **Tickets** *(populated during Phase 4 TDD decomposition):* A nested
+  `#### Tickets` subsection containing one entry per TDD vertical slice. Each
+  ticket maps to a single red-green-refactor cycle from `resources/tdd/tdd.md`
+  — one test verifying one user-observable behavior, plus the minimum code to
+  pass it. Tickets are the unit of work the `/loop` runner consumes.
+
+  Ticket format:
+  ```markdown
+  ##### T<N>.<M>: <Behavior phrased as "<actor> can <observable action>">
+
+  - [ ] **Done**
+  - **Cycle:** RED → GREEN → REFACTOR
+  - **Behavior:** Single user-observable behavior this ticket verifies. No
+    implementation details. Survives internal refactors.
+  - **Test outline:**
+    - File: `<path/to/test_file.ext>`
+    - Name: `<test name matching the behavior>`
+    - Asserts: <assertion against a public interface — no private methods,
+      no call counts, no direct DB inspection>
+  - **Implementation outline:**
+    - File(s): `<path/to/source_file.ext>`
+    - Minimum code to pass the test. No speculative scope.
+  - **Mocks:** `none` | <list — only system boundaries per
+    `resources/tdd/mocking.md`: external APIs, time/randomness, file
+    system if unavoidable. Never internal collaborators.>
+  - **Refactor candidates:** *(optional)* <hints from
+    `resources/tdd/refactoring.md` — duplication to extract, shallow
+    modules to deepen, etc.>
+  - **Depends on:** `T<N>.<M-1>` | `T<other>.<M>` | `none`
+  ```
+
+  Ticket numbering: `T<N>.<M>` where `<N>` matches the parent gap and `<M>`
+  is the 1-based ticket index within that gap. The first ticket per gap
+  (`T<N>.1`) is the **tracer bullet** — the smallest end-to-end slice
+  proving the path works through the public interface. Subsequent tickets
+  layer behaviors on top.
+
+  Anti-patterns (reject any ticket exhibiting these — see
+  `resources/tdd/tdd.md` and `resources/tdd/tests.md`):
+  - **Horizontal slice** — one ticket that bundles multiple tests OR multiple
+    tickets that all write tests before any implementation. Each ticket is
+    one test → one impl.
+  - **Implementation-detail behavior** — "calls X.process()" rather than
+    "produces Y output."
+  - **Internal mocking** — mocking your own modules; the test no longer
+    proves the system works.
+  - **External-channel verification** — asserting via direct DB query,
+    log scraping, or filesystem inspection rather than the public interface.
+  - **Speculative scope** — implementation that goes beyond what the test
+    requires.
 
 - **Architecture Decision Records (ADRs)** *(populated during Phase 2 refinement):*
   Each gap may accumulate one or more `#### ADR: <Decision Title>` subsections that
@@ -185,6 +313,22 @@ false signal of success while silently failing to deliver the intended value.
 Use this as the initial body when creating a new gap analysis document:
 
 ```markdown
+## Execution Plan
+
+<!-- TODO: Populated in Phase 4 (TDD Ticket Decomposition). Placeholder until then. -->
+
+### Loop Runner Prompt
+
+<!-- TODO: Self-contained /loop prompt embedding <SPEC_PATH>. Pending Phase 4. -->
+
+### Progress
+
+<!-- TODO: Roll-up table — one row per gap. Pending Phase 4. -->
+
+### Done Criteria
+
+<!-- TODO: Checklist — all tickets [x], all Success Measures pass, no UNRESOLVED markers. Pending Phase 4. -->
+
 ## Overview
 
 <!-- TODO: Brief description of the initiative, scope, and purpose -->
@@ -213,8 +357,9 @@ Use this as the initial body when creating a new gap analysis document:
 
 <!-- TODO: flowchart LR showing gap dependency ordering -->
 
-<!-- TODO: ### G1: Title — with Current, Gap, Output(s), References, ADRs fields -->
-<!-- TODO: ### G2: Title, etc. -->
+<!-- TODO: ### G1: Title — with Current, Gap, Output(s), References, Tickets, ADRs fields -->
+<!--      Tickets subsection populated in Phase 4 (TDD decomposition).            -->
+<!-- TODO: ### G2: Title, etc.                                                    -->
 
 ## Success Measures
 

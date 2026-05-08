@@ -67,17 +67,20 @@ Read `resources/spec-body.md` (relative to this skill's directory) for the full
 specification of the six mandatory sections, their content requirements, Mermaid
 diagram obligations, per-gap detail fields, and the skeleton template.
 
-**Quick reference — the six sections in order:**
+**Quick reference — the seven sections in order:**
 
-1. **Overview** — initiative scope and purpose, bullet-point gap index, Dependencies
+1. **Execution Plan** — `/loop` runner prompt, progress roll-up, done criteria
+   (placeholder until Phase 4 populates it)
+2. **Overview** — initiative scope and purpose, bullet-point gap index, Dependencies
    diagram
-2. **Current State** — what exists today (MUST include Mermaid diagram)
-3. **Desired State** — target end state (MUST include Mermaid diagram)
-4. **Gap Analysis** — delta with mandatory Gap Map (`flowchart TD`), Dependencies
+3. **Current State** — what exists today (MUST include Mermaid diagram)
+4. **Desired State** — target end state (MUST include Mermaid diagram)
+5. **Gap Analysis** — delta with mandatory Gap Map (`flowchart TD`), Dependencies
    (`flowchart LR`), and per-gap `G<N>:` subsections (Current / Gap / Output(s) /
-   References / ADRs)
-5. **Success Measures** — Project Quality Bar (CI Gates) + Domain-Specific Measures
-6. **Negative Measures** — Quality Bar Violations + Domain-Specific Failures
+   References / Tickets / ADRs). The `Tickets` field is populated in Phase 4 as
+   TDD vertical slices, one per red-green-refactor cycle.
+6. **Success Measures** — Project Quality Bar (CI Gates) + Domain-Specific Measures
+7. **Negative Measures** — Quality Bar Violations + Domain-Specific Failures
 
 ## Workflow
 
@@ -335,6 +338,123 @@ After the refinement loop converges:
    - Negative Measures are the complement of Success Measures (what "looks done but isn't")
    - Diagrams in Current State and Desired State are visually distinguishable
 
+### Phase 4: TDD Ticket Decomposition
+
+After Phase 3 validation passes, decompose each `G<N>` into TDD vertical-slice
+tickets and write the Execution Plan section that drives the spec to completion via
+`/loop`. The bundled TDD reference lives in `resources/tdd/`.
+
+Read `resources/tdd/tdd.md` once before starting Phase 4. Pay particular
+attention to the **horizontal-slice anti-pattern** — every ticket MUST be a single
+vertical slice (one test → one minimum implementation), never "all tests first then
+all implementation."
+
+#### Step 4a: Per-gap behavior enumeration
+
+For each `G<N>`, launch a focused subagent (parallel across gaps when N > 1). Each
+subagent receives a fresh context containing only:
+
+- The gap's `Current`, `Gap`, `Output(s)`, `References`, and resolved `ADR` blocks
+- Read access to `resources/tdd/` (tdd.md, tests.md, mocking.md,
+  interface-design.md, deep-modules.md, refactoring.md)
+
+The subagent enumerates the user-observable behaviors that the gap's Output(s) must
+support. Each behavior:
+
+- Is phrased as `<actor> can <observable action> when <preconditions>`
+- Is verifiable through a public interface — see `resources/tdd/interface-design.md`
+- Is the smallest unit that delivers a falsifiable signal — one assertion per behavior
+- Survives an internal refactor — see `resources/tdd/tests.md` for the
+  good-vs-bad-test contrast
+
+The subagent rejects any candidate behavior matching the anti-patterns in
+`resources/tdd/tdd.md` and `resources/tdd/tests.md`:
+
+- "Tests the shape of things" rather than user-facing behavior
+- Asserts on call counts, call order, or private methods
+- Verifies via direct DB inspection, log scraping, or filesystem reads instead of
+  the public interface
+- Mocks an internal collaborator the project owns (only system boundaries per
+  `resources/tdd/mocking.md`)
+
+#### Step 4b: Ticket structuring
+
+For each behavior, draft a ticket `T<N>.<M>` using the `Tickets` field schema in
+`resources/spec-body.md`. Numbering: `<N>` matches the parent gap, `<M>` is 1-based
+within that gap. The first ticket per gap (`T<N>.1`) is the **tracer bullet** — the
+smallest end-to-end slice that proves the path through the public interface works.
+Subsequent tickets layer behaviors on top.
+
+Each ticket captures:
+
+- A status checkbox (`- [ ] **Done**`) the `/loop` runner toggles to `[x]` on
+  completion
+- The behavior phrasing from Step 4a
+- A `Test outline` (file path, test name, assertion against a public interface)
+- An `Implementation outline` (file path(s), minimum code only — no speculative scope)
+- `Mocks` (only system boundaries per `resources/tdd/mocking.md`; otherwise `none`)
+- Optional `Refactor candidates` from `resources/tdd/refactoring.md`
+- `Depends on` — earlier tickets within the gap, tickets in upstream gaps, or `none`
+
+Validate every ticket against the Phase 4 anti-pattern list before accepting it. Any
+ticket exhibiting a horizontal slice (multiple tests bundled, or test-first without
+matching implementation) is rejected and split into N separate tickets.
+
+#### Step 4c: Dependency ordering
+
+Cross-link tickets across gaps. A ticket in `G2` may depend on a ticket in `G1`
+when it requires deliverables from `G1`. Capture dependencies in each ticket's
+`Depends on` field.
+
+The complete dependency DAG must be topologically sortable — no cycles. If a cycle
+is detected:
+
+1. Identify the smallest ticket in the cycle that can be split into a "minimal stub"
+   plus a "full implementation" pair.
+2. Replace the original with the two new tickets.
+3. Re-check the DAG.
+
+Confirm the DAG by walking it from the leaves (no incoming dependencies) to the
+roots. The leaves are the candidates for `T<N>.1` tracer bullets.
+
+#### Step 4d: Write the Execution Plan section
+
+Populate the `## Execution Plan` section at the top of the document per the spec in
+`resources/spec-body.md`:
+
+1. **Loop Runner Prompt** — substitute `<SPEC_PATH>` with the document's path
+   (relative to the project root for local files) or `<owner/repo#N>` for GitHub
+   issues. The prompt is self-contained — an agent in a fresh context invoked by
+   `/loop` can execute it without external arguments. Do not modify the prompt
+   skeleton from `resources/spec-body.md`; only substitute the path.
+
+2. **Progress** — emit one row per gap with the ticket counts. Initial state is
+   `0` done, all `[ ]` todo, "Next eligible" set to the lowest-numbered ticket
+   with no unresolved dependencies, "Blocked on" lists outstanding dependencies.
+
+3. **Done Criteria** — copy the four-item checklist verbatim from
+   `resources/spec-body.md`. The `/loop` runner uses it to detect "spec complete."
+
+#### Step 4e: Validation of the decomposition
+
+After Steps 4a–4d, verify that:
+
+- Every `G<N>` has at least one ticket — no gap is left without execution material
+- Every ticket has all six required fields populated (Status, Behavior, Test
+  outline, Implementation outline, Mocks, Depends on); Refactor candidates is
+  optional
+- The dependency DAG is acyclic and topologically sortable
+- The Progress table totals match the ticket counts in the gap subsections
+- The Loop Runner Prompt's `<SPEC_PATH>` substitution is correct and points at the
+  current document
+
+The user can now invoke `/loop` with the runner prompt to drive the spec to
+completion. Each iteration of the loop consumes one ticket via the
+RED→GREEN→(REFACTOR) cycle from `resources/tdd/tdd.md` and updates the
+Progress table. The loop exits when Done Criteria are satisfied or when an
+`<!-- UNRESOLVED -->` ADR placeholder appears (returning control to Phase 2
+refinement).
+
 ## Questioning Principles
 
 - **One question at a time.** Never dump a list of questions. The user should focus
@@ -371,9 +491,15 @@ This skill bundles the following reference documents in its `resources/` directo
 
 | File | Purpose |
 |------|---------|
-| `resources/spec-body.md` | Document body specification — six sections, per-gap fields, skeleton template |
+| `resources/spec-body.md` | Document body specification — seven sections (incl. Execution Plan), per-gap fields (incl. Tickets), skeleton template |
 | `resources/escalators-not-stairs.md` | Requirement integrity principles — read during Phase 3 validation |
 | `resources/mermaidjs_diagrams.md` | Mermaid diagram reference — rendering, complexity thresholds, pitfalls |
 | `resources/playwright-cli.md` | Link verification — detection, fallback chain, and unverified markers |
 | `resources/gh-cli.md` | GitHub CLI reference — detection, authentication, issue CRUD commands |
 | `resources/gh-issues.md` | GitHub issues backend — local cache, sync protocol, edit history lineage |
+| `resources/tdd/tdd.md` | TDD workflow — red-green-refactor, vertical slicing, anti-patterns. Read at the start of Phase 4 |
+| `resources/tdd/tests.md` | Good-vs-bad test examples — used in Phase 4 to reject implementation-detail behaviors |
+| `resources/tdd/mocking.md` | When to mock — system-boundaries-only rule applied to ticket `Mocks` field |
+| `resources/tdd/interface-design.md` | Testable interface design — accept dependencies, return results, small surface |
+| `resources/tdd/deep-modules.md` | Deep module guidance — small interface, deep implementation |
+| `resources/tdd/refactoring.md` | Refactor candidates — populates the optional ticket `Refactor candidates` field |

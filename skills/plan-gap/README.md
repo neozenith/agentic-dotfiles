@@ -23,13 +23,8 @@ flowchart LR
         TB["Track B - Future State<br/>SOTA + Prior Art"]
     end
 
-    subgraph P1c["Phase 1c: Verify"]
-        LV["Link Verification<br/>(playwright-cli<br/>or WebFetch)"]
-    end
-
-    subgraph P1d["Phase 1d: Synthesis"]
-        SYN["Identify Top-Level<br/>G&lt;N&gt; Gaps"]
-    end
+    LV["Phase 1c: Link Verification<br/>(playwright-cli<br/>or WebFetch)"]
+    SYN["Phase 1d: Identify<br/>Top-Level G&lt;N&gt; Gaps"]
 
     subgraph P1e["Phase 1e: Per-Gap Deep Dive"]
         G1A["G1<br/>Agent"]
@@ -55,6 +50,11 @@ flowchart LR
         CON["Cross-<br/>Consistency"]
     end
 
+    BTKT["Phase 4a: Per-Gap<br/>Behavior + TDD Ticket<br/>Decomposition<br/>(parallel per G&lt;N&gt;)"]
+    EXE["Phase 4b: Write<br/>Execution Plan +<br/>/loop runner prompt"]
+    LP_CYC(["/loop iter:<br/>RED → GREEN<br/>→ REFACTOR<br/>(per ticket)"])
+    DONE([Spec Complete])
+
     USER --> TA & TB
     TA --> SYN
     TB --> LV --> SYN
@@ -66,6 +66,9 @@ flowchart LR
     INC -->|unresolved ADRs remain| ADR
     INC -->|all resolved| MMD
     MMD --> REQ --> CON
+    CON --> BTKT --> EXE --> LP_CYC
+    LP_CYC --> DONE
+    LP_CYC -.->|UNRESOLVED ADR| ADR
 
     classDef userNode fill:#f59e0b,stroke:#d97706,color:#1c1917,stroke-width:3px
     classDef exploreAgent fill:#2563eb,stroke:#1d4ed8,color:#eff6ff,stroke-width:2px
@@ -77,6 +80,9 @@ flowchart LR
     classDef humanNode fill:#f59e0b,stroke:#d97706,color:#1c1917,stroke-width:3px
     classDef refinNode fill:#8b5cf6,stroke:#7c3aed,color:#f5f3ff,stroke-width:2px
     classDef validNode fill:#10b981,stroke:#059669,color:#ecfdf5,stroke-width:2px
+    classDef tddAgent fill:#9d174d,stroke:#831843,color:#fdf2f8,stroke-width:2px
+    classDef execNode fill:#9a3412,stroke:#7c2d12,color:#fff7ed,stroke-width:3px
+    classDef terminalNode fill:#475569,stroke:#1e293b,color:#f8fafc,stroke-width:3px
 
     class USER,HITL userNode
     class TA exploreAgent
@@ -87,10 +93,11 @@ flowchart LR
     class QA,FM qualAgent
     class ADR,Q,INC refinNode
     class MMD,REQ,CON validNode
+    class BTKT,EXE tddAgent
+    class LP_CYC execNode
+    class DONE terminalNode
 
     style P1b fill:#1e3a8a22,stroke:#2563eb,color:#93c5fd
-    style P1c fill:#991b1b22,stroke:#dc2626,color:#f87171
-    style P1d fill:#155e7522,stroke:#0891b2,color:#22d3ee
     style P1e fill:#065f4622,stroke:#059669,color:#34d399
     style P1f fill:#0f766e22,stroke:#0d9488,color:#2dd4bf
     style P2 fill:#5b21b622,stroke:#8b5cf6,color:#a78bfa
