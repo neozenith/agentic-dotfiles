@@ -37,11 +37,17 @@ Automated setup script for a fullstack web application — Python (FastAPI + uv)
 
 ```bash
 # Set up in the current directory
-bun .claude/skills/setup-fullstack/scripts/setup-fullstack.ts
+bun .claude/skills/setup-fullstack/scripts/setup-fullstack.ts scaffold
 
 # Set up in a named subdirectory
-bun .claude/skills/setup-fullstack/scripts/setup-fullstack.ts my-fullstack-app
+bun .claude/skills/setup-fullstack/scripts/setup-fullstack.ts scaffold my-fullstack-app
+
+# Self-documenting subcommands
+bun .claude/skills/setup-fullstack/scripts/setup-fullstack.ts --help
+bun .claude/skills/setup-fullstack/scripts/setup-fullstack.ts list-variations
 ```
+
+The CLI also exposes the runtime variation matrix as subcommands (`variation`, `matrix`) so the same binary can boot any database/storage/backup combo against an existing scaffold. See `setup-fullstack.ts <cmd> --help` for details.
 
 ### From Claude Code
 
