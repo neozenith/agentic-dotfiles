@@ -11,20 +11,21 @@ Two lenses: the **scaffolder** (this skill — the Bun CLI + resource tree that 
 ```mermaid
 flowchart LR
     User["User /<br/>Claude Code"]:::entry
-    CLI["setup-fullstack.ts<br/>(subcommand CLI)"]:::cli
-    Scaffold["scaffold<br/>command"]:::backend
-    Variation["variation / matrix<br/>commands"]:::backend
+    CLI["setup-fullstack.ts<br/>[variation]"]:::cli
+    Variations["lib/variations.ts<br/>(preset registry)"]:::data
     Steps["7-step<br/>pipeline"]:::backend
     Resources["resources/<br/>(templates)"]:::data
+    EnvFile[".env<br/>(variation preset)"]:::data
     Output["Materialised<br/>fullstack project"]:::usercode
     Verify["make fix ci<br/>(self-test)"]:::test
 
     User --> CLI
-    CLI --> Scaffold
-    CLI --> Variation
-    Scaffold --> Steps
+    CLI -->|looks up preset| Variations
+    CLI --> Steps
     Steps -->|copies from| Resources
     Steps --> Output
+    Steps -->|writes| EnvFile
+    EnvFile --> Output
     Steps --> Verify
     Verify --> Output
 
@@ -36,22 +37,17 @@ flowchart LR
     classDef test     fill:#cbd5e1,stroke:#1e293b,color:#1e293b,stroke-width:1px,stroke-dasharray:5 5
 ```
 
-*Simplified — user invokes the CLI, the scaffold command runs the 7-step pipeline over the resource tree, and the final step self-verifies via `make fix ci`.*
+*Simplified — user runs `setup-fullstack.ts [variation]`. The CLI looks up the variation's env-var preset, runs the 7-step pipeline over the resource tree, writes `.env` with the preset, then self-verifies via `make fix ci`.*
 
 <details>
-<summary>📋 Detailed scaffolder diagram (20 nodes)</summary>
+<summary>📋 Detailed scaffolder diagram (19 nodes)</summary>
 
 ```mermaid
 flowchart LR
     User["User /<br/>Claude Code"]:::entry
-
-    subgraph CLISub["CLI dispatcher"]
-        Main["setup-fullstack.ts"]:::cli
-        ScaffoldCmd["scaffold"]:::backend
-        VariationCmd["variation"]:::backend
-        MatrixCmd["matrix"]:::backend
-        ListCmd["list-variations"]:::backend
-    end
+    Main["setup-fullstack.ts<br/>[variation]"]:::cli
+    ListCmd["list-variations<br/>(discoverability)"]:::backend
+    Variations["lib/variations.ts<br/>(VARIATIONS registry)"]:::data
 
     subgraph StepsSub["scripts/steps/ - pipeline"]
         S01["01-prepare"]:::backend
@@ -64,7 +60,7 @@ flowchart LR
     end
 
     subgraph LibsSub["scripts/lib/ - helpers"]
-        Resources["resources.ts<br/>(copyResource)"]:::data
+        ResourcesLib["resources.ts<br/>(copyResource)"]:::data
         Shell["shell.ts<br/>(Bun.shell)"]:::data
     end
 
@@ -74,22 +70,24 @@ flowchart LR
         TopT["top-level<br/>(Makefile, CLAUDE.md,<br/>CONTEXT.md, Dockerfile, compose)"]:::data
     end
 
+    EnvFile[".env<br/>(variation preset)"]:::data
     Output["Materialised<br/>scaffolded project"]:::usercode
 
     User --> Main
-    Main --> ScaffoldCmd
-    Main --> VariationCmd
-    Main --> MatrixCmd
     Main --> ListCmd
-    ScaffoldCmd --> S01
+    Main -->|validates name| Variations
+    Main --> S01
     S01 --> S02 --> S03 --> S04 --> S05 --> S06 --> S07
-    S05 --> Resources
-    Resources --> BackendT
-    Resources --> FrontendT
-    Resources --> TopT
+    S05 --> ResourcesLib
+    ResourcesLib --> BackendT
+    ResourcesLib --> FrontendT
+    ResourcesLib --> TopT
     S02 --> Shell
     S07 --> Shell
+    Main -->|writes| EnvFile
+    Variations -->|env bundle| EnvFile
     S07 --> Output
+    EnvFile --> Output
 
     classDef entry    fill:#334155,stroke:#fff,color:#fff,stroke-width:2px,font-weight:bold
     classDef cli      fill:#2563eb,stroke:#fff,color:#fff,stroke-width:2px,font-weight:bold
@@ -269,18 +267,24 @@ flowchart LR
 ### From the command line
 
 ```bash
-# Set up in the current directory
-bun .claude/skills/setup-fullstack/scripts/setup-fullstack.ts scaffold
+# Scaffold with the default variation (sqlite-memory)
+bun .claude/skills/setup-fullstack/scripts/setup-fullstack.ts
 
-# Set up in a named subdirectory
-bun .claude/skills/setup-fullstack/scripts/setup-fullstack.ts scaffold my-fullstack-app
+# Scaffold with a specific variation — its env-var bundle is written to .env
+# so `make docker-up` / `make ci` pick that combo out of the box.
+bun .claude/skills/setup-fullstack/scripts/setup-fullstack.ts postgres-aws-backup
+bun .claude/skills/setup-fullstack/scripts/setup-fullstack.ts sqlite-persisted
 
-# Self-documenting subcommands
-bun .claude/skills/setup-fullstack/scripts/setup-fullstack.ts --help
+# Discover available variations
 bun .claude/skills/setup-fullstack/scripts/setup-fullstack.ts list-variations
+
+# Help
+bun .claude/skills/setup-fullstack/scripts/setup-fullstack.ts --help
 ```
 
-The CLI also exposes the runtime variation matrix as subcommands (`variation`, `matrix`) so the same binary can boot any database/storage/backup combo against an existing scaffold. See `setup-fullstack.ts <cmd> --help` for details.
+The variation argument is a **config preset** — it determines what env vars land in the scaffolded `.env` file. The scaffold output supports every variation at runtime (via the docker-compose overlay system); the variation arg just chooses the default.
+
+Testing each variation against the scaffolded project is **not** the CLI's job. The bash harness at `tmp/test-matrix.sh` + `tmp/test-variation.sh` exercises the variation matrix against a scaffolded project from outside the skill.
 
 ### From Claude Code
 

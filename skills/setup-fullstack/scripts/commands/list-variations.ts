@@ -18,7 +18,7 @@ OPTIONS
 
 EXAMPLES
   setup-fullstack list-variations
-  setup-fullstack list-variations --names-only | xargs -n1 setup-fullstack variation
+  setup-fullstack list-variations --names-only | xargs -n1 -I{} setup-fullstack {}
 `;
 
 export const listVariationsMain = (argv: string[]): number => {

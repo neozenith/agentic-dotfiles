@@ -1,6 +1,14 @@
 SHELL := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c
 
+# `.env` is written by `setup-fullstack` with the variation's runtime preset
+# (DATABASE_BACKEND / BACKUP_BACKEND / STORAGE_BACKEND / ...). Including it
+# here makes both make recipes AND docker compose see the same defaults
+# without the user having to `source .env` first. Optional — missing file
+# is fine (default variation `sqlite-memory` has no env to set).
+-include .env
+export
+
 # Ports — exported so child Makefiles + processes inherit them.
 # Both backend AND frontend ports split across human/agent profiles so two
 # concurrent dev sessions never collide. Docker uses a third pair so the

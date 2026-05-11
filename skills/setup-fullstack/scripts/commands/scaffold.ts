@@ -1,11 +1,23 @@
-// `scaffold` subcommand — runs the seven-step pipeline that produces a
-// fullstack project. The orchestration logic was previously inline in
-// setup-fullstack.ts; it is unchanged here, only relocated.
+// Scaffold flow — runs the seven-step pipeline that produces a fullstack
+// project, then writes a `.env` file capturing the chosen variation's
+// runtime preset so `make docker-up` / `make ci` pick that combo by default.
+//
+// The variation is the ONLY user-facing argument. The target is always the
+// current working directory. Testing variations is the harness's job
+// (tmp/test-matrix.sh + tmp/test-variation.sh); this CLI does not run them.
 
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { parseArgs } from "node:util";
 
 import { elog, log } from "../lib/logger.ts";
 import { resolveProjectPaths } from "../lib/paths.ts";
+import {
+  DEFAULT_VARIATION,
+  variationByName,
+  variationNames,
+  type Variation,
+} from "../lib/variations.ts";
 import { applyResources } from "../steps/05-apply-resources.ts";
 import { writeDocs } from "../steps/06-docs.ts";
 import { finalize } from "../steps/07-finalize.ts";
@@ -15,70 +27,45 @@ import { installFrontendTooling } from "../steps/03-frontend-tooling.ts";
 import { setupTailwindAndShadcn } from "../steps/04-tailwind-shadcn.ts";
 
 export const SCAFFOLD_HELP = `\
-setup-fullstack scaffold — produce a Python (FastAPI + uv) backend + React
-                            (Vite) frontend project with shared Makefile
-                            orchestration.
+setup-fullstack — produce a Python (FastAPI + uv) backend + React (Vite)
+                  frontend project with shared Makefile orchestration.
 
 USAGE
-  setup-fullstack scaffold [target] [--no-fix] [--no-verify]
+  setup-fullstack [variation] [--no-fix] [--no-verify]
+  setup-fullstack list-variations
+  setup-fullstack --help
 
 ARGUMENTS
-  target              Project root for the scaffold. Defaults to "." (current
-                      working directory). May be relative or absolute. A
-                      non-existent path is created.
+  variation           One of the known runtime variations (see list-variations).
+                      Writes its env-var bundle to .env in the scaffolded
+                      project so \`make docker-up\` / \`make ci\` pick that
+                      combo by default. Defaults to "${DEFAULT_VARIATION}".
 
 OPTIONS
   -h, --help          Show this help and exit.
-  --no-fix            Skip Step 15 (\`make fix\` autofix pass).
-  --no-verify         Skip Step 16 (typecheck + tests verification). Implies
-                      that the user will run \`make ci\` themselves. \`make fix\`
-                      still runs unless --no-fix is also passed.
-
-PIPELINE
-  Step 0   Snapshot user-curated docs (in-place flow only)
-  Step 1   Create project structure
-  Step 2   Vite + React + TypeScript scaffold (TTY-hardened)
-  Step 3   Install frontend deps (Tailwind, shadcn deps, dev tooling)
-  Step 4   Replace ESLint with Biome
-  Step 5   Install Playwright Chromium
-  Step 6   Patch tsconfig.json + tsconfig.app.json (strict family + @/*)
-  Step 7   Patch biome.json (excludes + cssModules)
-  Step 8   Merge package.json scripts
-  Step 8.5 Pre-stage Tailwind v4 wiring
-  Step 9   Initialize shadcn/ui
-  Step 9.5 Add shadcn components (button, card)
-  Step 10  Copy frontend resources on top of the Vite scaffold
-  Step 10.5 Patch Vite-generated frontend files (.gitignore, main.tsx)
-  Step 11  Copy backend resources
-  Step 12  Copy top-level orchestration files
-  Step 13  Write README.md + CONTRIBUTING.md
-  Step 14  uv sync to materialise the backend venv
-  Step 15  make fix (autofix)
-  Step 16  Verify: make typecheck + make test
-
-EXIT CODES
-   0  Setup complete.
-   1  Any step failed.
-   2  Bad arguments.
+  --no-fix            Skip \`make fix\` autofix pass.
+  --no-verify         Skip the typecheck + tests verification step.
 
 EXAMPLES
-  setup-fullstack scaffold
-  setup-fullstack scaffold my-fullstack-app
-  setup-fullstack scaffold --no-verify
+  setup-fullstack
+  setup-fullstack postgres-aws-backup
+  setup-fullstack sqlite-persisted --no-verify
+  setup-fullstack list-variations
 `;
 
 export interface ScaffoldOptions {
-  target: string;
+  variation: Variation;
   skipFix: boolean;
   skipVerify: boolean;
 }
 
-const printSummary = (targetArg: string, isCurrentDir: boolean): void => {
+const printSummary = (variation: Variation): void => {
   log("\nSetup complete.\n");
-  log("Canonical inner-loop:");
-  if (!isCurrentDir) {
-    log(`  cd ${targetArg}`);
+  log(`Variation: ${variation.name}`);
+  if (Object.keys(variation.env).length > 0) {
+    log("  .env preset written — `make docker-up` / `make ci` honor it by default.");
   }
+  log("\nCanonical inner-loop:");
   log("  make fix ci          # autofix everything, then run the strict gate");
   log("\nDev:");
   log("  make dev             # backend 8200 + frontend 5173 (human profile)");
@@ -86,16 +73,32 @@ const printSummary = (targetArg: string, isCurrentDir: boolean): void => {
   log("\nNarrow inner-loops:");
   log("  make test-py         # backend pytest only");
   log("  make test-ts         # frontend vitest only");
-  log("  make typecheck-py    # mypy only");
-  log("  make typecheck-ts    # tsc only");
   log("  make test-e2e        # Playwright (auto-launches both halves)");
   log("\nDiscover everything:");
   log("  make help");
 };
 
+const writeEnvFile = (projectRoot: string, variation: Variation): void => {
+  const envPath = join(projectRoot, ".env");
+  if (Object.keys(variation.env).length === 0) {
+    log(`  variation '${variation.name}' has no runtime env defaults; skipping .env`);
+    return;
+  }
+  const header = [
+    `# Generated by setup-fullstack for variation: ${variation.name}`,
+    `# ${variation.description}`,
+    "# Edit freely. `make docker-up` and `make ci` read these via the",
+    "# `-include .env` directive in the top-level Makefile.",
+    "",
+  ];
+  const lines = Object.entries(variation.env).map(([k, v]) => `${k}=${v}`);
+  writeFileSync(envPath, `${header.join("\n")}${lines.join("\n")}\n`);
+  log(`  wrote .env (variation: ${variation.name})`);
+};
+
 export const runScaffold = async (opts: ScaffoldOptions): Promise<void> => {
-  const paths = resolveProjectPaths(opts.target);
-  log(`Setting up fullstack app in ${paths.displayName}...`);
+  const paths = resolveProjectPaths(".");
+  log(`Setting up fullstack app in ${paths.displayName} (variation: ${opts.variation.name})...`);
 
   const ctx = prepare(paths);
   await scaffoldVite(ctx);
@@ -103,12 +106,13 @@ export const runScaffold = async (opts: ScaffoldOptions): Promise<void> => {
   await setupTailwindAndShadcn(ctx);
   applyResources(ctx);
   writeDocs(ctx);
+  writeEnvFile(paths.projectRoot, opts.variation);
   await finalize({ skipFix: opts.skipFix, skipVerify: opts.skipVerify });
 
-  printSummary(paths.targetArg, paths.isCurrentDir);
+  printSummary(opts.variation);
 };
 
-/** Parse `scaffold`-subcommand argv into options + dispatch. */
+/** Parse argv for the scaffold flow. Variation is the first positional. */
 export const scaffoldMain = async (argv: string[]): Promise<void> => {
   const { values, positionals } = parseArgs({
     args: argv,
@@ -128,11 +132,20 @@ export const scaffoldMain = async (argv: string[]): Promise<void> => {
 
   if (positionals.length > 1) {
     elog(`error: too many positional arguments (got ${positionals.length}, expected 0–1)`);
+    elog(`Known variations: ${variationNames().join(", ")}`);
+    process.exit(2);
+  }
+
+  const variationName = positionals[0] ?? DEFAULT_VARIATION;
+  const variation = variationByName(variationName);
+  if (!variation) {
+    elog(`error: unknown variation '${variationName}'`);
+    elog(`Known variations: ${variationNames().join(", ")}`);
     process.exit(2);
   }
 
   await runScaffold({
-    target: positionals[0] ?? ".",
+    variation,
     skipFix: values["no-fix"] === true,
     skipVerify: values["no-verify"] === true,
   });
