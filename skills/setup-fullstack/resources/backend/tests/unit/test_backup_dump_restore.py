@@ -12,9 +12,10 @@ from __future__ import annotations
 
 import pytest
 
-from server.backup.dump import LATEST_KEY, dump_database
-from server.backup.restore import NoBackupAvailableError, restore_database
-from server.backup.url import DatabaseConnection
+from server.storage.backup.dump import dump_database
+from server.storage.backup.pointer import latest_pointer_key
+from server.storage.backup.restore import NoBackupAvailableError, restore_database
+from server.storage.backup.url import DatabaseConnection
 from server.storage import InMemoryBackend
 
 
@@ -48,7 +49,7 @@ async def test_dump_writes_timestamped_and_latest_keys(
     assert timestamped_key.startswith("backups/")
     assert timestamped_key.endswith(".dump")
     assert await storage.get_object(timestamped_key) == fake_bytes
-    assert await storage.get_object(f"backups/{LATEST_KEY}") == fake_bytes
+    assert await storage.get_object(latest_pointer_key("backups/")) == fake_bytes
 
     # Runner saw the parsed connection
     assert len(captured) == 1
@@ -69,14 +70,14 @@ async def test_dump_respects_custom_key_prefix(storage: InMemoryBackend, databas
     )
 
     assert timestamped_key.startswith("archived/")
-    assert await storage.head_object(f"archived/{LATEST_KEY}")
+    assert await storage.head_object(latest_pointer_key("archived/"))
 
 
 async def test_restore_loads_latest_when_no_key_specified(
     storage: InMemoryBackend, database_url: str
 ) -> None:
     payload = b"PGDMP-existing-backup"
-    await storage.put_object(f"backups/{LATEST_KEY}", payload)
+    await storage.put_object(latest_pointer_key("backups/"), payload)
 
     received: list[tuple[DatabaseConnection, bytes]] = []
 
@@ -89,7 +90,7 @@ async def test_restore_loads_latest_when_no_key_specified(
         runner=fake_restorer,
     )
 
-    assert used_key == f"backups/{LATEST_KEY}"
+    assert used_key == latest_pointer_key("backups/")
     assert len(received) == 1
     assert received[0][1] == payload
     assert received[0][0].database == "testdb"

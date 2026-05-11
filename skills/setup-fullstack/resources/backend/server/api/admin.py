@@ -21,8 +21,9 @@ from typing import TYPE_CHECKING
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel
 
-from server.backup import dump_database, restore_database
-from server.backup.restore import NoBackupAvailableError
+from server.storage.backup import dump_database, restore_database
+from server.storage.backup.pointer import head_latest
+from server.storage.backup.restore import NoBackupAvailableError
 
 if TYPE_CHECKING:
     from server.api.app_state import BackupContext
@@ -63,21 +64,14 @@ async def backup_status(request: Request) -> BackupStatusResponse:
     if ctx is None:
         return BackupStatusResponse(enabled=False)
 
-    latest_key = f"{ctx.key_prefix}latest.dump"
-    size: int | None = None
-    try:
-        head = await ctx.storage.head_object(latest_key)
-        size = head.size
-    except LookupError:
-        latest_key = None  # type: ignore[assignment]
-
+    metadata = await head_latest(ctx.storage, ctx.key_prefix)
     return BackupStatusResponse(
         enabled=True,
         interval_seconds=ctx.interval_seconds,
         key_prefix=ctx.key_prefix,
         bucket=ctx.bucket_label,
-        latest_key=latest_key,
-        latest_size_bytes=size,
+        latest_key=metadata.key if metadata is not None else None,
+        latest_size_bytes=metadata.size if metadata is not None else None,
     )
 
 

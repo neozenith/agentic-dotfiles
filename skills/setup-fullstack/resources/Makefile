@@ -5,11 +5,19 @@ SHELL := /bin/bash
 # Both backend AND frontend ports split across human/agent profiles so two
 # concurrent dev sessions never collide. Docker uses a third pair so the
 # container can run alongside `make dev` / `make agentic-dev`.
-export API_PORT          ?= 8200
-export AGENTIC_API_PORT  ?= 8201
-export DEV_PORT          ?= 5173
-export AGENTIC_DEV_PORT  ?= 5174
-export DOCKER_API_PORT   ?= 8210
+#
+# PORT_OFFSET shifts every port by a fixed amount so this scaffold can run
+# alongside other parallel projects without colliding on the standard
+# 5173/5174/8200/8201/8210 set. Set `PORT_OFFSET=1000 make agentic-dev` to
+# move everything to 6173/6174/9200/9201/9210. Each port can also be
+# overridden individually via env or `make API_PORT=... <target>`.
+PORT_OFFSET ?= 0
+
+export API_PORT          ?= $(shell expr 8200 + $(PORT_OFFSET))
+export AGENTIC_API_PORT  ?= $(shell expr 8201 + $(PORT_OFFSET))
+export DEV_PORT          ?= $(shell expr 5173 + $(PORT_OFFSET))
+export AGENTIC_DEV_PORT  ?= $(shell expr 5174 + $(PORT_OFFSET))
+export DOCKER_API_PORT   ?= $(shell expr 8210 + $(PORT_OFFSET))
 
 # DATABASE_BACKEND selects which overlay compose file to layer on top of the
 # base docker-compose.yml. Override via `make DATABASE_BACKEND=postgres docker-up`
@@ -120,7 +128,8 @@ test-py: ## Backend unit + api tests (pytest --cov)
 	$(MAKE) -C backend test
 
 test-e2e: ## Playwright e2e (auto-launches both halves via concurrently)
-	$(MAKE) -C frontend test-e2e
+	PLAYWRIGHT_PORT=$(AGENTIC_DEV_PORT) PLAYWRIGHT_API_PORT=$(AGENTIC_API_PORT) \
+		$(MAKE) -C frontend test-e2e
 
 # =============================================================================
 # Composite — the canonical inner-loop is `make fix ci`

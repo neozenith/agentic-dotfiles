@@ -12,27 +12,27 @@ import shutil
 
 import pytest
 
-from server.backup.dump import (
+from server.storage.backup.dump import (
     PgDumpError,
     _resolve_pg_dump,
 )
-from server.backup.dump import (
+from server.storage.backup.dump import (
     _build_argv as dump_build_argv,
 )
-from server.backup.dump import (
+from server.storage.backup.dump import (
     _build_env as dump_build_env,
 )
-from server.backup.restore import (
+from server.storage.backup.restore import (
     PgRestoreError,
     _resolve_pg_restore,
 )
-from server.backup.restore import (
+from server.storage.backup.restore import (
     _build_argv as restore_build_argv,
 )
-from server.backup.restore import (
+from server.storage.backup.restore import (
     _build_env as restore_build_env,
 )
-from server.backup.url import DatabaseConnection
+from server.storage.backup.url import DatabaseConnection
 
 
 @pytest.fixture

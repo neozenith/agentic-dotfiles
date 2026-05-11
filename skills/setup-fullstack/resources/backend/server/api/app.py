@@ -29,7 +29,7 @@ from server import models  # noqa: F401
 from server.api.admin import router as admin_router
 from server.api.app_state import BackupContext
 from server.api.routes import router
-from server.backup.lifecycle import BackupScheduler, restore_if_database_empty
+from server.storage.backup.lifecycle import BackupScheduler, restore_if_database_empty
 from server.config import (
     get_backup_interval_seconds,
     get_backup_key_prefix,

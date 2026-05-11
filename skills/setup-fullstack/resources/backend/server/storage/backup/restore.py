@@ -16,8 +16,8 @@ import shutil
 import subprocess
 from collections.abc import Callable
 
-from server.backup.dump import LATEST_KEY
-from server.backup.url import DatabaseConnection, parse_database_url
+from server.storage.backup.pointer import latest_pointer_key
+from server.storage.backup.url import DatabaseConnection, parse_database_url
 from server.storage.base import ObjectNotFoundError, StorageBackend
 
 log = logging.getLogger(__name__)
@@ -32,7 +32,7 @@ class PgRestoreError(RuntimeError):
 
 
 class NoBackupAvailableError(LookupError):
-    """Raised when the latest-key has nothing behind it. Distinct from generic
+    """Raised when the requested key has nothing behind it. Distinct from generic
     errors so callers can branch on 'first cold start, no prior data'."""
 
 
@@ -98,13 +98,13 @@ async def restore_database(
 ) -> str:
     """Download a dump from `storage` and pipe it into pg_restore.
 
-    `key` defaults to `<prefix>latest.dump`. Returns the key actually used so
-    the caller can log / audit which backup was loaded. `runner` is injectable
-    for tests (pass a lambda that records the call); production uses
+    `key` defaults to whatever the latest-pointer module reports as current.
+    Returns the key actually used so the caller can log / audit which backup
+    was loaded. `runner` is injectable for tests; production uses
     `_run_pg_restore`.
     """
     conn = parse_database_url(database_url)
-    target_key = key if key is not None else f"{key_prefix}{LATEST_KEY}"
+    target_key = key if key is not None else latest_pointer_key(key_prefix)
 
     try:
         dump_bytes = await storage.get_object(target_key)

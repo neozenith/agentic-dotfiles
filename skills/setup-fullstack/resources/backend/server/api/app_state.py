@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from server.backup.lifecycle import BackupScheduler
+from server.storage.backup.lifecycle import BackupScheduler
 from server.storage.base import StorageBackend
 
 

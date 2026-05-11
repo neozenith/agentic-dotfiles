@@ -24,13 +24,13 @@ from collections.abc import Awaitable, Callable
 
 from sqlalchemy import func, select
 
-from server.backup.dump import dump_database
-from server.backup.restore import (
+from server.db import Base, DatabaseProvider
+from server.storage.backup.dump import dump_database
+from server.storage.backup.restore import (
     NoBackupAvailableError,
     RestoreRunner,
     restore_database,
 )
-from server.db import Base, DatabaseProvider
 from server.storage.base import StorageBackend
 
 log = logging.getLogger(__name__)

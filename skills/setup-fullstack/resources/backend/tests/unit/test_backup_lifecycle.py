@@ -14,13 +14,14 @@ from pathlib import Path
 import pytest
 from sqlalchemy import insert
 
-from server.backup.dump import LATEST_KEY, dump_database
-from server.backup.lifecycle import (
+from server.storage.backup.dump import dump_database
+from server.storage.backup.lifecycle import (
     BackupScheduler,
     is_database_empty,
     restore_if_database_empty,
 )
-from server.backup.url import DatabaseConnection
+from server.storage.backup.pointer import latest_pointer_key
+from server.storage.backup.url import DatabaseConnection
 from server.db import DatabaseProvider
 from server.models import Item
 from server.storage import InMemoryBackend
@@ -74,7 +75,7 @@ async def test_restore_skipped_when_db_has_data(
     async with db.session_factory() as session:
         await session.execute(insert(Item).values(name="seeded", description=""))
         await session.commit()
-    await storage.put_object(f"backups/{LATEST_KEY}", b"PGDMP-x")
+    await storage.put_object(latest_pointer_key("backups/"), b"PGDMP-x")
 
     called: list[bool] = []
 
@@ -108,7 +109,7 @@ async def test_restore_runs_when_db_empty_and_backup_present(
     db: DatabaseProvider, storage: InMemoryBackend, pg_url: str
 ) -> None:
     payload = b"PGDMP-cold-start"
-    await storage.put_object(f"backups/{LATEST_KEY}", payload)
+    await storage.put_object(latest_pointer_key("backups/"), payload)
 
     received: list[bytes] = []
 
@@ -121,7 +122,7 @@ async def test_restore_runs_when_db_empty_and_backup_present(
         storage=storage,
         restore_runner=runner,
     )
-    assert result == f"backups/{LATEST_KEY}"
+    assert result == latest_pointer_key("backups/")
     assert received == [payload]
 
 

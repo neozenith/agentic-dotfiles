@@ -22,16 +22,22 @@ If `make ci` fails, the work is not done. Fix the issues, then re-run.
 
 ```
 .
+├── CONTEXT.md             # domain language: code tiers, storage + backup vocabulary
 ├── Makefile               # top-level orchestrator; delegates via `make -C backend|frontend`
 ├── docker-compose.yml     # backend service for deploy-parity testing
 ├── backend/               # FastAPI + uvicorn + uv + ruff + mypy + pytest
 │   ├── Dockerfile         # multi-stage: builder (uv) → slim runtime
-│   ├── server/api/        # wire layer (FastAPI + Pydantic schemas)
-│   └── server/core/       # pure logic — NO FastAPI imports
+│   ├── server/api/        # framework-managed: wire layer (FastAPI + Pydantic)
+│   ├── server/core/       # user-contributed: your fork's domain logic — NO FastAPI imports
+│   └── server/storage/    # framework-managed: object storage adapters + Postgres backup
 └── frontend/              # Vite + React + TS + Tailwind + shadcn + Biome + Vitest + Playwright
     ├── src/               # React app
     └── e2e/               # Playwright slug-taxonomy + coverage-matrix tests
 ```
+
+The two backend tiers — **user-contributed code** (`server/core/`) and
+**framework-managed code** (everything else under `server/`) — are defined
+in `CONTEXT.md`. Reach for that file when deciding where new code goes.
 
 ## Ports
 
@@ -75,8 +81,8 @@ in-process via `TestClient(create_app())`. Same tests, two transports.
 
 ## Where new things go
 
-- **New API route** → `backend/server/api/routes.py` + Pydantic models in `backend/server/api/schemas.py`. Real logic in `backend/server/core/`.
-- **New domain logic** → `backend/server/core/` (NO FastAPI imports allowed). This is the surface the ≥90% coverage gate targets.
+- **New API route** → `backend/server/api/routes.py` + Pydantic models in `backend/server/api/schemas.py`. Real logic in `backend/server/core/` (the user-contributed surface).
+- **New domain logic** → `backend/server/core/` (NO FastAPI imports allowed). User-contributed code; the ≥90% coverage gate targets this surface.
 - **New shadcn component** → `bunx --bun --cwd frontend shadcn@latest add <name>`. Lands in `frontend/src/components/ui/`. Don't hand-edit.
 - **New e2e route smoke** → append to `frontend/e2e/matrix.ts` `SECTIONS`. Done.
 - **New backend dep** → `uv --directory backend add <pkg>`. Never `pip install`.
@@ -95,7 +101,15 @@ in-process via `TestClient(create_app())`. Same tests, two transports.
 
 ## Dev server collision avoidance
 
-If `make dev` errors with "address already in use", run `make port-debug` to see
-which of the 4 dev ports (5173, 5174, 8200, 8201) are occupied, then
-`make port-clean` to free them. Both targets exist precisely so this never
-becomes a 5-minute debugging tangent.
+If `make dev` errors with "address already in use", you have two options:
+
+1. **Free the ports** — `make port-debug` shows which of the 5 dev/docker ports
+   are occupied; `make port-clean` kills the holders. Use this when the
+   collision is from a stale instance of *this* project.
+2. **Shift this project's ports** — `PORT_OFFSET=1000 make agentic-dev` moves
+   every port by +1000 (6173/6174/9200/9201/9210), letting this scaffold run
+   alongside another project that owns the standard 5173/5174/8200/8201/8210
+   set. `PORT_OFFSET` flows through to Vite, FastAPI, Docker compose, and
+   Playwright. The default is `0` (no shift).
+
+Both targets exist precisely so this never becomes a 5-minute debugging tangent.

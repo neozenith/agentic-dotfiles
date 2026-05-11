@@ -2,6 +2,239 @@
 
 Automated setup script for a fullstack web application — Python (FastAPI + uv) backend served alongside a React (Vite + TypeScript) frontend, with a top-level Makefile that orchestrates both halves.
 
+## Architecture
+
+Two lenses: the **scaffolder** (this skill — the Bun CLI + resource tree that produces a project) and the **scaffolded output** (the project that lands on disk). Each has a simplified always-visible diagram and a detailed reference in the collapsible block.
+
+### Lens 1 — The scaffolder
+
+```mermaid
+flowchart LR
+    User["User /<br/>Claude Code"]:::entry
+    CLI["setup-fullstack.ts<br/>(subcommand CLI)"]:::cli
+    Scaffold["scaffold<br/>command"]:::backend
+    Variation["variation / matrix<br/>commands"]:::backend
+    Steps["7-step<br/>pipeline"]:::backend
+    Resources["resources/<br/>(templates)"]:::data
+    Output["Materialised<br/>fullstack project"]:::usercode
+    Verify["make fix ci<br/>(self-test)"]:::test
+
+    User --> CLI
+    CLI --> Scaffold
+    CLI --> Variation
+    Scaffold --> Steps
+    Steps -->|copies from| Resources
+    Steps --> Output
+    Steps --> Verify
+    Verify --> Output
+
+    classDef entry    fill:#334155,stroke:#fff,color:#fff,stroke-width:2px,font-weight:bold
+    classDef cli      fill:#2563eb,stroke:#fff,color:#fff,stroke-width:2px,font-weight:bold
+    classDef backend  fill:#7c3aed,stroke:#fff,color:#fff,stroke-width:2px
+    classDef data     fill:#b45309,stroke:#fff,color:#fff,stroke-width:2px
+    classDef usercode fill:#047857,stroke:#fff,color:#fff,stroke-width:2px,font-weight:bold
+    classDef test     fill:#cbd5e1,stroke:#1e293b,color:#1e293b,stroke-width:1px,stroke-dasharray:5 5
+```
+
+*Simplified — user invokes the CLI, the scaffold command runs the 7-step pipeline over the resource tree, and the final step self-verifies via `make fix ci`.*
+
+<details>
+<summary>📋 Detailed scaffolder diagram (20 nodes)</summary>
+
+```mermaid
+flowchart LR
+    User["User /<br/>Claude Code"]:::entry
+
+    subgraph CLISub["CLI dispatcher"]
+        Main["setup-fullstack.ts"]:::cli
+        ScaffoldCmd["scaffold"]:::backend
+        VariationCmd["variation"]:::backend
+        MatrixCmd["matrix"]:::backend
+        ListCmd["list-variations"]:::backend
+    end
+
+    subgraph StepsSub["scripts/steps/ - pipeline"]
+        S01["01-prepare"]:::backend
+        S02["02-vite-scaffold"]:::backend
+        S03["03-frontend-tooling"]:::backend
+        S04["04-tailwind-shadcn"]:::backend
+        S05["05-apply-resources"]:::backend
+        S06["06-docs"]:::backend
+        S07["07-finalize (make fix ci)"]:::test
+    end
+
+    subgraph LibsSub["scripts/lib/ - helpers"]
+        Resources["resources.ts<br/>(copyResource)"]:::data
+        Shell["shell.ts<br/>(Bun.shell)"]:::data
+    end
+
+    subgraph TreeSub["resources/ - templates"]
+        BackendT["backend/<br/>(server, tests, pyproject)"]:::data
+        FrontendT["frontend/<br/>(configs, e2e)"]:::data
+        TopT["top-level<br/>(Makefile, CLAUDE.md,<br/>CONTEXT.md, Dockerfile, compose)"]:::data
+    end
+
+    Output["Materialised<br/>scaffolded project"]:::usercode
+
+    User --> Main
+    Main --> ScaffoldCmd
+    Main --> VariationCmd
+    Main --> MatrixCmd
+    Main --> ListCmd
+    ScaffoldCmd --> S01
+    S01 --> S02 --> S03 --> S04 --> S05 --> S06 --> S07
+    S05 --> Resources
+    Resources --> BackendT
+    Resources --> FrontendT
+    Resources --> TopT
+    S02 --> Shell
+    S07 --> Shell
+    S07 --> Output
+
+    classDef entry    fill:#334155,stroke:#fff,color:#fff,stroke-width:2px,font-weight:bold
+    classDef cli      fill:#2563eb,stroke:#fff,color:#fff,stroke-width:2px,font-weight:bold
+    classDef backend  fill:#7c3aed,stroke:#fff,color:#fff,stroke-width:2px
+    classDef data     fill:#b45309,stroke:#fff,color:#fff,stroke-width:2px
+    classDef usercode fill:#047857,stroke:#fff,color:#fff,stroke-width:2px,font-weight:bold
+    classDef test     fill:#cbd5e1,stroke:#1e293b,color:#1e293b,stroke-width:1px,stroke-dasharray:5 5
+```
+
+</details>
+
+### Lens 2 — The materialised scaffold
+
+```mermaid
+flowchart LR
+    Make["Top-level<br/>Makefile<br/>(make fix ci)"]:::entry
+    Frontend["frontend/<br/>(Vite + React + TS)"]:::frontend
+
+    subgraph Backend["backend/server/"]
+        API["api/<br/>(FastAPI wire)"]:::backend
+        Core["core/<br/>(user-contributed)"]:::usercode
+        Storage["storage/<br/>(Protocol + adapters)"]:::data
+        Backup["storage/backup/<br/>(pg_dump/restore)"]:::data
+    end
+
+    Tests["tests/<br/>(unit + api + e2e)"]:::test
+    Docker["docker-compose<br/>(postgres + minio)"]:::external
+
+    Make --> Frontend
+    Make --> API
+    Make --> Tests
+    API --> Core
+    API --> Storage
+    API --> Backup
+    Backup --> Storage
+    Make --> Docker
+    Docker --> Backup
+    Tests --> API
+    Tests --> Frontend
+
+    classDef entry    fill:#334155,stroke:#fff,color:#fff,stroke-width:2px,font-weight:bold
+    classDef frontend fill:#2563eb,stroke:#fff,color:#fff,stroke-width:2px
+    classDef backend  fill:#7c3aed,stroke:#fff,color:#fff,stroke-width:2px
+    classDef data     fill:#b45309,stroke:#fff,color:#fff,stroke-width:2px
+    classDef usercode fill:#047857,stroke:#fff,color:#fff,stroke-width:2px,font-weight:bold
+    classDef test     fill:#cbd5e1,stroke:#1e293b,color:#1e293b,stroke-width:1px,stroke-dasharray:5 5
+    classDef external fill:#b91c1c,stroke:#fff,color:#fff,stroke-width:2px
+```
+
+*Simplified — top-level Makefile orchestrates frontend, backend (api / core / storage / storage-backup), tests, and the dockerised postgres+minio stack. The user-contributed surface (`server/core/`) is highlighted; everything else is framework-managed.*
+
+<details>
+<summary>📋 Detailed scaffold diagram (21 nodes)</summary>
+
+```mermaid
+flowchart LR
+    Make["Top-level<br/>Makefile"]:::entry
+    CtxDoc["CONTEXT.md<br/>(domain language)"]:::data
+    Dockerfile["Dockerfile<br/>(multi-stage)"]:::external
+    Compose["docker-compose +<br/>overlays<br/>(sqlite/postgres/minio/local)"]:::external
+    Core["core/<br/>(user-contributed)"]:::usercode
+    Db["db.py + models.py<br/>+ config.py"]:::backend
+
+    subgraph BackendAPI["backend/server/api/ - wire layer"]
+        AppPy["app.py<br/>(create_app factory)"]:::backend
+        Routes["routes.py<br/>(/api/items, /api/notes)"]:::backend
+        Admin["admin.py<br/>(/api/admin/backup)"]:::backend
+    end
+
+    subgraph Storage["backend/server/storage/ - object storage seam"]
+        Base["base.py<br/>(StorageBackend Protocol)"]:::data
+        Factory["factory.py<br/>(env to adapter)"]:::data
+        Adapters["adapters:<br/>memory / local / s3"]:::data
+    end
+
+    subgraph BackupPkg["backend/server/storage/backup/ - Postgres backup"]
+        Pointer["pointer.py<br/>(latest.dump owner)"]:::data
+        Dump["dump.py<br/>(pg_dump -Fc)"]:::backend
+        Restore["restore.py<br/>(pg_restore)"]:::backend
+        Lifecycle["lifecycle.py<br/>(scheduler +<br/>cold-start)"]:::backend
+    end
+
+    subgraph FrontendApp["frontend/src/ - React SPA"]
+        Pages["pages/ + components/<br/>(Home, Items, Notes,<br/>Layout, Theme, ui/)"]:::frontend
+        ApiLib["lib/api.ts<br/>(/api/* fetch)"]:::frontend
+    end
+
+    subgraph Tests["backend/tests + frontend/e2e"]
+        TestUnit["tests/unit/<br/>(pure logic, 90% gate)"]:::test
+        TestApi["tests/api/<br/>(TestClient + httpx)"]:::test
+        E2E["e2e/<br/>(slug-taxonomy matrix)"]:::test
+    end
+
+    Make --> AppPy
+    Make --> Pages
+    Make --> Tests
+    Make --> Compose
+    Compose --> Dockerfile
+    CtxDoc -.->|guides forks| Core
+
+    AppPy --> Routes
+    AppPy --> Admin
+    AppPy --> Lifecycle
+    AppPy --> Db
+    Routes --> Db
+    Routes --> Core
+    Admin --> Dump
+    Admin --> Restore
+    Admin --> Pointer
+
+    Lifecycle --> Dump
+    Lifecycle --> Restore
+    Dump --> Pointer
+    Restore --> Pointer
+    Pointer --> Base
+    Dump --> Base
+    Restore --> Base
+    Factory --> Adapters
+    Adapters -.implements.-> Base
+    Db --> Factory
+
+    Pages --> ApiLib
+    ApiLib -->|HTTP /api/*| Routes
+    ApiLib -->|HTTP /api/admin/*| Admin
+
+    TestUnit --> Core
+    TestUnit --> Pointer
+    TestUnit --> Dump
+    TestUnit --> Restore
+    TestApi --> AppPy
+    E2E --> Pages
+
+    classDef entry    fill:#334155,stroke:#fff,color:#fff,stroke-width:2px,font-weight:bold
+    classDef frontend fill:#2563eb,stroke:#fff,color:#fff,stroke-width:2px
+    classDef backend  fill:#7c3aed,stroke:#fff,color:#fff,stroke-width:2px
+    classDef data     fill:#b45309,stroke:#fff,color:#fff,stroke-width:2px
+    classDef usercode fill:#047857,stroke:#fff,color:#fff,stroke-width:2px,font-weight:bold
+    classDef test     fill:#cbd5e1,stroke:#1e293b,color:#1e293b,stroke-width:1px,stroke-dasharray:5 5
+    classDef external fill:#b91c1c,stroke:#fff,color:#fff,stroke-width:2px
+```
+
+</details>
+
+**Reading the colors**: `core/` (green) is **user-contributed** — the surface a fork fills with its own domain logic. Everything else under `backend/server/` (violet/amber) is **framework-managed** — code the scaffold owns and forks generally inherit unchanged. The amber tier (`storage/`, `storage/backup/pointer.py`) is the data-plane seam; the red tier (`Dockerfile`, `docker-compose`) is the external runtime. See `CONTEXT.md` (shipped into every scaffolded project) for the canonical glossary.
+
 ## What it includes
 
 ### Frontend (sibling `frontend/` directory)

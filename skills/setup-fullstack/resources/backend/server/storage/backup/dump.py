@@ -6,8 +6,9 @@ Why `-Fc` (custom format):
   * Compresses by default (zstd in PG16; zlib older), so the bytes that hit
     S3 are already small.
 
-The DSN-from-URL parsing lives in `server.backup.url` so this module only
-deals with subprocess + I/O.
+This module owns subprocess invocation. Naming and pointer-update mechanics
+live in `server.storage.backup.pointer`; URL parsing lives in
+`server.storage.backup.url`. Each module has one job.
 """
 
 from __future__ import annotations
@@ -18,9 +19,9 @@ import os
 import shutil
 import subprocess
 from collections.abc import Callable
-from datetime import UTC, datetime
 
-from server.backup.url import DatabaseConnection, parse_database_url
+from server.storage.backup.pointer import record_dump
+from server.storage.backup.url import DatabaseConnection, parse_database_url
 from server.storage.base import StorageBackend
 
 DumpRunner = Callable[[DatabaseConnection], bytes]
@@ -32,9 +33,6 @@ test injection is dependency injection, not a mock.
 """
 
 log = logging.getLogger(__name__)
-
-LATEST_KEY = "latest.dump"
-"""The key that always points at the most recent backup. Cold-start restore reads this."""
 
 
 class PgDumpError(RuntimeError):
@@ -105,9 +103,9 @@ async def dump_database(
 ) -> str:
     """Run pg_dump against `database_url` and upload the dump to `storage`.
 
-    Returns the timestamped key the dump was written to. Also rewrites the
-    `latest.dump` pointer under the same prefix so cold-start restore has a
-    stable key to read.
+    Returns the timestamped key the dump was written to. The latest-pointer
+    is advanced atomically as part of the same call — see
+    `server.storage.backup.pointer.record_dump` for the exact mechanics.
 
     `runner` is the sync function that produces dump bytes. Defaults to
     `_run_pg_dump` (real subprocess); tests inject a lambda returning canned
@@ -116,18 +114,6 @@ async def dump_database(
     conn = parse_database_url(database_url)
     effective_runner = runner if runner is not None else _run_pg_dump
     dump_bytes = await asyncio.to_thread(effective_runner, conn)
-
-    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    timestamped_key = f"{key_prefix}{timestamp}.dump"
-    latest_key = f"{key_prefix}{LATEST_KEY}"
-
-    await storage.put_object(timestamped_key, dump_bytes)
-    await storage.put_object(latest_key, dump_bytes)
-
-    log.info(
-        "pg_dump wrote %d bytes to %s (also pointed %s at it)",
-        len(dump_bytes),
-        timestamped_key,
-        latest_key,
-    )
-    return timestamped_key
+    key = await record_dump(storage, key_prefix, dump_bytes)
+    log.info("pg_dump wrote %d bytes to %s", len(dump_bytes), key)
+    return key

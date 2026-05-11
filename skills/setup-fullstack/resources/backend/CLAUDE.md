@@ -10,15 +10,41 @@ FastAPI + uvicorn + uv server. See project-root `CLAUDE.md` for cross-cutting co
 
 ## Architecture
 
-- `server/api/` — FastAPI app + routes + Pydantic schemas. The wire layer.
+The backend has two tiers, distinguished by who owns the code. See
+`../CONTEXT.md` for the canonical definitions of these terms.
+
+### Framework-managed code
+
+Parts the scaffold ships with and forks generally inherit unchanged.
+
+- `server/api/` — FastAPI wire layer (routes, schemas, app factory).
   - `app.py` — `create_app()` factory. Tests build isolated app instances per fixture.
   - `routes.py` — endpoint handlers. Translate Pydantic ↔ core function calls only; NO business logic here.
   - `schemas.py` — Pydantic v2 request/response models. The schemas ARE the contract.
-- `server/core/` — pure logic. **NO FastAPI imports allowed.** This is the surface the ≥90% coverage gate targets.
+- `server/storage/` — cloud-agnostic object-storage adapters (`memory`, `local`,
+  `s3`) behind the `StorageBackend` Protocol.
+- `server/storage/backup/` — Postgres `pg_dump`/`pg_restore` against a
+  `StorageBackend`. Owns the periodic-backup scheduler and cold-start restore
+  wired into the FastAPI lifespan. The `latest.dump` pointer convention lives
+  exclusively in `server/storage/backup/pointer.py`; no other module knows the
+  filename.
+- `server/db.py`, `server/models.py`, `server/config.py` — DB engine, SQLAlchemy
+  `Base`, env-driven config.
 
-The `core` boundary is load-bearing: deterministic, easy to test exhaustively,
-testable without spinning up an HTTP server. Framework glue (FastAPI middleware,
-DI, request parsing) lives in `api/`, where TestClient integration tests cover it.
+### User-contributed code
+
+Where your fork's domain logic lives.
+
+- `server/core/` — pure functions, **NO FastAPI imports allowed**. Deterministic,
+  exhaustively unit-testable. The ≥90% coverage gate targets this surface.
+  The scaffold ships an `echo()` placeholder; replace it with whatever your fork
+  actually does. Name modules after the domain (e.g. `quote_calculator.py`,
+  `order_intake.py`), not the technical role.
+
+The `core` rule is load-bearing: deterministic, easy to test exhaustively,
+testable without spinning up an HTTP server. Framework glue (FastAPI
+middleware, DI, request parsing) lives in `api/`, where TestClient integration
+tests cover it.
 
 ## Tests
 
@@ -65,7 +91,7 @@ mocks is meaningless coverage.
 
 1. Add Pydantic models to `server/api/schemas.py`.
 2. Add the handler to `server/api/routes.py` — keep it thin, delegate to `server.core`.
-3. Add real domain logic to `server/core/`.
+3. Add real domain logic to `server/core/` (user-contributed surface).
 4. Write a unit test in `tests/unit/test_<module>.py` for the core function.
 5. Write an integration test in `tests/api/test_<endpoint>.py` using the `client` fixture.
 6. Run `make test-py` — must pass with ≥ 90% coverage.

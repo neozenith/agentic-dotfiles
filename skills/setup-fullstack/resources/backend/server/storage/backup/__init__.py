@@ -13,12 +13,16 @@ Public surface:
 
 The dump format is `-Fc` (custom). It is denser than `-Fp` and supports
 `pg_restore --clean --if-exists` for idempotent restores.
+
+Layout convention (see `pointer.py`): each backup prefix holds timestamped
+immutable dumps plus a single `latest.dump` pointer. Only `pointer.py`
+knows the pointer's filename — every other module goes through it.
 """
 
-from server.backup.dump import dump_database
-from server.backup.lifecycle import BackupScheduler, restore_if_database_empty
-from server.backup.restore import restore_database
-from server.backup.url import DatabaseConnection, parse_database_url
+from server.storage.backup.dump import dump_database
+from server.storage.backup.lifecycle import BackupScheduler, restore_if_database_empty
+from server.storage.backup.restore import restore_database
+from server.storage.backup.url import DatabaseConnection, parse_database_url
 
 __all__ = [
     "BackupScheduler",

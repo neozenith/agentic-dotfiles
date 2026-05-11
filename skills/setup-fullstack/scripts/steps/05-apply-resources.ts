@@ -132,6 +132,7 @@ const copyOrchestrationFiles = (projectRoot: string): void => {
   copyResource("gitignore", ".gitignore");
   copyResource(".github/workflows/build.yml");
   copyResource("CLAUDE.md");
+  copyResource("CONTEXT.md");
   // Layered docker-compose: base + one overlay per DB backend, plus optional
   // storage overlays. The Makefile picks which to layer via DATABASE_BACKEND
   // and BACKUP_BACKEND.

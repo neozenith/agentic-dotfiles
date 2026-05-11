@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from server.backup.url import UnsupportedDatabaseUrlError, parse_database_url
+from server.storage.backup.url import UnsupportedDatabaseUrlError, parse_database_url
 
 
 def test_parses_canonical_postgres_url() -> None:
