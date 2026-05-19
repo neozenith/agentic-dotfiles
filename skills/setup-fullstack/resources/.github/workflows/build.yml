@@ -20,7 +20,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -28,7 +28,7 @@ jobs:
           bun-version: latest
 
       - name: Setup uv
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@v8
         with:
           enable-cache: true
 
@@ -36,13 +36,13 @@ jobs:
         run: uv python install 3.12
 
       - name: Cache Bun deps
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.bun/install/cache
           key: bun-${{ runner.os }}-${{ hashFiles('frontend/bun.lock') }}
 
       - name: Cache Playwright browsers
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cache/ms-playwright
           key: pw-${{ runner.os }}-${{ hashFiles('frontend/bun.lock') }}
@@ -64,7 +64,7 @@ jobs:
 
       - name: Upload e2e artefacts on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: e2e-artefacts-${{ github.run_id }}
           path: |

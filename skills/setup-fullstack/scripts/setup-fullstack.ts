@@ -18,6 +18,7 @@
  */
 
 import { elog } from "./lib/logger.ts";
+import { runPreflight, PreflightError } from "./lib/preflight.ts";
 import { scaffoldMain, SCAFFOLD_HELP } from "./commands/scaffold.ts";
 import {
   listVariationsMain,
@@ -30,6 +31,8 @@ const HELP_BY_COMMAND: Record<string, string> = {
 };
 
 const main = async (): Promise<number> => {
+  runPreflight();
+
   const argv = Bun.argv.slice(2);
   const first = argv[0];
 
@@ -91,6 +94,10 @@ if (import.meta.main) {
   main()
     .then((code) => process.exit(code))
     .catch((err: unknown) => {
+      // PreflightError already printed its own message; just exit.
+      if (err instanceof PreflightError) {
+        process.exit(1);
+      }
       const msg = err instanceof Error ? err.message : String(err);
       elog(`setup-fullstack: ${msg}`);
       process.exit(1);
