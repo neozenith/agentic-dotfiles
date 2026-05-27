@@ -2,7 +2,6 @@
 # /// script
 # requires-python = ">=3.12"
 # dependencies = [
-#   "sqlite-muninn>=0.3.3",
 # ]
 # ///
 """
@@ -36,16 +35,13 @@ import logging
 import os
 import re
 import sqlite3
-import subprocess
 import time
-import urllib.request
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from textwrap import dedent
 from typing import Any, Literal
 
-import sqlite_muninn
 
 # ============================================================================
 # Configuration
@@ -67,22 +63,12 @@ log = logging.getLogger(__name__)
 
 SCHEMA_VERSION = "13"
 
-# ML Analysis Configuration (used by reflect --engine)
-ML_DEFAULT_MODELS: dict[str, str] = {
-    "sentiment": "distilbert/distilbert-base-uncased-finetuned-sst-2-english",
-    "zero-shot": "facebook/bart-large-mnli",
-    "summarize": "facebook/bart-large-cnn",
-    "ner": "dslim/bert-base-NER",
-}
-
-ML_TASK_NAMES: dict[str, str] = {
-    "sentiment": "sentiment-analysis",
-    "zero-shot": "zero-shot-classification",
-    "summarize": "summarization",
-    "ner": "ner",
-}
-
-ML_DEFAULT_MAX_CHARS = 2000  # ~512 tokens for BERT-family models
+# Sentinel key in cache_metadata used to gate the one-shot (session_id, uuid)
+# dedupe migration. Mirrors DEDUPE_SESSION_UUID_MIGRATION_KEY in
+# src/claude_code_sessions/database/sqlite/cache.py — both scripts write to the
+# same DB and read/set the same sentinel, so whichever runs first does the work
+# and the other becomes a no-op.
+DEDUPE_SESSION_UUID_MIGRATION_KEY = "dedupe_session_uuid_v1"
 
 
 # ============================================================================
@@ -219,89 +205,157 @@ def _message_kind(event_type: str, is_meta: bool, content: Any) -> str:
 # ============================================================================
 # event_calls fact-table extraction
 # ============================================================================
-# Kept verbatim in sync with
-# src/claude_code_sessions/database/sqlite/calls.py — the standalone script
-# is self-contained, so the helpers are duplicated rather than imported.
+# Byte-equivalent copy of
+# src/claude_code_sessions/database/sqlite/calls.py — keep in lockstep.
+# The two are independent files (the skill is a standalone PEP-723 script
+# and cannot import from the package) but their extracted call rows must
+# match exactly so dashboard queries and introspect queries agree.
 
+# ---------------------------------------------------------------------------
+# Regexes — compiled once at import time.
+# ---------------------------------------------------------------------------
+
+# Locate <system-reminder>...</system-reminder> blocks (non-greedy, dotall so
+# newlines inside the reminder body are consumed).
 _SYSTEM_REMINDER_RE = re.compile(
     r"<system-reminder>(.*?)</system-reminder>",
     re.DOTALL,
 )
+
+# Extract absolute paths following "Contents of " inside a system-reminder.
+# This matches the canonical format used by Claude Code to inject CLAUDE.md
+# and .claude/rules/*.md files into the conversation. The character class
+# excludes whitespace AND ``:`` so the trailing colon ("Contents of /foo.md:")
+# is not captured into the call_name — and neither are quote characters
+# from paths embedded inside quoted strings.
 _RULE_PATH_RE = re.compile(r"Contents of\s+(/[^\s:'\"]+)")
+
+# Shell separators that start a new command segment in an input.command
+# string. Order matters only to the extent that ``re.split`` consumes all
+# alternations at once — each alternation must be a distinct literal.
 _SHELL_SPLIT_RE = re.compile(r"\|\||&&|;|\|")
-_CLI_WRAPPERS: frozenset[str] = frozenset({
-    "sudo", "time", "nohup", "exec", "xargs", "env", "command",
-})
-_SHELL_KEYWORDS_UNWRAP: frozenset[str] = frozenset({
-    "if", "elif", "then", "else", "do", "while", "until",
-})
-_SHELL_SEGMENT_REJECT: frozenset[str] = frozenset({
-    "for", "case", "in", "done", "fi", "esac",
-})
-_MAKE_FLAGS_WITH_ARG: frozenset[str] = frozenset({
-    "-C", "-f", "-I", "-j", "-l", "-o", "-W",
-})
-_UV_RUN_FLAGS_WITH_ARG: frozenset[str] = frozenset({
-    "--directory", "--with", "--with-editable", "--with-requirements",
-    "--python", "-p", "--group", "--extra", "--index-url",
-    "--extra-index-url", "--find-links", "--package", "--prerelease",
-    "--index-strategy", "--resolution", "--exclude-newer",
-    "--keyring-provider", "--refresh-package",
-})
-_BUN_RUN_FLAGS_WITH_ARG: frozenset[str] = frozenset({
-    "--cwd", "--config", "-c",
-})
+
+# Command "wrappers" whose first positional argument is itself a command.
+# We skip past them (and any of their flags) to find the real program head.
+_WRAPPERS: frozenset[str] = frozenset(
+    {
+        "sudo",
+        "time",
+        "nohup",
+        "exec",
+        "xargs",
+        "env",
+        "command",
+    }
+)
+
+# Bash control-flow keywords that INTRODUCE a command. A segment like
+# ``do cmd`` really invokes ``cmd`` — the ``do`` is syntactic scaffolding
+# from a surrounding for/while/until loop that survived the segment
+# splitter. Unwrapping them behaves like ``_WRAPPERS`` but without flag
+# consumption (these keywords don't take ``-flags``).
+_SHELL_KEYWORDS_UNWRAP: frozenset[str] = frozenset(
+    {
+        "if",
+        "elif",
+        "then",
+        "else",
+        "do",
+        "while",
+        "until",
+    }
+)
+
+# Bash tokens that, when appearing as the first non-env word, mean the
+# segment carries no real command — either a loop header (``for i in …``,
+# ``case X in``) or a block terminator (``done``, ``fi``, ``esac``).
+_SHELL_SEGMENT_REJECT: frozenset[str] = frozenset(
+    {
+        "for",
+        "case",
+        "in",
+        "done",
+        "fi",
+        "esac",
+    }
+)
+
+# GNU make flags that take a following positional argument. When parsing
+# ``make <target>`` segments we need to skip past these flag+arg pairs so
+# the arg isn't misread as a target name (e.g. ``make -C subproject test``
+# has target ``test``, not ``subproject``).
+_MAKE_FLAGS_WITH_ARG: frozenset[str] = frozenset(
+    {
+        "-C",
+        "-f",
+        "-I",
+        "-j",
+        "-l",
+        "-o",
+        "-W",
+    }
+)
+
+# ``uv run`` flags that take a following positional argument. Needed so
+# we don't mistake the argument for the script being invoked — e.g. in
+# ``uv run --directory subproject pytest`` the script is ``pytest``.
+_UV_RUN_FLAGS_WITH_ARG: frozenset[str] = frozenset(
+    {
+        "--directory",
+        "--with",
+        "--with-editable",
+        "--with-requirements",
+        "--python",
+        "-p",
+        "--group",
+        "--extra",
+        "--index-url",
+        "--extra-index-url",
+        "--find-links",
+        "--package",
+        "--prerelease",
+        "--index-strategy",
+        "--resolution",
+        "--exclude-newer",
+        "--keyring-provider",
+        "--refresh-package",
+    }
+)
+
+# ``bun run`` flags that take a following positional argument.
+_BUN_RUN_FLAGS_WITH_ARG: frozenset[str] = frozenset(
+    {
+        "--cwd",
+        "--config",
+        "-c",
+    }
+)
 
 
-def _is_env_assignment(token: str) -> bool:
-    """True for tokens of the form ``NAME=value`` (valid env var assignment)."""
-    if "=" not in token or token.startswith("-") or token.startswith("="):
-        return False
-    name, _, _ = token.partition("=")
-    if not name:
-        return False
-    if not (name[0].isalpha() or name[0] == "_"):
-        return False
-    return all(c.isalnum() or c == "_" for c in name)
-
-
-def _segment_head_and_rest(tokens: list[str]) -> tuple[str, list[str]] | None:
-    """Skip env-var assignments and wrappers, return ``(head, rest)``."""
-    i = 0
-    while i < len(tokens) and _is_env_assignment(tokens[i]):
-        i += 1
-    # Reject bash control-structure segments (`for ... in ...`, `done`, `fi`).
-    if i < len(tokens) and tokens[i] in _SHELL_SEGMENT_REJECT:
-        return None
-    # Unwrap keywords that introduce a real command: `do cmd`, `then cmd`.
-    while i < len(tokens) and tokens[i] in _SHELL_KEYWORDS_UNWRAP:
-        i += 1
-    if i < len(tokens) and tokens[i] in _SHELL_SEGMENT_REJECT:
-        return None
-    while i < len(tokens) and tokens[i] in _CLI_WRAPPERS:
-        i += 1
-        while i < len(tokens) and tokens[i].startswith("-"):
-            i += 1
-        while i < len(tokens) and _is_env_assignment(tokens[i]):
-            i += 1
-    if i >= len(tokens):
-        return None
-    raw = tokens[i].lstrip("(")
-    raw = raw.rsplit("/", 1)[-1]
-    raw = raw.rstrip("();&")
-    if not raw:
-        return None
-    # Reject pure-punctuation heads (bare quotes, semicolons) that
-    # survived tokenisation of multi-line heredocs or `sh -c "..."` args.
-    if not any(c.isalnum() for c in raw):
-        return None
-    return raw, tokens[i + 1:]
+# ---------------------------------------------------------------------------
+# CLI head parsing
+# ---------------------------------------------------------------------------
 
 
 def _parse_cli_segments(command: str) -> list[tuple[str, list[str]]]:
-    """Parse a shell command into ``(head, post_head_tokens)`` segments."""
+    """Parse a shell command into ``(head, post_head_tokens)`` segments.
+
+    Each returned tuple is one sub-command: the program name and the
+    remaining tokens (arguments, flags) in order. Wrapper commands like
+    ``sudo`` are skipped and the wrapped program is returned as the head.
+
+    Examples
+    --------
+    >>> _parse_cli_segments("gh pr view 42")
+    [('gh', ['pr', 'view', '42'])]
+    >>> _parse_cli_segments("aws s3 ls | grep foo")
+    [('aws', ['s3', 'ls']), ('grep', ['foo'])]
+    >>> _parse_cli_segments("sudo -E make test")
+    [('make', ['test'])]
+    """
     if not command:
         return []
+
     out: list[tuple[str, list[str]]] = []
     for segment in _SHELL_SPLIT_RE.split(command):
         tokens = segment.strip().split()
@@ -312,41 +366,61 @@ def _parse_cli_segments(command: str) -> list[tuple[str, list[str]]]:
 
 
 def _parse_cli_heads(command: str) -> list[str]:
-    """Return the program-name head(s) of each sub-command in a shell string."""
+    """Return the program-name head(s) of each sub-command in a shell string.
+
+    Thin wrapper over ``_parse_cli_segments`` for callers that only care
+    about the heads (backwards compatibility with the original API).
+    """
     return [head for head, _rest in _parse_cli_segments(command)]
 
 
-def _is_shell_redirection(tok: str) -> bool:
-    """True for shell redirection / control tokens like ``2>&1``, ``&``, ``>log``."""
-    if not tok:
-        return False
-    first = tok[0]
-    if first in "<>&":
-        return True
-    if first.isdigit() and len(tok) > 1 and tok[1] in "<>":
-        return True
-    return False
-
-
 def _parse_make_targets(tokens_after_make: list[str]) -> list[str]:
-    """Extract target names from tokens appearing after ``make``."""
+    """Extract the target names from tokens appearing after ``make``.
+
+    Skips flags (``-j``, ``-s``, ``--silent``…) and the positional
+    arguments consumed by known flag-with-arg pairs (``-C dir``,
+    ``-f Makefile``, etc.). Also skips ``VAR=value`` overrides. The rest
+    are treated as target names.
+
+    Examples
+    --------
+    >>> _parse_make_targets(['test'])
+    ['test']
+    >>> _parse_make_targets(['-C', 'subproject', 'test'])
+    ['test']
+    >>> _parse_make_targets(['test', 'format'])
+    ['test', 'format']
+    >>> _parse_make_targets(['CI=true', '-j', '4', 'ci'])
+    ['ci']
+    >>> _parse_make_targets(['--directory=subproj', 'build'])
+    ['build']
+    """
     targets: list[str] = []
     i = 0
     while i < len(tokens_after_make):
         tok = tokens_after_make[i]
         if tok.startswith("--"):
+            # Long-form flag. `--directory=subproj` is self-contained;
+            # `--jobs 4` would need a lookahead, but such forms are rare
+            # in practice. Skip a single token either way.
             i += 1
             continue
         if tok in _MAKE_FLAGS_WITH_ARG:
+            # Consume the flag plus its argument.
             i += 2
             continue
         if tok.startswith("-"):
+            # Other short flag (no arg), e.g. `-s`, `-k`, `-n`.
             i += 1
             continue
         if _is_env_assignment(tok):
+            # Make variable override (`CI=true`) — not a target.
             i += 1
             continue
         if _is_shell_redirection(tok):
+            # `2>&1`, `&`, `>log`, etc. — shell artifacts that slipped
+            # past the segment splitter (common in `make test 2>&1 | tee`).
+            # Never a target.
             i += 1
             continue
         targets.append(tok)
@@ -358,29 +432,160 @@ def _parse_runner_script(
     tokens_after_runner: list[str],
     flags_with_arg: frozenset[str],
 ) -> str | None:
-    """First positional after ``<runner> run …`` (skips flags + arg pairs)."""
+    """Extract the first positional after a ``<runner> run …`` sequence.
+
+    ``tokens_after_runner`` is the slice of tokens *after* the runner's
+    head — e.g. for ``uv run --directory subproj pytest tests/`` it's
+    ``['run', '--directory', 'subproj', 'pytest', 'tests/']``. Returns
+    the script/target name (basename'd), or ``None`` if:
+
+    - The first token isn't ``run`` (runner is being used for something
+      other than invoking a script, e.g. ``uv sync``, ``bun install``).
+    - There's no positional after the flags (malformed or truncated).
+
+    Shared between ``uv run`` and ``bun run``; the only per-runner knob
+    is the set of flags that consume a following argument.
+    """
     if not tokens_after_runner or tokens_after_runner[0] != "run":
         return None
-    i = 1
+
+    i = 1  # skip the literal "run"
     while i < len(tokens_after_runner):
         tok = tokens_after_runner[i]
+        # `--flag=value` is self-contained — skip one token.
         if tok.startswith("--") and "=" in tok:
             i += 1
             continue
+        # Flag that consumes the next positional.
         if tok in flags_with_arg:
             i += 2
             continue
+        # Other flags (boolean switches) skip one token.
         if tok.startswith("-"):
             i += 1
             continue
+        # Env assignments (common before uv/bun, but usually stripped
+        # upstream; belt-and-braces).
         if _is_env_assignment(tok):
             i += 1
             continue
+        # Shell redirection artifacts that slipped the splitter.
         if _is_shell_redirection(tok):
             i += 1
             continue
+        # First real positional — this is what's being invoked.
+        # Strip to basename so absolute paths don't fragment the top-N.
         return tok.rsplit("/", 1)[-1] or None
+
     return None
+
+
+def _is_shell_redirection(tok: str) -> bool:
+    """True for shell redirection / control tokens like ``2>&1``, ``&``, ``>log``.
+
+    Remaining forms we haven't split on upstream:
+
+    - ``&``                 — background the command
+    - ``>``, ``>>``, ``<``  — redirection operators (standalone or ``>file``)
+    - ``2>``, ``2>&1``, ``2>>file`` — stderr redirection (fd prefix)
+    """
+    if not tok:
+        return False
+    first = tok[0]
+    if first in "<>&":
+        return True
+    # fd-prefixed forms like `1>`, `2>>`, `2>&1`.
+    if first.isdigit() and len(tok) > 1 and tok[1] in "<>":
+        return True
+    return False
+
+
+def _segment_head_and_rest(tokens: list[str]) -> tuple[str, list[str]] | None:
+    """Skip env-var assignments and wrappers, return ``(head, rest)``.
+
+    ``rest`` is the slice of ``tokens`` after the head — i.e. the
+    arguments and flags passed to the program. Returns ``None`` when the
+    segment is empty, contains only env assignments/wrappers, or begins
+    with a bash control-flow token that means "no real command here".
+    """
+    i = 0
+
+    # Skip KEY=VALUE env assignments at the start of a segment.
+    while i < len(tokens) and _is_env_assignment(tokens[i]):
+        i += 1
+
+    # Reject segments that are purely bash control structure (loop
+    # headers like `for i in LIST`, block terminators like `done`/`fi`).
+    # These appear as their own segments after splitting on `;` and
+    # have no meaningful command to record.
+    if i < len(tokens) and tokens[i] in _SHELL_SEGMENT_REJECT:
+        return None
+
+    # Unwrap shell control keywords that INTRODUCE a command:
+    # `do cmd`, `then cmd`, `while cond`, etc. The real invocation is
+    # whatever comes next. No flag-consumption pass because these
+    # keywords don't take options.
+    while i < len(tokens) and tokens[i] in _SHELL_KEYWORDS_UNWRAP:
+        i += 1
+
+    # Re-check the rejection list after keyword unwrap (handles nested
+    # combos like `do done` which would degenerate to nothing).
+    if i < len(tokens) and tokens[i] in _SHELL_SEGMENT_REJECT:
+        return None
+
+    # Unwrap sudo/time/nohup/xargs/env/... recursively.
+    while i < len(tokens) and tokens[i] in _WRAPPERS:
+        i += 1
+        # Consume wrapper flags (e.g. ``sudo -E``, ``xargs -P 4 -n 1``).
+        while i < len(tokens) and tokens[i].startswith("-"):
+            i += 1
+        # ``env`` can be followed by additional KEY=VALUE assignments.
+        while i < len(tokens) and _is_env_assignment(tokens[i]):
+            i += 1
+
+    if i >= len(tokens):
+        return None
+
+    raw = tokens[i]
+    # Strip a leading shell substitution/grouping character like "(".
+    raw = raw.lstrip("(")
+    # Basename: /usr/bin/gh → gh
+    raw = raw.rsplit("/", 1)[-1]
+    # Drop trailing shell metacharacters stuck to the word.
+    raw = raw.rstrip("();&")
+    if not raw:
+        return None
+    # Reject heads that are pure punctuation — bare quotes, semicolons,
+    # and other shell metacharacters that sometimes survive tokenisation
+    # of multi-line heredocs or `sh -c "..."` arguments. A real command
+    # name always contains at least one letter or digit.
+    if not any(c.isalnum() for c in raw):
+        return None
+    return raw, tokens[i + 1 :]
+
+
+def _head_of_segment(tokens: list[str]) -> str | None:
+    """Return just the head of a segment (kept for internal call sites)."""
+    result = _segment_head_and_rest(tokens)
+    return result[0] if result else None
+
+
+def _is_env_assignment(token: str) -> bool:
+    """True for tokens of the form ``NAME=value`` (valid env var assignment)."""
+    if "=" not in token or token.startswith("-") or token.startswith("="):
+        return False
+    name, _, _ = token.partition("=")
+    if not name:
+        return False
+    # POSIX env var names: letters, digits, underscore; cannot start with digit.
+    if not (name[0].isalpha() or name[0] == "_"):
+        return False
+    return all(c.isalnum() or c == "_" for c in name)
+
+
+# ---------------------------------------------------------------------------
+# Rule-path parsing
+# ---------------------------------------------------------------------------
 
 
 def _extract_rule_paths(text: str) -> list[str]:
@@ -392,8 +597,39 @@ def _extract_rule_paths(text: str) -> list[str]:
     return paths
 
 
-def _extract_tool_use_calls(idx: int, block: dict[str, Any]) -> list[tuple[int, str, str]]:
-    """Rows for a single tool_use content block (tool/skill/subagent/cli)."""
+# ---------------------------------------------------------------------------
+# Top-level extractor
+# ---------------------------------------------------------------------------
+
+
+def extract_calls(raw: dict[str, Any]) -> list[tuple[int, str, str]]:
+    """Return ``(ord, call_type, call_name)`` rows for an event's signals.
+
+    ``ord`` is the position of the source content block (or zero for rule
+    rows derived from embedded text). Order within an event is preserved so
+    downstream queries can reconstruct the sequence of actions faithfully.
+    """
+    calls: list[tuple[int, str, str]] = []
+    message = raw.get("message") if isinstance(raw, dict) else None
+    content = message.get("content") if isinstance(message, dict) else None
+    if not isinstance(content, list):
+        return calls
+
+    for idx, block in enumerate(content):
+        if not isinstance(block, dict):
+            continue
+        block_type = block.get("type")
+        if block_type == "tool_use":
+            calls.extend(_extract_tool_use(idx, block))
+        elif block_type == "text":
+            text = block.get("text") or ""
+            for path in _extract_rule_paths(text):
+                calls.append((idx, "rule", path))
+    return calls
+
+
+def _extract_tool_use(idx: int, block: dict[str, Any]) -> list[tuple[int, str, str]]:
+    """Extract rows for a single tool_use content block."""
     name = block.get("name") or ""
     raw_input = block.get("input")
     inp: dict[str, Any] = raw_input if isinstance(raw_input, dict) else {}
@@ -405,6 +641,7 @@ def _extract_tool_use_calls(idx: int, block: dict[str, Any]) -> list[tuple[int, 
         if skill:
             rows.append((idx, "skill", skill))
         else:
+            # Fallback: still count the tool_use even if input is malformed.
             rows.append((idx, "tool", name))
         return rows
 
@@ -423,10 +660,16 @@ def _extract_tool_use_calls(idx: int, block: dict[str, Any]) -> list[tuple[int, 
     if name == "Bash":
         command_val = inp.get("command")
         command = command_val if isinstance(command_val, str) else ""
-        # One 'cli' row per segment head; additionally emit 'make_target'
-        # rows when the head is `make` so we can slice "what targets
-        # does this project build most" separately from "how often was
-        # make invoked at all".
+        # Walk each pipeline/chain segment once. For every segment we
+        # emit one 'cli' row (the head) plus, when the head is a known
+        # runner, additional rows that identify what the runner is
+        # actually executing:
+        #   - ``make <target>``     → one 'make_target' row per target
+        #   - ``uv run <script>``   → one 'uv_script' row
+        #   - ``bun run <script>``  → one 'bun_script' row
+        # These additional rows augment the 'cli' signal — `uv` still
+        # appears in the top-CLIs, but the uv_script dimension lets you
+        # slice "what's actually being run under uv".
         for head, rest in _parse_cli_segments(command):
             rows.append((idx, "cli", head))
             if head == "make":
@@ -442,33 +685,6 @@ def _extract_tool_use_calls(idx: int, block: dict[str, Any]) -> list[tuple[int, 
                     rows.append((idx, "bun_script", script))
 
     return rows
-
-
-def _extract_calls(raw: dict[str, Any]) -> list[tuple[int, str, str]]:
-    """Return (ord, call_type, call_name) rows for an event's signals.
-
-    Five discriminators — tool, skill, subagent, cli, rule — produced from
-    message.content[] tool_use blocks and embedded <system-reminder> text.
-    """
-    calls: list[tuple[int, str, str]] = []
-    message = raw.get("message") if isinstance(raw, dict) else None
-    content = message.get("content") if isinstance(message, dict) else None
-    if not isinstance(content, list):
-        return calls
-
-    for idx, block in enumerate(content):
-        if not isinstance(block, dict):
-            continue
-        block_type = block.get("type")
-        if block_type == "tool_use":
-            calls.extend(_extract_tool_use_calls(idx, block))
-        elif block_type == "text":
-            text = block.get("text") or ""
-            for path in _extract_rule_paths(text):
-                calls.append((idx, "rule", path))
-    return calls
-
-
 # ============================================================================
 # SQLite Cache Schema
 # ============================================================================
@@ -646,50 +862,6 @@ CREATE INDEX IF NOT EXISTS idx_event_calls_timestamp ON event_calls(timestamp);
 CREATE INDEX IF NOT EXISTS idx_event_calls_project_session
     ON event_calls(project_id, session_id);
 
--- Reflections table: persisted meta-prompt evaluations
-CREATE TABLE IF NOT EXISTS reflections (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    project_id TEXT NOT NULL,
-    session_id TEXT NOT NULL,
-    reflection_prompt TEXT NOT NULL,
-    created_at TEXT NOT NULL
-);
-
--- FTS5 for reflections
-CREATE VIRTUAL TABLE IF NOT EXISTS reflections_fts USING fts5(
-    reflection_prompt, content='reflections', content_rowid='id'
-);
-
--- Triggers to keep reflections_fts in sync
-CREATE TRIGGER IF NOT EXISTS reflections_ai AFTER INSERT ON reflections BEGIN
-    INSERT INTO reflections_fts(rowid, reflection_prompt) VALUES (new.id, new.reflection_prompt);
-END;
-
-CREATE TRIGGER IF NOT EXISTS reflections_ad AFTER DELETE ON reflections BEGIN
-    INSERT INTO reflections_fts(reflections_fts, rowid, reflection_prompt)
-        VALUES('delete', old.id, old.reflection_prompt);
-END;
-
-CREATE TRIGGER IF NOT EXISTS reflections_au AFTER UPDATE ON reflections BEGIN
-    INSERT INTO reflections_fts(reflections_fts, rowid, reflection_prompt)
-        VALUES('delete', old.id, old.reflection_prompt);
-    INSERT INTO reflections_fts(rowid, reflection_prompt)
-        VALUES(new.id, new.reflection_prompt);
-END;
-
--- Event annotations table: reflection results linked to events
-CREATE TABLE IF NOT EXISTS event_annotations (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    project_id TEXT NOT NULL,
-    session_id TEXT NOT NULL,
-    event_uuid TEXT NOT NULL,
-    reflection_id INTEGER NOT NULL REFERENCES reflections(id) ON DELETE CASCADE,
-    annotation_result TEXT NOT NULL,
-    created_at TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_event_annotations_reflection ON event_annotations(reflection_id);
-CREATE INDEX IF NOT EXISTS idx_event_annotations_event ON event_annotations(event_uuid);
-CREATE INDEX IF NOT EXISTS idx_event_annotations_session ON event_annotations(project_id, session_id);
 
 -- Composite indexes on existing tables for common query patterns
 CREATE INDEX IF NOT EXISTS idx_events_project_session ON events(project_id, session_id);
@@ -738,9 +910,11 @@ CREATE INDEX IF NOT EXISTS idx_agg_granularity_project_time
 
 -- =====================================================================
 -- event_message_chunks — paragraph-sized splits of event content for
--- vector embedding. Populated by sync_chunks() at the tail of update().
--- The companion HNSW virtual table `chunks_vec` is created at runtime
--- (requires sqlite-muninn extension) — see setup_embedding_runtime().
+-- vector embedding. Populated by the dashboard backend's wave pipeline
+-- (src/claude_code_sessions/database/sqlite/embeddings.py). The
+-- companion HNSW virtual table ``chunks_vec`` is created at backend
+-- runtime via the sqlite-muninn extension. This script only declares
+-- the schema so SELECTs work; it does not write to these tables.
 -- FK CASCADE on event_id → events.id wipes stale chunks when an event
 -- is re-ingested.
 -- =====================================================================
@@ -869,213 +1043,11 @@ CREATE TABLE IF NOT EXISTS community_labels (
 """
 
 
-# ============================================================================
-# Embedding configuration (mirror of
-# src/claude_code_sessions/database/sqlite/embeddings.py — keep in sync!)
-# ============================================================================
-
-GGUF_MODEL_NAME = "NomicEmbed"
-GGUF_MODEL_FILENAME = "nomic-embed-text-v1.5.Q8_0.gguf"
-GGUF_MODEL_URL = (
-    "https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF/resolve/main/"
-    + GGUF_MODEL_FILENAME
-)
-GGUF_EMBEDDING_DIM = 768
-MODELS_DIR = CLAUDE_HOME / "cache" / "models"
-
-CHUNK_MAX_CHARS = 1200
-CHUNK_MIN_CHARS = 100
-EMBED_MAX_CHARS = 1500
-EMBEDDED_MSG_KINDS: tuple[str, ...] = ("human",)
 
 
-def ensure_model_downloaded(*, force: bool = False) -> Path:
-    """Download the NomicEmbed GGUF model to MODELS_DIR on first use."""
-    MODELS_DIR.mkdir(parents=True, exist_ok=True)
-    target = MODELS_DIR / GGUF_MODEL_FILENAME
-    if target.exists() and not force:
-        return target
-
-    log.info("Downloading GGUF model %s → %s", GGUF_MODEL_URL, target)
-    req = urllib.request.Request(
-        GGUF_MODEL_URL,
-        headers={"User-Agent": "introspect-sessions/1.0"},
-    )
-    t0 = time.monotonic()
-    partial = target.with_suffix(target.suffix + ".partial")
-    with urllib.request.urlopen(req) as resp, partial.open("wb") as out:
-        total = int(resp.headers.get("Content-Length", 0))
-        downloaded = 0
-        last_log = t0
-        chunk_bytes = 1024 * 1024
-        while True:
-            chunk = resp.read(chunk_bytes)
-            if not chunk:
-                break
-            out.write(chunk)
-            downloaded += len(chunk)
-            now = time.monotonic()
-            if now - last_log >= 5.0:
-                pct = f"{100 * downloaded / total:.1f}%" if total else "?%"
-                log.info(
-                    "  downloaded %.1f MiB / %.1f MiB (%s)",
-                    downloaded / (1024 * 1024),
-                    total / (1024 * 1024) if total else 0,
-                    pct,
-                )
-                last_log = now
-    partial.rename(target)
-    log.info(
-        "Downloaded GGUF model (%.1f MiB in %.1f s)",
-        target.stat().st_size / (1024 * 1024),
-        time.monotonic() - t0,
-    )
-    return target
 
 
-def chunk_text(text: str) -> list[tuple[str, int]]:
-    """Split text into (chunk_text, char_offset) pairs. See embeddings.py."""
-    if not text:
-        return []
-    if len(text) < CHUNK_MIN_CHARS:
-        return [(text, 0)]
 
-    chunks: list[tuple[str, int]] = []
-    paragraphs = text.split("\n\n")
-
-    offset = 0
-    current_chunk = ""
-    current_offset = 0
-
-    for i, raw_para in enumerate(paragraphs):
-        para = raw_para.strip()
-        if not para:
-            offset += 2
-            continue
-        if not current_chunk:
-            current_chunk = para
-            current_offset = offset
-        elif len(current_chunk) + len(para) + 2 <= CHUNK_MAX_CHARS:
-            current_chunk += "\n\n" + para
-        else:
-            if len(current_chunk) >= CHUNK_MIN_CHARS:
-                chunks.append((current_chunk, current_offset))
-            current_chunk = para
-            current_offset = offset
-        offset += len(para) + (2 if i < len(paragraphs) - 1 else 0)
-
-    if current_chunk:
-        if len(current_chunk) >= CHUNK_MIN_CHARS or not chunks:
-            chunks.append((current_chunk, current_offset))
-        else:
-            prev_text, prev_offset = chunks[-1]
-            chunks[-1] = (prev_text + "\n\n" + current_chunk, prev_offset)
-
-    return chunks
-
-
-def sync_chunks(conn: sqlite3.Connection) -> int:
-    """Chunk any human-message events that don't yet have chunks."""
-    kinds_placeholders = ",".join("?" * len(EMBEDDED_MSG_KINDS))
-    total = conn.execute(
-        f"""
-        SELECT COUNT(*) FROM events e
-        WHERE e.message_content IS NOT NULL
-          AND e.message_content != ''
-          AND e.msg_kind IN ({kinds_placeholders})
-          AND e.id NOT IN (SELECT DISTINCT event_id FROM event_message_chunks)
-        """,
-        EMBEDDED_MSG_KINDS,
-    ).fetchone()[0]
-    if total == 0:
-        return 0
-    log.info("Chunking %d events", total)
-    cursor = conn.execute(
-        f"""
-        SELECT e.id, e.message_content
-        FROM events e
-        WHERE e.message_content IS NOT NULL
-          AND e.message_content != ''
-          AND e.msg_kind IN ({kinds_placeholders})
-          AND e.id NOT IN (SELECT DISTINCT event_id FROM event_message_chunks)
-        """,
-        EMBEDDED_MSG_KINDS,
-    )
-    total_chunks = 0
-    for row in cursor:
-        event_id, text = row[0], row[1]
-        for chunk, chunk_offset in chunk_text(text):
-            conn.execute(
-                "INSERT INTO event_message_chunks (event_id, text, chunk_offset) "
-                "VALUES (?, ?, ?)",
-                (event_id, chunk, chunk_offset),
-            )
-            total_chunks += 1
-    conn.commit()
-    log.info("Created %d chunks", total_chunks)
-    return total_chunks
-
-
-def setup_embedding_runtime(conn: sqlite3.Connection, model_path: Path) -> None:
-    """Load sqlite-muninn, register the GGUF model, create HNSW VT."""
-    conn.enable_load_extension(True)
-    sqlite_muninn.load(conn)
-    conn.enable_load_extension(False)
-
-    row = conn.execute(
-        "SELECT name FROM temp.muninn_models WHERE name = ?",
-        (GGUF_MODEL_NAME,),
-    ).fetchone()
-    if row is None:
-        conn.execute(
-            "INSERT INTO temp.muninn_models(name, model) "
-            "SELECT ?, muninn_embed_model(?)",
-            (GGUF_MODEL_NAME, str(model_path)),
-        )
-    conn.execute(
-        f"CREATE VIRTUAL TABLE IF NOT EXISTS chunks_vec "
-        f"USING hnsw_index(dimensions={GGUF_EMBEDDING_DIM}, metric='cosine')"
-    )
-    conn.commit()
-
-
-def sync_embeddings(conn: sqlite3.Connection) -> int:
-    """Embed any chunks missing a vector in chunks_vec_nodes."""
-    total = conn.execute(
-        """
-        SELECT COUNT(*) FROM event_message_chunks c
-        WHERE c.chunk_id NOT IN (SELECT id FROM chunks_vec_nodes)
-        """,
-    ).fetchone()[0]
-    if total == 0:
-        return 0
-    log.info("Embedding %d chunks", total)
-    cursor = conn.execute(
-        """
-        SELECT c.chunk_id, c.text
-        FROM event_message_chunks c
-        WHERE c.chunk_id NOT IN (SELECT id FROM chunks_vec_nodes)
-        """,
-    )
-    total_embedded = 0
-    for row in cursor:
-        chunk_id, text = row[0], row[1]
-        try:
-            result = conn.execute(
-                "SELECT muninn_embed(?, ?)",
-                (GGUF_MODEL_NAME, text[:EMBED_MAX_CHARS]),
-            ).fetchone()
-            if result and result[0]:
-                conn.execute(
-                    "INSERT INTO chunks_vec(rowid, vector) VALUES (?, ?)",
-                    (chunk_id, result[0]),
-                )
-                total_embedded += 1
-        except sqlite3.OperationalError as e:
-            log.warning("Failed to embed chunk %d: %s", chunk_id, e)
-    conn.commit()
-    log.info("Embedded %d/%d chunks", total_embedded, total)
-    return total_embedded
 
 
 # ============================================================================
@@ -1153,8 +1125,6 @@ class CacheManager:
         log.info("Clearing cache...")
         # Use DELETE FROM with IF EXISTS check via try/except for each table
         tables_to_clear = [
-            "event_annotations",  # FK → reflections
-            "reflections",
             "event_edges",  # FK → source_files
             "event_calls",  # FK → events (must precede `events`)
             "events",
@@ -1162,7 +1132,6 @@ class CacheManager:
             "projects",
             "source_files",
             "events_fts",
-            "reflections_fts",
         ]
         for table in tables_to_clear:
             try:
@@ -1193,14 +1162,8 @@ class CacheManager:
 
         # Get counts for new tables (with backward compat)
         edge_count = 0
-        reflection_count = 0
-        annotation_count = 0
         try:
             edge_count = cursor.execute("SELECT COUNT(*) FROM event_edges").fetchone()[0]
-            reflection_count = cursor.execute("SELECT COUNT(*) FROM reflections").fetchone()[0]
-            annotation_count = cursor.execute("SELECT COUNT(*) FROM event_annotations").fetchone()[
-                0
-            ]
         except sqlite3.OperationalError:
             pass  # Tables may not exist in older schema
 
@@ -1224,8 +1187,6 @@ class CacheManager:
             "sessions": session_count,
             "events": event_count,
             "event_edges": edge_count,
-            "reflections": reflection_count,
-            "event_annotations": annotation_count,
             "created_at": created_at[0] if created_at else None,
             "last_update_at": last_update[0] if last_update else None,
         }
@@ -1394,8 +1355,26 @@ class CacheManager:
         )
         source_file_id = cursor.lastrowid
 
-        # Insert events
+        # Insert events — append-if-not-exists on canonical (session_id, uuid).
+        # When the same JSONL is ingested via a second filepath (e.g. an rsync
+        # mirror) the event already lives in the cache — reuse its id and skip
+        # the dependent edges/calls writes below so we don't duplicate them
+        # either. Backed by idx_events_session_uuid.
         for event in events_data:
+            existing_id: int | None = None
+            if event["uuid"] is not None:
+                row = cursor.execute(
+                    "SELECT id FROM events WHERE session_id IS ? AND uuid = ?",
+                    (detected_session_id, event["uuid"]),
+                ).fetchone()
+                if row is not None:
+                    existing_id = row[0]
+
+            if existing_id is not None:
+                event["_db_id"] = existing_id
+                event["_dedup_skip"] = True
+                continue
+
             cursor.execute(
                 """INSERT INTO events
                    (uuid, parent_uuid, prompt_id, event_type, msg_kind, timestamp, timestamp_local,
@@ -1442,6 +1421,8 @@ class CacheManager:
 
         # Insert event edges for parent-child relationships
         for event in events_data:
+            if event.get("_dedup_skip"):
+                continue
             if event["uuid"] and event["parent_uuid"]:
                 cursor.execute(
                     """INSERT INTO event_edges
@@ -1460,6 +1441,8 @@ class CacheManager:
         # list was attached during _parse_event_for_cache so we're just
         # fanning out the already-parsed content-block signals here.
         for event in events_data:
+            if event.get("_dedup_skip"):
+                continue
             event_db_id = event.get("_db_id")
             if not event_db_id:
                 continue
@@ -1590,7 +1573,7 @@ class CacheManager:
             # Fact-table rows for tool/skill/subagent/cli/rule calls. Parsed
             # once here so ingest_file() can fan them out to event_calls
             # after the event row's primary key is known.
-            "_calls": _extract_calls(raw),
+            "_calls": extract_calls(raw),
         }
 
     def _extract_text_content(self, content: Any) -> str:
@@ -1736,33 +1719,14 @@ class CacheManager:
             GROUP BY project_id, session_id
         """)
 
-        # Calculate costs per-event using model family pricing
+        # Sum per-event cost from events.total_cost_usd, which was
+        # populated at ingest by _compute_event_costs(). The events column
+        # is the single source of truth so rollup matches the dashboard
+        # backend's rebuild_aggregates() — see
+        # src/claude_code_sessions/database/sqlite/cache.py.
         cursor.execute("""
             UPDATE sessions SET total_cost_usd = (
-                SELECT COALESCE(SUM(
-                    CASE
-                        WHEN e.model_id LIKE '%opus%' THEN
-                            (e.input_tokens / 1000000.0) * 15.0 +
-                            (e.output_tokens / 1000000.0) * 75.0 +
-                            (e.cache_read_tokens / 1000000.0) * 1.5 +
-                            (e.cache_creation_tokens / 1000000.0) * 18.75
-                        WHEN e.model_id LIKE '%sonnet%' THEN
-                            (e.input_tokens / 1000000.0) * 3.0 +
-                            (e.output_tokens / 1000000.0) * 15.0 +
-                            (e.cache_read_tokens / 1000000.0) * 0.3 +
-                            (e.cache_creation_tokens / 1000000.0) * 3.75
-                        WHEN e.model_id LIKE '%haiku%' THEN
-                            (e.input_tokens / 1000000.0) * 1.0 +
-                            (e.output_tokens / 1000000.0) * 5.0 +
-                            (e.cache_read_tokens / 1000000.0) * 0.1 +
-                            (e.cache_creation_tokens / 1000000.0) * 1.25
-                        ELSE
-                            (e.input_tokens / 1000000.0) * 15.0 +
-                            (e.output_tokens / 1000000.0) * 75.0 +
-                            (e.cache_read_tokens / 1000000.0) * 1.5 +
-                            (e.cache_creation_tokens / 1000000.0) * 18.75
-                    END
-                ), 0)
+                SELECT COALESCE(SUM(e.total_cost_usd), 0)
                 FROM events e
                 WHERE e.session_id = sessions.session_id
                   AND e.project_id = sessions.project_id
@@ -1771,6 +1735,118 @@ class CacheManager:
 
         self.conn.commit()
         log.info("Aggregate tables rebuilt")
+
+    def migrate_dedupe_session_uuid(self) -> dict[str, int] | None:
+        """Prune (session_id, uuid) duplicates left behind by rsync-mirror
+        ingestion that predates append-if-not-exists semantics in
+        ``ingest_file``.
+
+        Mirrors ``CacheManager.migrate_dedupe_session_uuid`` in the
+        ``claude_code_sessions`` package — same sentinel, same SQL, same
+        cascade strategy. See that docstring for the full rationale.
+        Idempotent — returns None when the sentinel is already set.
+        """
+        cursor = self.conn.cursor()
+        row = cursor.execute(
+            "SELECT value FROM cache_metadata WHERE key = ?",
+            (DEDUPE_SESSION_UUID_MIGRATION_KEY,),
+        ).fetchone()
+        if row is not None and row[0] == "1":
+            return None
+
+        t0 = time.monotonic()
+        log.info("════════════════════════════════════════════════════════")
+        log.info(" Dedupe migration: (session_id, uuid) prune")
+        log.info("════════════════════════════════════════════════════════")
+
+        events_before = cursor.execute("SELECT COUNT(*) FROM events").fetchone()[0]
+
+        cursor.execute(
+            """
+            DELETE FROM events
+            WHERE uuid IS NOT NULL
+              AND id NOT IN (
+                SELECT MIN(id) FROM events
+                WHERE uuid IS NOT NULL
+                GROUP BY session_id, uuid
+              )
+            """
+        )
+        events_deleted = cursor.rowcount
+
+        cursor.execute(
+            """
+            DELETE FROM event_edges
+            WHERE id NOT IN (
+                SELECT MIN(id) FROM event_edges
+                GROUP BY project_id, session_id, event_uuid, parent_event_uuid
+            )
+            """
+        )
+        edges_deleted = cursor.rowcount
+
+        cursor.execute(
+            """
+            DELETE FROM source_files
+            WHERE id NOT IN (
+                    SELECT DISTINCT source_file_id FROM events
+                    WHERE source_file_id IS NOT NULL
+                )
+              AND id NOT IN (
+                    SELECT DISTINCT source_file_id FROM event_edges
+                    WHERE source_file_id IS NOT NULL
+                )
+            """
+        )
+        source_files_deleted = cursor.rowcount
+
+        cursor.execute(
+            "DELETE FROM ner_chunks_log WHERE chunk_id NOT IN "
+            "(SELECT chunk_id FROM event_message_chunks)"
+        )
+        ner_log_deleted = cursor.rowcount
+        cursor.execute(
+            "DELETE FROM re_chunks_log WHERE chunk_id NOT IN "
+            "(SELECT chunk_id FROM event_message_chunks)"
+        )
+        re_log_deleted = cursor.rowcount
+
+        cursor.execute(
+            "INSERT OR REPLACE INTO cache_metadata (key, value) VALUES (?, ?)",
+            (DEDUPE_SESSION_UUID_MIGRATION_KEY, "1"),
+        )
+        self.conn.commit()
+
+        events_after = cursor.execute("SELECT COUNT(*) FROM events").fetchone()[0]
+
+        log.info(
+            "  pruned: events %d → %d (-%d), edges -%d, source_files -%d, "
+            "ner_log -%d, re_log -%d",
+            events_before,
+            events_after,
+            events_deleted,
+            edges_deleted,
+            source_files_deleted,
+            ner_log_deleted,
+            re_log_deleted,
+        )
+
+        self.rebuild_aggregates()
+        self.refresh_aggregates_for_range()
+
+        log.info(
+            "  dedupe migration complete in %.1f s "
+            "(run VACUUM separately to reclaim disk space)",
+            time.monotonic() - t0,
+        )
+
+        return {
+            "events_deleted": events_deleted,
+            "edges_deleted": edges_deleted,
+            "source_files_deleted": source_files_deleted,
+            "ner_log_deleted": ner_log_deleted,
+            "re_log_deleted": re_log_deleted,
+        }
 
     def build_cross_agent_edges(self, session_id: str, project_id: str) -> int:
         """Create synthetic bridge edges from subagent first events to parent tool_use events.
@@ -1881,23 +1957,9 @@ class CacheManager:
 
         if not files_to_update:
             log.info("Cache is up to date")
-            # Still run downstream syncs — chunks / HNSW may be behind
-            # the events table after a schema version bump. Both calls
-            # are incremental and cheap no-ops when everything is in
-            # step.
-            chunks_added = sync_chunks(self.conn)
-            embeddings_added = 0
-            if os.environ.get(
-                "CLAUDE_SESSIONS_DISABLE_EMBEDDINGS", "",
-            ).strip().lower() not in {"1", "true", "yes", "on"}:
-                model_path = ensure_model_downloaded()
-                setup_embedding_runtime(self.conn, model_path)
-                embeddings_added = sync_embeddings(self.conn)
             return {
                 "files_updated": 0,
                 "events_added": 0,
-                "chunks_added": chunks_added,
-                "embeddings_added": embeddings_added,
             }
 
         # Ingest updated files, tracking which sessions were touched
@@ -1947,19 +2009,11 @@ class CacheManager:
             if row and row[0]:
                 self.refresh_aggregates_for_range(str(row[0]), str(row[1]))
 
-        # Chunking + embeddings. Incremental; no-op when nothing is stale.
-        # First-run embedding downloads ~150 MB GGUF model and processes
-        # the backlog — takes minutes. Set the env var to skip in tests
-        # or when the introspect script is only used for its other
-        # subcommands.
-        chunks_added = sync_chunks(self.conn)
-        embeddings_added = 0
-        if os.environ.get(
-            "CLAUDE_SESSIONS_DISABLE_EMBEDDINGS", "",
-        ).strip().lower() not in {"1", "true", "yes", "on"}:
-            model_path = ensure_model_downloaded()
-            setup_embedding_runtime(self.conn, model_path)
-            embeddings_added = sync_embeddings(self.conn)
+        # Chunks/embeddings/entities/relations/communities are managed by
+        # the dashboard backend's wave pipeline, not by this script. See
+        # src/claude_code_sessions/database/sqlite/{embeddings,kg/pipeline}.py.
+        # We define the table schemas above so SELECTs work, but population
+        # is the backend's job — keeping a single producer prevents drift.
 
         # Update metadata
         self.conn.execute(
@@ -1968,15 +2022,10 @@ class CacheManager:
         )
         self.conn.commit()
 
-        log.info(
-            f"Updated {len(files_to_update)} files, {total_events} events, "
-            f"{chunks_added} chunks, {embeddings_added} embeddings"
-        )
+        log.info(f"Updated {len(files_to_update)} files, {total_events} events")
         return {
             "files_updated": len(files_to_update),
             "events_added": total_events,
-            "chunks_added": chunks_added,
-            "embeddings_added": embeddings_added,
         }
 
 
@@ -2071,6 +2120,10 @@ def ensure_cache(cache: CacheManager, projects_path: Path | None = None) -> None
         log.info("Schema version mismatch, rebuilding cache...")
         cache.reset()
         cache.update(projects_path)
+    else:
+        # One-shot data migrations on an existing, current-schema cache.
+        # Sentinel-gated in cache_metadata so it's a no-op after first run.
+        cache.migrate_dedupe_session_uuid()
 
 
 def resolve_project_id(cache: CacheManager, session_id: str) -> str | None:
@@ -2656,580 +2709,6 @@ def cmd_trajectory(
     return events
 
 
-def cmd_reflect(
-    cache: CacheManager,
-    session_id: str,
-    meta_prompt: str,
-    project_id: str | None = None,
-    event_types: list[str] | None = None,
-    start_uuid: str | None = None,
-    end_uuid: str | None = None,
-    limit: int | None = None,
-    output_schema: dict[str, Any] | None = None,
-) -> list[dict[str, Any]]:
-    """Run meta-prompt evaluation over session events using claude -p.
-
-    Persists reflections and annotations to the database for future querying.
-    """
-    events = cmd_trajectory(
-        cache,
-        session_id=session_id,
-        project_id=project_id,
-        start_uuid=start_uuid,
-        end_uuid=end_uuid,
-        event_types=event_types,
-        limit=limit,
-    )
-
-    # Determine effective project_id for persistence
-    effective_project_id = project_id
-    if not effective_project_id and events:
-        effective_project_id = events[0].get("project_id", "unknown")
-
-    # Persist the reflection prompt
-    now = datetime.now(UTC).isoformat()
-    cursor = cache.conn.cursor()
-    cursor.execute(
-        "INSERT INTO reflections (project_id, session_id, reflection_prompt, created_at) VALUES (?, ?, ?, ?)",
-        (effective_project_id or "unknown", session_id, meta_prompt, now),
-    )
-    reflection_id = cursor.lastrowid
-
-    results: list[dict[str, Any]] = []
-
-    for event in events:
-        content = event.get("message_content", "")
-        if not content or not content.strip():
-            continue
-
-        # Build prompt with substitutions
-        prompt = meta_prompt.replace("{{content}}", content)
-        prompt = prompt.replace("{{event_type}}", event.get("event_type", ""))
-        prompt = prompt.replace("{{uuid}}", event.get("uuid") or "")
-        prompt = prompt.replace("{{timestamp}}", event.get("timestamp") or "")
-
-        if output_schema:
-            prompt += f"\n\nRespond with valid JSON matching this schema:\n{json.dumps(output_schema, indent=2)}"
-
-        try:
-            result = subprocess.run(
-                ["claude", "-p", prompt, "--output-format", "json"],
-                capture_output=True,
-                text=True,
-                timeout=120,
-            )
-
-            if result.returncode == 0:
-                try:
-                    analysis = json.loads(result.stdout)
-                except json.JSONDecodeError:
-                    analysis = {"raw_output": result.stdout}
-            else:
-                analysis = {
-                    "error": f"claude -p failed with code {result.returncode}",
-                    "stderr": result.stderr,
-                }
-
-        except FileNotFoundError:
-            analysis = {"error": "claude command not found"}
-        except subprocess.TimeoutExpired:
-            analysis = {"error": "Timeout waiting for claude response"}
-        except Exception as e:
-            analysis = {"error": str(e)}
-
-        # Persist the annotation
-        annotation_now = datetime.now(UTC).isoformat()
-        cursor.execute(
-            """INSERT INTO event_annotations
-               (project_id, session_id, event_uuid, reflection_id, annotation_result, created_at)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (
-                effective_project_id or "unknown",
-                session_id,
-                event.get("uuid") or "",
-                reflection_id,
-                json.dumps(analysis),
-                annotation_now,
-            ),
-        )
-
-        results.append(
-            {
-                "uuid": event.get("uuid"),
-                "event_type": event.get("event_type"),
-                "timestamp": event.get("timestamp"),
-                "analysis": analysis,
-            }
-        )
-
-    cache.conn.commit()
-    return results
-
-
-# ============================================================================
-# ML Analysis Functions (used by reflect --engine)
-# ============================================================================
-
-
-def truncate_content(text: str, max_chars: int = ML_DEFAULT_MAX_CHARS) -> str:
-    """Truncate text at a word boundary to respect model token limits.
-
-    Args:
-        text: The input text to truncate.
-        max_chars: Maximum character length.
-
-    Returns:
-        Truncated text, cut at the last space before max_chars if needed.
-    """
-    if len(text) <= max_chars:
-        return text
-
-    truncated = text[:max_chars]
-    last_space = truncated.rfind(" ")
-    if last_space > max_chars // 2:
-        return truncated[:last_space] + "..."
-    return truncated + "..."
-
-
-def batch_items(items: list[Any], batch_size: int) -> list[list[Any]]:
-    """Split a list into batches of the given size.
-
-    Args:
-        items: List to split.
-        batch_size: Maximum items per batch.
-
-    Returns:
-        List of batches (sublists).
-    """
-    return [items[i : i + batch_size] for i in range(0, len(items), batch_size)]
-
-
-def load_pipeline(task: str, model: str, device: str = "cpu") -> Any:
-    """Load a HuggingFace transformers pipeline.
-
-    This is the ONE exception to the top-level import rule — transformers/torch
-    are heavy dependencies (~3s import time) that are only needed for --engine.
-    They are injected at runtime by introspect_sessions.sh.
-
-    Args:
-        task: HuggingFace task string (e.g. 'sentiment-analysis').
-        model: Model identifier (e.g. 'distilbert/distilbert-base-uncased-finetuned-sst-2-english').
-        device: Device to run on (default: 'cpu').
-
-    Returns:
-        A transformers Pipeline object.
-    """
-    from transformers import pipeline  # noqa: E402 — deferred import for heavy ML deps
-
-    log.info("Loading pipeline: task=%s model=%s device=%s", task, model, device)
-    return pipeline(task, model=model, device=device)
-
-
-def analyze_sentiment(
-    messages: list[dict[str, Any]],
-    model: str | None = None,
-    batch_size: int = 8,
-    max_chars: int = ML_DEFAULT_MAX_CHARS,
-) -> list[dict[str, Any]]:
-    """Run sentiment analysis on messages.
-
-    Args:
-        messages: List of message dicts with 'content' key.
-        model: HuggingFace model identifier.
-        batch_size: Processing batch size.
-        max_chars: Max characters per message for model input.
-
-    Returns:
-        Messages enriched with 'analysis' key containing sentiment results.
-    """
-    if not messages:
-        return []
-
-    effective_model = model or ML_DEFAULT_MODELS["sentiment"]
-    pipe = load_pipeline(ML_TASK_NAMES["sentiment"], effective_model)
-
-    results: list[dict[str, Any]] = []
-    for batch in batch_items(messages, batch_size):
-        texts = [truncate_content(m.get("content", ""), max_chars) for m in batch]
-        non_empty_indices = [i for i, t in enumerate(texts) if t.strip()]
-        non_empty_texts = [texts[i] for i in non_empty_indices]
-
-        predictions: list[dict[str, Any]] = []
-        if non_empty_texts:
-            predictions = pipe(non_empty_texts)
-
-        pred_idx = 0
-        for i, msg in enumerate(batch):
-            enriched = dict(msg)
-            if i in non_empty_indices:
-                pred = predictions[pred_idx]
-                enriched["analysis"] = {
-                    "task": "sentiment",
-                    "model": effective_model,
-                    "label": pred["label"],
-                    "score": round(pred["score"], 4),
-                }
-                pred_idx += 1
-            else:
-                enriched["analysis"] = {
-                    "task": "sentiment",
-                    "model": effective_model,
-                    "label": "UNKNOWN",
-                    "score": 0.0,
-                }
-            results.append(enriched)
-
-    return results
-
-
-def analyze_zero_shot(
-    messages: list[dict[str, Any]],
-    labels: list[str],
-    model: str | None = None,
-    batch_size: int = 8,
-    max_chars: int = ML_DEFAULT_MAX_CHARS,
-) -> list[dict[str, Any]]:
-    """Run zero-shot classification with custom labels.
-
-    Args:
-        messages: List of message dicts with 'content' key.
-        labels: List of classification labels (min 2).
-        model: HuggingFace model identifier.
-        batch_size: Processing batch size.
-        max_chars: Max characters per message for model input.
-
-    Returns:
-        Messages enriched with 'analysis' key containing classification results.
-    """
-    if not messages:
-        return []
-
-    effective_model = model or ML_DEFAULT_MODELS["zero-shot"]
-    pipe = load_pipeline(ML_TASK_NAMES["zero-shot"], effective_model)
-
-    results: list[dict[str, Any]] = []
-    for batch in batch_items(messages, batch_size):
-        texts = [truncate_content(m.get("content", ""), max_chars) for m in batch]
-
-        for msg, text in zip(batch, texts, strict=True):
-            enriched = dict(msg)
-            if text.strip():
-                pred = pipe(text, candidate_labels=labels)
-                enriched["analysis"] = {
-                    "task": "zero-shot",
-                    "model": effective_model,
-                    "labels": dict(
-                        zip(pred["labels"], [round(s, 4) for s in pred["scores"]], strict=True)
-                    ),
-                    "top_label": pred["labels"][0],
-                    "top_score": round(pred["scores"][0], 4),
-                }
-            else:
-                enriched["analysis"] = {
-                    "task": "zero-shot",
-                    "model": effective_model,
-                    "labels": {},
-                    "top_label": "UNKNOWN",
-                    "top_score": 0.0,
-                }
-            results.append(enriched)
-
-    return results
-
-
-def analyze_ner(
-    messages: list[dict[str, Any]],
-    model: str | None = None,
-    batch_size: int = 8,
-    max_chars: int = ML_DEFAULT_MAX_CHARS,
-) -> list[dict[str, Any]]:
-    """Run Named Entity Recognition on messages.
-
-    Args:
-        messages: List of message dicts with 'content' key.
-        model: HuggingFace model identifier.
-        batch_size: Processing batch size.
-        max_chars: Max characters per message for model input.
-
-    Returns:
-        Messages enriched with 'analysis' key containing NER entities.
-    """
-    if not messages:
-        return []
-
-    effective_model = model or ML_DEFAULT_MODELS["ner"]
-    pipe = load_pipeline(ML_TASK_NAMES["ner"], effective_model)
-
-    results: list[dict[str, Any]] = []
-    for batch in batch_items(messages, batch_size):
-        texts = [truncate_content(m.get("content", ""), max_chars) for m in batch]
-
-        for msg, text in zip(batch, texts, strict=True):
-            enriched = dict(msg)
-            if text.strip():
-                raw_entities = pipe(text)
-                entities = [
-                    {
-                        "entity": e["entity"],
-                        "word": e["word"],
-                        "score": round(float(e["score"]), 4),
-                        "start": int(e["start"]),
-                        "end": int(e["end"]),
-                    }
-                    for e in raw_entities
-                ]
-                enriched["analysis"] = {
-                    "task": "ner",
-                    "model": effective_model,
-                    "entities": entities,
-                    "entity_count": len(entities),
-                }
-            else:
-                enriched["analysis"] = {
-                    "task": "ner",
-                    "model": effective_model,
-                    "entities": [],
-                    "entity_count": 0,
-                }
-            results.append(enriched)
-
-    return results
-
-
-def analyze_summarize(
-    messages: list[dict[str, Any]],
-    model: str | None = None,
-    batch_size: int = 8,
-    max_chars: int = ML_DEFAULT_MAX_CHARS,
-    concatenate: bool = False,
-) -> list[dict[str, Any]]:
-    """Run text summarization on messages.
-
-    Args:
-        messages: List of message dicts with 'content' key.
-        model: HuggingFace model identifier.
-        batch_size: Processing batch size.
-        max_chars: Max characters per message for model input.
-        concatenate: If True, concatenate all messages into one summary.
-
-    Returns:
-        Messages enriched with 'analysis' key containing summaries.
-    """
-    if not messages:
-        return []
-
-    effective_model = model or ML_DEFAULT_MODELS["summarize"]
-    pipe = load_pipeline(ML_TASK_NAMES["summarize"], effective_model)
-
-    if concatenate:
-        combined_text = "\n\n".join(
-            m.get("content", "") for m in messages if m.get("content", "").strip()
-        )
-        combined_text = truncate_content(combined_text, max_chars)
-
-        if combined_text.strip():
-            pred = pipe(combined_text, max_length=150, min_length=30, do_sample=False)
-            summary_text = pred[0]["summary_text"]
-        else:
-            summary_text = ""
-
-        return [
-            {
-                "role": "summary",
-                "content": combined_text[:200] + "..."
-                if len(combined_text) > 200
-                else combined_text,
-                "message_count": len(messages),
-                "analysis": {
-                    "task": "summarize",
-                    "model": effective_model,
-                    "summary": summary_text,
-                    "concatenated": True,
-                },
-            }
-        ]
-
-    results: list[dict[str, Any]] = []
-    for batch in batch_items(messages, batch_size):
-        texts = [truncate_content(m.get("content", ""), max_chars) for m in batch]
-
-        for msg, text in zip(batch, texts, strict=True):
-            enriched = dict(msg)
-            if text.strip() and len(text.split()) > 10:
-                pred = pipe(text, max_length=150, min_length=10, do_sample=False)
-                enriched["analysis"] = {
-                    "task": "summarize",
-                    "model": effective_model,
-                    "summary": pred[0]["summary_text"],
-                }
-            else:
-                enriched["analysis"] = {
-                    "task": "summarize",
-                    "model": effective_model,
-                    "summary": text,
-                    "note": "too_short_to_summarize",
-                }
-            results.append(enriched)
-
-    return results
-
-
-def cmd_reflect_ml(
-    cache: CacheManager,
-    session_id: str,
-    engine: str,
-    project_id: str | None = None,
-    limit: int | None = None,
-    model: str | None = None,
-    batch_size: int = 8,
-    max_chars: int = ML_DEFAULT_MAX_CHARS,
-    labels: list[str] | None = None,
-    concatenate: bool = False,
-) -> list[dict[str, Any]]:
-    """Run local ML model analysis as a reflect engine.
-
-    Fetches messages from cache, runs through HF pipeline,
-    persists to event_annotations, returns results.
-
-    Args:
-        cache: CacheManager instance.
-        session_id: Session UUID.
-        engine: ML engine name (sentiment, zero-shot, ner, summarize).
-        project_id: Optional project filter.
-        limit: Max messages to process.
-        model: Override default HuggingFace model.
-        batch_size: Batch size for ML processing.
-        max_chars: Max chars per message for model input.
-        labels: Labels for zero-shot classification.
-        concatenate: If True, concatenate for summarize engine.
-
-    Returns:
-        List of annotation dicts with uuid, event_type, timestamp, analysis.
-    """
-    # Fetch messages with uuid/event_type info via trajectory (richer than cmd_messages)
-    events = cmd_trajectory(
-        cache,
-        session_id=session_id,
-        project_id=project_id,
-        limit=limit,
-    )
-
-    if not events:
-        log.warning("No events found for session %s", session_id)
-        return []
-
-    # Build message dicts with content for the analyze_* functions
-    messages: list[dict[str, Any]] = []
-    event_map: list[dict[str, Any]] = []  # parallel list to track source events
-    for event in events:
-        content = event.get("message_content", "")
-        if content and content.strip():
-            messages.append({"content": content, "role": event.get("event_type", "")})
-            event_map.append(event)
-
-    if not messages:
-        log.warning("No messages with content found for session %s", session_id)
-        return []
-
-    effective_model = model or ML_DEFAULT_MODELS.get(engine, "unknown")
-
-    # Run the appropriate analysis
-    if engine == "sentiment":
-        analyzed = analyze_sentiment(
-            messages, model=model, batch_size=batch_size, max_chars=max_chars
-        )
-    elif engine == "zero-shot":
-        analyzed = analyze_zero_shot(
-            messages, labels=labels or [], model=model, batch_size=batch_size, max_chars=max_chars
-        )
-    elif engine == "ner":
-        analyzed = analyze_ner(messages, model=model, batch_size=batch_size, max_chars=max_chars)
-    elif engine == "summarize":
-        analyzed = analyze_summarize(
-            messages,
-            model=model,
-            batch_size=batch_size,
-            max_chars=max_chars,
-            concatenate=concatenate,
-        )
-    else:
-        log.error("Unknown ML engine: %s", engine)
-        return []
-
-    # Determine effective project_id for persistence
-    effective_project_id = project_id
-    if not effective_project_id and event_map:
-        effective_project_id = event_map[0].get("project_id", "unknown")
-
-    # Persist reflection record
-    now = datetime.now(UTC).isoformat()
-    cursor = cache.conn.cursor()
-    cursor.execute(
-        "INSERT INTO reflections (project_id, session_id, reflection_prompt, created_at) VALUES (?, ?, ?, ?)",
-        (effective_project_id or "unknown", session_id, f"ml:{engine}:{effective_model}", now),
-    )
-    reflection_id = cursor.lastrowid
-
-    # Persist annotations and build results
-    results: list[dict[str, Any]] = []
-
-    if concatenate and engine == "summarize" and analyzed:
-        # Concatenated summarize returns a single result — annotate the first event
-        analysis = analyzed[0].get("analysis", {})
-        event = event_map[0] if event_map else {}
-        annotation_now = datetime.now(UTC).isoformat()
-        cursor.execute(
-            """INSERT INTO event_annotations
-               (project_id, session_id, event_uuid, reflection_id, annotation_result, created_at)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (
-                effective_project_id or "unknown",
-                session_id,
-                event.get("uuid") or "",
-                reflection_id,
-                json.dumps(analysis),
-                annotation_now,
-            ),
-        )
-        results.append(
-            {
-                "uuid": event.get("uuid"),
-                "event_type": "summary",
-                "timestamp": event.get("timestamp"),
-                "message_count": analyzed[0].get("message_count", len(messages)),
-                "analysis": analysis,
-            }
-        )
-    else:
-        for analyzed_msg, event in zip(analyzed, event_map, strict=False):
-            analysis = analyzed_msg.get("analysis", {})
-            annotation_now = datetime.now(UTC).isoformat()
-            cursor.execute(
-                """INSERT INTO event_annotations
-                   (project_id, session_id, event_uuid, reflection_id, annotation_result, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?)""",
-                (
-                    effective_project_id or "unknown",
-                    session_id,
-                    event.get("uuid") or "",
-                    reflection_id,
-                    json.dumps(analysis),
-                    annotation_now,
-                ),
-            )
-            results.append(
-                {
-                    "uuid": event.get("uuid"),
-                    "event_type": event.get("event_type"),
-                    "timestamp": event.get("timestamp"),
-                    "analysis": analysis,
-                }
-            )
-
-    cache.conn.commit()
-    return results
-
-
 # ============================================================================
 # Utility Functions
 # ============================================================================
@@ -3434,56 +2913,6 @@ def main(
                 include_content=not getattr(args, "no_content", False),
             )
 
-        elif args.command == "reflect":
-            engine = getattr(args, "engine", None)
-            if engine:
-                # ML engine path — local HuggingFace models
-                labels = None
-                if engine == "zero-shot":
-                    if not getattr(args, "labels", None):
-                        log.error("--labels required for zero-shot engine")
-                        return
-                    labels = [lbl.strip() for lbl in args.labels.split(",")]
-
-                result = cmd_reflect_ml(
-                    cache,
-                    args.session_id,
-                    engine=engine,
-                    project_id=args.project,
-                    limit=args.limit,
-                    model=getattr(args, "ml_model", None),
-                    batch_size=getattr(args, "batch_size", 8),
-                    max_chars=getattr(args, "max_chars", ML_DEFAULT_MAX_CHARS),
-                    labels=labels,
-                    concatenate=getattr(args, "concatenate", False),
-                )
-            elif getattr(args, "prompt", None) or getattr(args, "prompt_file", None):
-                # Existing claude -p path
-                if args.prompt_file:
-                    with open(args.prompt_file, encoding="utf-8") as f:
-                        meta_prompt = f.read()
-                else:
-                    meta_prompt = args.prompt
-
-                output_schema = None
-                if args.schema:
-                    output_schema = json.loads(args.schema)
-
-                result = cmd_reflect(
-                    cache,
-                    args.session_id,
-                    meta_prompt,
-                    project_id=args.project,
-                    event_types=args.types,
-                    start_uuid=args.start,
-                    end_uuid=args.end,
-                    limit=args.limit,
-                    output_schema=output_schema,
-                )
-            else:
-                log.error("Either --engine or --prompt/--prompt-file is required for reflect")
-                return
-
         else:
             log.error(f"Unknown command: {args.command}")
             return
@@ -3681,60 +3110,6 @@ if __name__ == "__main__":  # pragma: no cover
         "--no-content",
         action="store_true",
         help="Exclude message content and role from --all output",
-    )
-
-    # reflect command
-    reflect_parser = subparsers.add_parser(
-        "reflect", help="Meta-prompt evaluation or local ML analysis"
-    )
-    reflect_parser.add_argument("session_id", help="Session UUID")
-    reflect_parser.add_argument("--prompt", help="Meta-prompt (use {{content}} placeholder)")
-    reflect_parser.add_argument("--prompt-file", help="Read prompt from file")
-    reflect_parser.add_argument("--start", help="Start UUID")
-    reflect_parser.add_argument("--end", help="End UUID")
-    reflect_parser.add_argument(
-        "-t",
-        "--types",
-        nargs="+",
-        metavar="MSG_KIND",
-        help=(
-            "Filter by msg_kind. Valid values: "
-            "human task_notification tool_result user_text meta "
-            "assistant_text thinking tool_use other"
-        ),
-    )
-    reflect_parser.add_argument("-n", "--limit", type=int)
-    reflect_parser.add_argument("--schema", help="Expected JSON output schema")
-    # ML engine options
-    reflect_parser.add_argument(
-        "--engine",
-        choices=["sentiment", "zero-shot", "summarize", "ner"],
-        help="Use local ML model instead of claude -p (cheaper, faster)",
-    )
-    reflect_parser.add_argument(
-        "--ml-model",
-        help="Override default HuggingFace model for --engine",
-    )
-    reflect_parser.add_argument(
-        "--batch-size",
-        type=int,
-        default=8,
-        help="Batch size for ML processing (default: 8)",
-    )
-    reflect_parser.add_argument(
-        "--max-chars",
-        type=int,
-        default=ML_DEFAULT_MAX_CHARS,
-        help=f"Max chars per message for ML models (default: {ML_DEFAULT_MAX_CHARS})",
-    )
-    reflect_parser.add_argument(
-        "--labels",
-        help="Comma-separated labels for zero-shot engine",
-    )
-    reflect_parser.add_argument(
-        "--concatenate",
-        action="store_true",
-        help="Concatenate all messages for summarize engine",
     )
 
     args = parser.parse_args()

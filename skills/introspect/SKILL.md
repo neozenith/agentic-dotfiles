@@ -1,6 +1,6 @@
 ---
 name: introspect
-description: Introspect Claude Code sessions - query conversation history, tool usage, event trees, costs, and run meta-prompt reflection. Use when reviewing past sessions, debugging failures, or recovering user intent post-compaction.
+description: Introspect Claude Code sessions - query conversation history, tool usage, event trees, and costs. Use when reviewing past sessions, debugging failures, or recovering user intent post-compaction.
 user-invocable: true
 ---
 
@@ -162,7 +162,6 @@ tables directly.
 | `sessions -- PROJECT` | List sessions for a project |
 | `search "pattern"` | FTS5 cross-session search |
 | `project-id SESSION` | Resolve project ID from session ID |
-| `reflect SESSION` | Run meta-prompt or ML engine on events |
 | `cache {init,status,update,rebuild,clear}` | Manual cache management |
 
 → See [resources/commands.md](resources/commands.md) for full options and examples.
@@ -190,19 +189,8 @@ introspect_sessions.sh traverse ${CLAUDE_SESSION_ID} --all | jq 'sort_by(-.total
 introspect_sessions.sh traverse ${CLAUDE_SESSION_ID} --summary | jq 'sort_by(-.total_cost_usd)'
 ```
 
-## Reflect
-
-```bash
-.claude/skills/introspect/scripts/introspect_sessions.sh reflect ${CLAUDE_SESSION_ID} \
-    -t assistant_text --limit 5 \
-    --prompt "Summarize key points: {{content}}"
-```
-
-→ See [resources/reflect.md](resources/reflect.md) for full options, ML engines, and structured output.
-
 ## Resources
 
 - [resources/cache.md](resources/cache.md) — SQLite schema, auto-update behavior, management commands
 - [resources/commands.md](resources/commands.md) — Full command reference with all options
-- [resources/reflect.md](resources/reflect.md) — Meta-prompt reflection and local ML analysis
 - [resources/use-cases.md](resources/use-cases.md) — Workflows, post-compaction recovery, architecture, JSONL schema

@@ -114,24 +114,6 @@ erDiagram
         INTEGER source_file_id FK
     }
 
-    reflections {
-        INTEGER id PK
-        TEXT project_id
-        TEXT session_id
-        TEXT reflection_prompt
-        TEXT created_at
-    }
-
-    event_annotations {
-        INTEGER id PK
-        TEXT project_id
-        TEXT session_id
-        TEXT event_uuid
-        INTEGER reflection_id FK
-        TEXT annotation_result
-        TEXT created_at
-    }
-
     agg {
         TEXT granularity PK "hourly daily weekly monthly"
         TEXT time_bucket PK
@@ -149,20 +131,15 @@ erDiagram
 
     source_files ||--o{ events : "contains"
     source_files ||--o{ event_edges : "tracks"
-    events ||--o{ event_annotations : "annotated by"
-    reflections ||--o{ event_annotations : "produces"
     events ||--o{ agg : "rolled up into"
 ```
 
 **FTS5 virtual tables** (auto-synced via triggers):
 - `events_fts` — full-text search on `events.message_content`
-- `reflections_fts` — full-text search on `reflections.reflection_prompt`
 
 **Key relationships:**
 - `events.source_file_id` → `source_files.id` (CASCADE delete)
 - `event_edges` links `event_uuid` → `parent_event_uuid` for tree traversal
-- `event_annotations.(project_id, session_id, event_uuid)` → `events` (composite FK)
-- `event_annotations.reflection_id` → `reflections.id` (CASCADE delete)
 - `agg` table uses grain `(granularity, time_bucket, project_id, session_id, model_id)` — `granularity` discriminates `'hourly'`/`'daily'`/`'weekly'`/`'monthly'`; NULL `session_id`/`model_id` stored as `''` for PK uniqueness
 
 **Notes on the `events` table:**
