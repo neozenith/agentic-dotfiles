@@ -2,6 +2,9 @@
 # /// script
 # requires-python = ">=3.12"
 # dependencies = [
+#   "sqlite-muninn>=0.3.3",
+#   "gliner2>=1.2,<2",
+#   "huggingface-hub>=0.25",
 # ]
 # ///
 """
@@ -36,6 +39,9 @@ import os
 import re
 import sqlite3
 import time
+import urllib.request
+
+import sqlite_muninn
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -1051,6 +1057,1634 @@ CREATE TABLE IF NOT EXISTS community_labels (
 
 
 # ============================================================================
+# Embedding pipeline (byte-equivalent copy of
+# src/claude_code_sessions/database/sqlite/embeddings.py — keep in lockstep)
+# ============================================================================
+# ---------------------------------------------------------------------------
+# Constants — sized for NomicEmbed v1.5 Q8_0 quantised GGUF
+# ---------------------------------------------------------------------------
+
+# Registration name used inside ``temp.muninn_models`` — arbitrary but
+# must match between ``setup_embedding_runtime()`` and ``sync_embeddings()``.
+GGUF_MODEL_NAME = "NomicEmbed"
+
+# HuggingFace-hosted GGUF file. Downloading via plain urllib keeps us off
+# the huggingface_hub dependency chain.
+GGUF_MODEL_FILENAME = "nomic-embed-text-v1.5.Q8_0.gguf"
+GGUF_MODEL_URL = (
+    "https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF/resolve/main/" + GGUF_MODEL_FILENAME
+)
+
+# Output vector dimensionality for NomicEmbed v1.5 — matches the HNSW
+# ``dimensions=`` virtual-table parameter. Changing this requires a
+# different model and a cache rebuild.
+GGUF_EMBEDDING_DIM = 768
+
+# Local cache of downloaded models. Shared across all tools that use the
+# same SQLite cache (the main app + the introspect skill script).
+MODELS_DIR = CLAUDE_HOME / "cache" / "models"
+
+# Chunk sizing — empirical from the sessions_demo reference. Code-heavy
+# content averages ~3.1 chars/token, so 1200 chars ≈ 400 tokens per
+# chunk, safely under the 2048-token model context. Chunks below
+# CHUNK_MIN_CHARS are absorbed into an adjacent chunk rather than emitted
+# as noise.
+CHUNK_MAX_CHARS = 1200
+CHUNK_MIN_CHARS = 100
+
+# Hard ceiling on text passed to ``muninn_embed()`` — guards against
+# oversized chunks (shouldn't happen given CHUNK_MAX_CHARS, but the
+# stored chunk text is unconstrained). Truncation is at the front; we
+# keep the beginning as the highest-signal content for embeddings.
+EMBED_MAX_CHARS = 1500
+
+# Only user-typed prompts are embedded for now. Keeps the index small
+# and the semantic search focused on "what the user asked about" rather
+# than assistant output or tool results.
+EMBEDDED_MSG_KINDS: tuple[str, ...] = ("human",)
+
+
+# ---------------------------------------------------------------------------
+# Schema fragment — tables created at schema init time. The HNSW virtual
+# table is NOT here because it requires sqlite_muninn.load() first; it's
+# created lazily at runtime.
+# ---------------------------------------------------------------------------
+
+CHUNKS_SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS event_message_chunks (
+    chunk_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+    text TEXT NOT NULL,
+    chunk_offset INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_chunks_event_id
+    ON event_message_chunks(event_id);
+
+CREATE VIRTUAL TABLE IF NOT EXISTS event_message_chunks_fts
+    USING fts5(text, content=event_message_chunks, content_rowid=chunk_id);
+
+CREATE TRIGGER IF NOT EXISTS chunks_ai AFTER INSERT ON event_message_chunks BEGIN
+    INSERT INTO event_message_chunks_fts(rowid, text)
+        VALUES (new.chunk_id, new.text);
+END;
+CREATE TRIGGER IF NOT EXISTS chunks_ad AFTER DELETE ON event_message_chunks BEGIN
+    INSERT INTO event_message_chunks_fts(event_message_chunks_fts, rowid, text)
+        VALUES('delete', old.chunk_id, old.text);
+END;
+CREATE TRIGGER IF NOT EXISTS chunks_au AFTER UPDATE ON event_message_chunks BEGIN
+    INSERT INTO event_message_chunks_fts(event_message_chunks_fts, rowid, text)
+        VALUES('delete', old.chunk_id, old.text);
+    INSERT INTO event_message_chunks_fts(rowid, text)
+        VALUES (new.chunk_id, new.text);
+END;
+"""
+
+
+# ---------------------------------------------------------------------------
+# Model download
+# ---------------------------------------------------------------------------
+
+
+def ensure_model_downloaded(*, force: bool = False) -> Path:
+    """Return the local path to the GGUF model, downloading on first use.
+
+    The model is ~150 MB (Q8_0 quant); download runs once per machine.
+    Subsequent calls are a file-existence check. ``force=True`` re-downloads.
+
+    Raises ``URLError`` / ``HTTPError`` on network failure — fail loud,
+    since without the model the embedding phase cannot run.
+    """
+    MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    target = MODELS_DIR / GGUF_MODEL_FILENAME
+    if target.exists() and not force:
+        log.info(
+            "  GGUF model already present: %s (%.1f MiB)",
+            target,
+            target.stat().st_size / (1024 * 1024),
+        )
+        return target
+
+    log.info("  downloading GGUF model %s → %s", GGUF_MODEL_URL, target)
+    # User-Agent required: HuggingFace rejects Python's default "Python-urllib/X".
+    req = urllib.request.Request(
+        GGUF_MODEL_URL,
+        headers={"User-Agent": "claude-code-sessions/1.0"},
+    )
+    t0 = time.monotonic()
+    # Write to a .partial file then rename — an interrupted download
+    # leaves a stub that won't be mistaken for a completed model.
+    partial = target.with_suffix(target.suffix + ".partial")
+    with urllib.request.urlopen(req) as resp, partial.open("wb") as out:
+        total = int(resp.headers.get("Content-Length", 0))
+        downloaded = 0
+        last_log = t0
+        chunk_bytes = 1024 * 1024  # 1 MiB read unit
+        while True:
+            chunk = resp.read(chunk_bytes)
+            if not chunk:
+                break
+            out.write(chunk)
+            downloaded += len(chunk)
+            now = time.monotonic()
+            if now - last_log >= 5.0:
+                pct = f"{100 * downloaded / total:.1f}%" if total else "?%"
+                rate_mb_s = (downloaded / (now - t0)) / (1024 * 1024) if now > t0 else 0
+                log.info(
+                    "  downloaded %.1f MiB / %.1f MiB (%s, %.1f MiB/s)",
+                    downloaded / (1024 * 1024),
+                    total / (1024 * 1024) if total else 0,
+                    pct,
+                    rate_mb_s,
+                )
+                last_log = now
+    partial.rename(target)
+    log.info(
+        "Downloaded GGUF model (%.1f MiB in %.1f s)",
+        target.stat().st_size / (1024 * 1024),
+        time.monotonic() - t0,
+    )
+    return target
+
+
+# ---------------------------------------------------------------------------
+# Chunker
+# ---------------------------------------------------------------------------
+
+
+def chunk_text(text: str) -> list[tuple[str, int]]:
+    """Split ``text`` into paragraph-based chunks of (chunk_text, char_offset).
+
+    Algorithm (mirrors sessions_demo.phases.chunks._split_into_chunks):
+      1. Split on double-newline paragraphs.
+      2. Greedy-pack paragraphs into a running chunk until adding the next
+         one would exceed ``CHUNK_MAX_CHARS`` — emit then, start fresh.
+      3. Chunks below ``CHUNK_MIN_CHARS`` are absorbed into the preceding
+         chunk rather than emitted standalone.
+      4. Very short texts (below ``CHUNK_MIN_CHARS`` total) become a single
+         chunk rather than being dropped.
+
+    ``char_offset`` is the start position of the chunk in the original
+    text — useful if we later want to highlight the exact matched region.
+    """
+    if not text:
+        return []
+    if len(text) < CHUNK_MIN_CHARS:
+        return [(text, 0)]
+
+    chunks: list[tuple[str, int]] = []
+    paragraphs = text.split("\n\n")
+
+    offset = 0
+    current_chunk = ""
+    current_offset = 0
+
+    for i, raw_para in enumerate(paragraphs):
+        para = raw_para.strip()
+        if not para:
+            # Preserve the \n\n separator in the running offset so later
+            # chunks' char_offset still maps into the original string.
+            offset += 2
+            continue
+
+        if not current_chunk:
+            current_chunk = para
+            current_offset = offset
+        elif len(current_chunk) + len(para) + 2 <= CHUNK_MAX_CHARS:
+            current_chunk += "\n\n" + para
+        else:
+            if len(current_chunk) >= CHUNK_MIN_CHARS:
+                chunks.append((current_chunk, current_offset))
+            current_chunk = para
+            current_offset = offset
+
+        offset += len(para) + (2 if i < len(paragraphs) - 1 else 0)
+
+    if current_chunk:
+        if len(current_chunk) >= CHUNK_MIN_CHARS or not chunks:
+            chunks.append((current_chunk, current_offset))
+        else:
+            # Tail chunk is too short — merge into the previous one.
+            prev_text, prev_offset = chunks[-1]
+            chunks[-1] = (prev_text + "\n\n" + current_chunk, prev_offset)
+
+    return chunks
+
+
+# ---------------------------------------------------------------------------
+# Sync — runs at the tail of CacheManager.update()
+# ---------------------------------------------------------------------------
+
+
+def sync_chunks(conn: sqlite3.Connection) -> int:
+    """Chunk any human-message events that don't yet have chunks.
+
+    Returns the number of chunks inserted this run. Safe to call
+    repeatedly — it only processes events that aren't already covered.
+
+    We scope to ``msg_kind = 'human'`` for now (see ``EMBEDDED_MSG_KINDS``):
+    that's the most useful signal for semantic search and keeps the
+    index size modest.
+    """
+    kinds_placeholders = ",".join("?" * len(EMBEDDED_MSG_KINDS))
+    # Count first so we can log an estimate. This is the same query as
+    # the fetch below, just with COUNT(*). Cheap — it's an indexed scan.
+    total = conn.execute(
+        f"""
+        SELECT COUNT(*) FROM events e
+        WHERE e.message_content IS NOT NULL
+          AND e.message_content != ''
+          AND e.msg_kind IN ({kinds_placeholders})
+          AND e.id NOT IN (SELECT DISTINCT event_id FROM event_message_chunks)
+        """,
+        EMBEDDED_MSG_KINDS,
+    ).fetchone()[0]
+    if total == 0:
+        return 0
+
+    log.info("  chunking %d events (kinds=%s)", total, ",".join(EMBEDDED_MSG_KINDS))
+    t0 = time.monotonic()
+
+    cursor = conn.execute(
+        f"""
+        SELECT e.id, e.message_content
+        FROM events e
+        WHERE e.message_content IS NOT NULL
+          AND e.message_content != ''
+          AND e.msg_kind IN ({kinds_placeholders})
+          AND e.id NOT IN (SELECT DISTINCT event_id FROM event_message_chunks)
+        """,
+        EMBEDDED_MSG_KINDS,
+    )
+
+    total_chunks = 0
+    events_processed = 0
+    for row in cursor:
+        event_id = row[0]
+        text = row[1]
+        for chunk, chunk_offset in chunk_text(text):
+            conn.execute(
+                "INSERT INTO event_message_chunks (event_id, text, chunk_offset) VALUES (?, ?, ?)",
+                (event_id, chunk, chunk_offset),
+            )
+            total_chunks += 1
+        events_processed += 1
+        if events_processed % 500 == 0:
+            log.info(
+                "    chunked %d/%d events (%d chunks so far)",
+                events_processed,
+                total,
+                total_chunks,
+            )
+
+    conn.commit()
+    log.info(
+        "  created %d chunks from %d events (%.1f s)",
+        total_chunks,
+        events_processed,
+        time.monotonic() - t0,
+    )
+    return total_chunks
+
+
+def setup_embedding_runtime(conn: sqlite3.Connection, model_path: Path) -> None:
+    """Load muninn, register the GGUF model, and ensure the HNSW VT exists.
+
+    Idempotent: safe to call on every connection open. The expensive
+    part (creating the HNSW VT) is a no-op after the first call.
+    """
+    conn.enable_load_extension(True)
+    sqlite_muninn.load(conn)
+    conn.enable_load_extension(False)
+
+    # ``temp.muninn_models`` is a per-connection registry. An
+    # ``INSERT OR IGNORE`` doesn't work here because the value comes
+    # from ``muninn_embed_model()``; we instead check existence first.
+    row = conn.execute(
+        "SELECT name FROM temp.muninn_models WHERE name = ?",
+        (GGUF_MODEL_NAME,),
+    ).fetchone()
+    if row is None:
+        conn.execute(
+            "INSERT INTO temp.muninn_models(name, model) SELECT ?, muninn_embed_model(?)",
+            (GGUF_MODEL_NAME, str(model_path)),
+        )
+        log.debug("Registered GGUF model %s → %s", GGUF_MODEL_NAME, model_path)
+
+    conn.execute(
+        f"CREATE VIRTUAL TABLE IF NOT EXISTS chunks_vec "
+        f"USING hnsw_index(dimensions={GGUF_EMBEDDING_DIM}, metric='cosine')"
+    )
+    conn.commit()
+
+
+def sync_embeddings(conn: sqlite3.Connection) -> int:
+    """Embed any chunks that don't yet have a vector in ``chunks_vec``.
+
+    Uses ``chunks_vec_nodes`` (the shadow table — a regular SQLite table)
+    to detect "not yet embedded" rows. A direct scan of ``chunks_vec``
+    (the HNSW virtual table) returns no rows in muninn's implementation,
+    so staleness checks MUST go through the shadow table.
+
+    Prerequisite: ``setup_embedding_runtime(conn, model_path)`` must
+    have been called on this connection already.
+
+    Returns the number of vectors inserted.
+    """
+    total = conn.execute(
+        """
+        SELECT COUNT(*) FROM event_message_chunks c
+        WHERE c.chunk_id NOT IN (SELECT id FROM chunks_vec_nodes)
+        """,
+    ).fetchone()[0]
+    if total == 0:
+        return 0
+
+    log.info("  embedding %d chunks (dim=%d, model=%s)", total, GGUF_EMBEDDING_DIM, GGUF_MODEL_NAME)
+    t0 = time.monotonic()
+
+    cursor = conn.execute(
+        """
+        SELECT c.chunk_id, c.text
+        FROM event_message_chunks c
+        WHERE c.chunk_id NOT IN (SELECT id FROM chunks_vec_nodes)
+        """,
+    )
+
+    total_embedded = 0
+    failed = 0
+    last_log = t0
+    for row in cursor:
+        chunk_id, text = row[0], row[1]
+        try:
+            embed_text = text[:EMBED_MAX_CHARS]
+            result = conn.execute(
+                "SELECT muninn_embed(?, ?)",
+                (GGUF_MODEL_NAME, embed_text),
+            ).fetchone()
+            if result and result[0]:
+                conn.execute(
+                    "INSERT INTO chunks_vec(rowid, vector) VALUES (?, ?)",
+                    (chunk_id, result[0]),
+                )
+                total_embedded += 1
+        except sqlite3.OperationalError as e:
+            # One bad chunk shouldn't abort the whole pass. Log and
+            # continue — the next run picks up any rows we skipped.
+            log.warning("Failed to embed chunk %d: %s", chunk_id, e)
+            failed += 1
+
+        now = time.monotonic()
+        if now - last_log >= 30.0:
+            elapsed = now - t0
+            rate = total_embedded / elapsed if elapsed > 0 else 0
+            remaining = total - total_embedded
+            eta_s = remaining / rate if rate > 0 else 0
+            log.info(
+                "    embedded %d/%d chunks (%.1f chunks/s, elapsed %.0f s, eta %.0f s)",
+                total_embedded,
+                total,
+                rate,
+                elapsed,
+                eta_s,
+            )
+            last_log = now
+
+    conn.commit()
+    log.info(
+        "  embedded %d/%d chunks (%d failed, %.1f s)",
+        total_embedded,
+        total,
+        failed,
+        time.monotonic() - t0,
+    )
+    return total_embedded
+# ============================================================================
+# Knowledge-graph pipeline (byte-equivalent inline copy of
+# src/claude_code_sessions/database/sqlite/kg/*.py — keep in lockstep)
+# ============================================================================
+
+# --- KG imports (union of all kg/* module imports, project-internal stripped)
+from collections import defaultdict
+from datetime import UTC, datetime
+from gliner2 import GLiNER2
+from huggingface_hub import snapshot_download
+from pathlib import Path
+from typing import Any
+from typing import TypedDict
+import json
+import logging
+import os
+import sqlite3
+import time
+import urllib.request
+
+
+# ---------------------------------------------------------------------------
+# kg/runtime.py
+# ---------------------------------------------------------------------------
+"""Runtime configuration for the KG pipeline — chat model + label registry.
+
+The KG pipeline drives the published ``sqlite-muninn`` extension via SQL
+primitives. Two model artifacts are needed:
+
+* The **chat model** (a llama.cpp-compatible GGUF) that backs
+  ``muninn_extract_ner_re()`` and ``muninn_label_groups``. Default is a
+  4B-parameter Qwen3.5 Instruct quant (~2.6 GiB on disk).
+* The **embedding model** — already managed by
+  ``claude_code_sessions.database.sqlite.embeddings`` for chunk vectors. We
+  re-use the same ``GGUF_MODEL_NAME`` registration there for entity
+  embeddings.
+
+Per ``/escalators-not-stairs``: missing chat model → fail loud with the
+search paths printed and a remediation hint, never a silent skip.
+
+## Chat-model resolution order
+
+1. ``CLAUDE_SESSIONS_KG_CHAT_MODEL_PATH`` env var (absolute path; if set
+   but missing, raises immediately — does not fall back).
+2. Cached default at ``~/.claude/cache/models/Qwen3.5-4B-Q4_K_M.gguf``.
+3. The sqlite-muninn benchmark models directory at
+   ``~/play/sqlite-vector-graph/models/Qwen3.5-4B-Q4_K_M.gguf`` — picked
+   up automatically when the developer already maintains a copy there
+   (avoids re-downloading 2.6 GiB).
+4. None of the above → download from ``CHAT_MODEL_URL_DEFAULT`` into the
+   cache directory in (2).
+"""
+
+log = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Chat model — drives muninn_extract_ner_re() and muninn_label_groups
+# ---------------------------------------------------------------------------
+
+CHAT_MODEL_NAME = "kg_chat"
+# gemma-4-E2B-it is a 2-billion-parameter instruction-tuned model that
+# produces direct short labels in ~3-4 seconds per call on CPU. Larger
+# alternatives like Qwen3.5-4B can take 60×+ longer because they emit
+# extended `<think>` reasoning traces before answering — disastrous for
+# a phase that needs hundreds of inferences per build.
+CHAT_MODEL_FILENAME_DEFAULT = "gemma-4-E2B-it-Q4_K_M.gguf"
+CHAT_MODEL_URL_DEFAULT = (
+    "https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/resolve/main/gemma-4-E2B-it-Q4_K_M.gguf"
+)
+
+MODELS_DIR = Path.home() / ".claude" / "cache" / "models"
+
+# Other locations searched before downloading. The first existing match
+# wins. These are *opportunistic*: they let a developer who already has
+# the GGUF on disk skip the download without having to symlink or set
+# env vars.
+_FALLBACK_SEARCH_PATHS: tuple[Path, ...] = (
+    Path.home() / "play" / "sqlite-vector-graph" / "models" / CHAT_MODEL_FILENAME_DEFAULT,
+)
+
+
+def _env_override_path() -> Path | None:
+    raw = os.environ.get("CLAUDE_SESSIONS_KG_CHAT_MODEL_PATH", "").strip()
+    if not raw:
+        return None
+    p = Path(raw).expanduser().resolve()
+    if not p.exists():
+        raise FileNotFoundError(
+            f"CLAUDE_SESSIONS_KG_CHAT_MODEL_PATH={p} does not exist. "
+            f"Either point it at an existing GGUF chat model or unset it "
+            f"so the pipeline falls back to the cached default."
+        )
+    return p
+
+
+def _existing_chat_model() -> Path | None:
+    """Return the first chat-model path that exists, in priority order."""
+    cache_target = MODELS_DIR / CHAT_MODEL_FILENAME_DEFAULT
+    if cache_target.exists():
+        return cache_target
+    for candidate in _FALLBACK_SEARCH_PATHS:
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def ensure_chat_model_downloaded(*, force: bool = False) -> Path:
+    """Return the local path to the KG chat GGUF, downloading on first use.
+
+    Resolution order: env override → cache → fallback search paths →
+    download. ``force=True`` skips every existing-file check and re-downloads
+    into the cache directory.
+
+    Raises ``URLError``/``HTTPError`` on network failure — fail loud, since
+    without the chat model the NER+RE and community-naming phases cannot run.
+    """
+    override = _env_override_path()
+    if override is not None:
+        log.info("  KG chat model: %s (env override)", override)
+        return override
+
+    if not force:
+        existing = _existing_chat_model()
+        if existing is not None:
+            log.info(
+                "  KG chat model already present: %s (%.1f GiB)",
+                existing,
+                existing.stat().st_size / (1024**3),
+            )
+            return existing
+
+    MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    target = MODELS_DIR / CHAT_MODEL_FILENAME_DEFAULT
+
+    log.info("  downloading KG chat model %s → %s", CHAT_MODEL_URL_DEFAULT, target)
+    req = urllib.request.Request(
+        CHAT_MODEL_URL_DEFAULT,
+        headers={"User-Agent": "claude-code-sessions/1.0"},
+    )
+    t0 = time.monotonic()
+    partial = target.with_suffix(target.suffix + ".partial")
+    with urllib.request.urlopen(req) as resp, partial.open("wb") as out:
+        total = int(resp.headers.get("Content-Length", 0))
+        downloaded = 0
+        last_log = t0
+        chunk_bytes = 1024 * 1024
+        while True:
+            chunk = resp.read(chunk_bytes)
+            if not chunk:
+                break
+            out.write(chunk)
+            downloaded += len(chunk)
+            now = time.monotonic()
+            if now - last_log >= 5.0:
+                pct = f"{100 * downloaded / total:.1f}%" if total else "?%"
+                rate = (downloaded / (now - t0)) / (1024 * 1024) if now > t0 else 0
+                log.info(
+                    "  downloaded %.1f MiB / %.1f MiB (%s, %.1f MiB/s)",
+                    downloaded / (1024 * 1024),
+                    total / (1024 * 1024) if total else 0,
+                    pct,
+                    rate,
+                )
+                last_log = now
+    partial.rename(target)
+    log.info(
+        "  KG chat model downloaded (%.1f GiB in %.1f s)",
+        target.stat().st_size / (1024**3),
+        time.monotonic() - t0,
+    )
+    return target
+
+
+def register_chat_model(conn: sqlite3.Connection, model_path: Path) -> None:
+    """Register the GGUF chat model in ``temp.muninn_chat_models``.
+
+    The registration is idempotent: re-registering with the same name is a
+    no-op (sqlite-muninn raises an OperationalError saying "already loaded"
+    that we treat as success).
+    """
+    try:
+        conn.execute(
+            "INSERT INTO temp.muninn_chat_models(name, model) SELECT ?, muninn_chat_model(?)",
+            (CHAT_MODEL_NAME, str(model_path)),
+        )
+        log.info("  registered KG chat model in temp.muninn_chat_models: %s", CHAT_MODEL_NAME)
+    except sqlite3.OperationalError as exc:
+        if "already loaded" not in str(exc).lower():
+            raise
+
+
+# ---------------------------------------------------------------------------
+# Label vocabularies — domain-tuned for Claude Code session content.
+# ---------------------------------------------------------------------------
+
+NER_LABELS: tuple[str, ...] = (
+    "tool",
+    "file_path",
+    "model",
+    "concept",
+    "error",
+    "person",
+    "organization",
+    "library",
+    "command",
+)
+
+RE_LABELS: tuple[str, ...] = (
+    "uses",
+    "calls",
+    "imports",
+    "depends_on",
+    "modifies",
+    "reads",
+    "writes",
+    "instance_of",
+    "part_of",
+)
+
+
+# ---------------------------------------------------------------------------
+# Leiden resolutions — coarse / medium / fine community structure.
+# ---------------------------------------------------------------------------
+
+LEIDEN_RESOLUTIONS: tuple[float, ...] = (0.25, 1.0, 3.0)
+DEFAULT_RESOLUTION = 0.25
+
+
+# ---------------------------------------------------------------------------
+# kg/gliner2_loader.py
+# ---------------------------------------------------------------------------
+"""Shared GLiNER2 model cache — loads once per process.
+
+Both NER and RE use the same model instance via this loader. The cache
+ensures the ~205 MB DeBERTa weights are mmaped at most once even when
+both phases run sequentially.
+
+Offline loading: ``snapshot_download`` returns the cached local path;
+``GLiNER2.from_pretrained(local_dir)`` short-circuits to local file
+access via ``os.path.isdir()`` — no ``HF_HUB_OFFLINE`` patching required.
+"""
+
+log = logging.getLogger(__name__)
+
+DEFAULT_GLINER2_MODEL = "fastino/gliner2-base-v1"
+
+_cache: dict[str, GLiNER2] = {}
+
+
+def get_gliner2(model_name: str = DEFAULT_GLINER2_MODEL) -> GLiNER2:
+    """Return a cached GLiNER2 instance.
+
+    First call resolves the model in the local HF cache (without a
+    network round-trip — ``snapshot_download(local_files_only=True)``).
+    The weights live under ``~/.cache/huggingface/hub/...``; if they
+    aren't present we re-issue the call WITHOUT ``local_files_only`` so
+    the missing files are downloaded once. This keeps warm starts
+    instant while still bootstrapping a fresh machine.
+
+    Subsequent calls with the same ``model_name`` return the cached
+    instance with no additional memory or disk I/O.
+    """
+    if model_name not in _cache:
+        log.info("  loading GLiNER2 weights: %s", model_name)
+        try:
+            local_path = snapshot_download(model_name, local_files_only=True)
+        except Exception:
+            log.info("  GLiNER2 weights not in HF cache — downloading from HF Hub")
+            local_path = snapshot_download(model_name)
+        _cache[model_name] = GLiNER2.from_pretrained(local_path)
+    return _cache[model_name]
+
+
+# ---------------------------------------------------------------------------
+# kg/entity_resolution.py
+# ---------------------------------------------------------------------------
+"""Entity-resolution phase — collapse synonyms into canonical clusters.
+
+Uses ``muninn_extract_er(vec_table, name_col, k, dist_threshold, jw_weight,
+borderline_delta, eb_threshold_or_null, type_filter, type_filter_col)`` —
+sqlite-muninn's all-in-one ER pipeline that does HNSW blocking →
+Jaro-Winkler + cosine scoring → Leiden clustering → edge-betweenness
+cleanup, returning a JSON cluster map.
+
+Outputs:
+  - ``entity_clusters(name, canonical)`` — synonym → canonical mapping
+  - ``nodes(node_id, name, entity_type, mention_count)`` — canonical entities
+  - ``edges(src, dst, rel_type, weight)`` — coalesced canonical relations
+
+This phase is non-incremental: it ALWAYS rebuilds nodes/edges from
+scratch when run, because ER is a global optimization. It is only
+*invoked* when entity_embeddings has produced new vectors, so the
+no-op case is "skip the rebuild altogether."
+"""
+
+log = logging.getLogger(__name__)
+
+
+_DEFAULT_K = 10
+_DEFAULT_DIST_THRESHOLD = 0.15
+_DEFAULT_JW_WEIGHT = 0.3
+_DEFAULT_BORDERLINE_DELTA = 0.0
+
+
+def _has_new_entities(conn: sqlite3.Connection) -> bool:
+    """True if entity_vec_map has rows whose names are missing from entity_clusters."""
+    cluster_count = int(conn.execute("SELECT count(*) FROM entity_clusters").fetchone()[0])
+    name_count = int(conn.execute("SELECT count(*) FROM entity_vec_map").fetchone()[0])
+    return cluster_count < name_count
+
+
+def sync_entity_clusters(conn: sqlite3.Connection) -> tuple[int, int]:
+    """Run muninn_extract_er and rebuild nodes/edges.
+
+    Returns ``(num_nodes, num_edges)``.
+    """
+    if not _has_new_entities(conn):
+        log.info("  entity-resolution: clusters already up to date")
+        return (
+            int(conn.execute("SELECT count(*) FROM nodes").fetchone()[0]),
+            int(conn.execute("SELECT count(*) FROM edges").fetchone()[0]),
+        )
+
+    t0 = time.monotonic()
+
+    # Drop the rebuildable tables (entity_clusters / nodes / edges /
+    # _match_edges). entity_vec_map and entities_vec are upstream and
+    # preserved so re-running the ER doesn't force a full re-embed.
+    conn.execute("DROP TABLE IF EXISTS _match_edges")
+    conn.execute("DELETE FROM entity_clusters")
+    conn.execute("DELETE FROM nodes")
+    conn.execute("DELETE FROM edges")
+    conn.execute("DELETE FROM sqlite_sequence WHERE name IN ('nodes', 'edge')")
+
+    # Bridge schema: muninn_extract_er expects a ``temp.entities`` view-like
+    # table with (entity_id, name, source) columns. Build it from
+    # entity_vec_map joined to the dominant entity_type per name.
+    conn.execute("DROP TABLE IF EXISTS temp.entities")
+    conn.execute("CREATE TEMP TABLE entities(entity_id TEXT, name TEXT, source TEXT)")
+    conn.execute(
+        """
+        INSERT INTO temp.entities(entity_id, name, source)
+        SELECT m.name, m.name, COALESCE(t.entity_type, '')
+        FROM entity_vec_map m
+        LEFT JOIN (
+            SELECT name, entity_type
+            FROM main.entities
+            GROUP BY name
+        ) t ON t.name = m.name
+        """
+    )
+
+    log.info(
+        "  entity-resolution: muninn_extract_er(k=%d, dist=%.2f, jw=%.2f)",
+        _DEFAULT_K,
+        _DEFAULT_DIST_THRESHOLD,
+        _DEFAULT_JW_WEIGHT,
+    )
+    result_row = conn.execute(
+        "SELECT muninn_extract_er(?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            "entities_vec",
+            "name",
+            _DEFAULT_K,
+            _DEFAULT_DIST_THRESHOLD,
+            _DEFAULT_JW_WEIGHT,
+            _DEFAULT_BORDERLINE_DELTA,
+            None,
+            None,
+            "diff_type",
+        ),
+    ).fetchone()
+    if result_row is None or result_row[0] is None:
+        raise RuntimeError("muninn_extract_er returned NULL")
+
+    conn.execute("DROP TABLE IF EXISTS temp.entities")
+
+    parsed = json.loads(result_row[0])
+    clusters: dict[str, int] = parsed.get("clusters", {})
+    if not clusters:
+        log.warning("  entity-resolution: muninn_extract_er produced 0 clusters")
+
+    # Group cluster members and pick the highest-mention name as canonical.
+    name_to_count: dict[str, int] = {
+        str(r[0]): int(r[1])
+        for r in conn.execute("SELECT name, count(*) FROM entities GROUP BY name").fetchall()
+    }
+    name_to_type: dict[str, str | None] = {
+        str(r[0]): (r[1] if r[1] else None)
+        for r in conn.execute("SELECT name, entity_type FROM entities GROUP BY name").fetchall()
+    }
+
+    members_by_cluster: dict[int, list[str]] = {}
+    for name, cluster_id in clusters.items():
+        members_by_cluster.setdefault(int(cluster_id), []).append(str(name))
+
+    name_to_canonical: dict[str, str] = {}
+    for members in members_by_cluster.values():
+        canonical = max(members, key=lambda n: name_to_count.get(n, 0))
+        for member in members:
+            name_to_canonical[member] = canonical
+    # Singletons: any entity name not in the cluster map maps to itself.
+    for name in name_to_count:
+        name_to_canonical.setdefault(name, name)
+
+    log.info(
+        "  entity-resolution: %d entities → %d clusters",
+        len(name_to_canonical),
+        len(members_by_cluster) or len(name_to_canonical),
+    )
+
+    conn.executemany(
+        "INSERT INTO entity_clusters (name, canonical) VALUES (?, ?)",
+        list(name_to_canonical.items()),
+    )
+
+    # Build nodes from canonical roll-up.
+    canonical_stats: dict[str, dict[str, str | int | None]] = {}
+    for name, count in name_to_count.items():
+        canonical = name_to_canonical[name]
+        slot_default: dict[str, str | int | None] = {
+            "entity_type": name_to_type.get(canonical) or name_to_type.get(name),
+            "mention_count": 0,
+        }
+        slot = canonical_stats.setdefault(canonical, slot_default)
+        slot["mention_count"] = int(slot.get("mention_count", 0) or 0) + count
+
+    for canonical in sorted(canonical_stats):
+        stats = canonical_stats[canonical]
+        conn.execute(
+            "INSERT OR IGNORE INTO nodes (name, entity_type, mention_count) VALUES (?, ?, ?)",
+            (canonical, stats.get("entity_type"), stats.get("mention_count", 0)),
+        )
+    num_nodes = int(conn.execute("SELECT count(*) FROM nodes").fetchone()[0])
+    log.info("  entity-resolution: %d canonical nodes", num_nodes)
+
+    # Coalesce relations into edges keyed on canonical names.
+    edge_agg: dict[tuple[str, str, str], float] = {}
+    for src, dst, rel_type, weight in conn.execute(
+        "SELECT src, dst, rel_type, weight FROM relations"
+    ).fetchall():
+        c_src = name_to_canonical.get(str(src), str(src))
+        c_dst = name_to_canonical.get(str(dst), str(dst))
+        if c_src == c_dst:
+            continue
+        key = (c_src, c_dst, str(rel_type or ""))
+        edge_agg[key] = edge_agg.get(key, 0.0) + float(weight or 0.0)
+
+    if edge_agg:
+        conn.executemany(
+            "INSERT OR IGNORE INTO edges (src, dst, rel_type, weight) VALUES (?, ?, ?, ?)",
+            [(s, d, rt, w) for (s, d, rt), w in edge_agg.items()],
+        )
+    num_edges = int(conn.execute("SELECT count(*) FROM edges").fetchone()[0])
+    log.info("  entity-resolution: %d coalesced edges", num_edges)
+
+    conn.commit()
+    log.info(
+        "  entity-resolution: complete in %.1f s",
+        time.monotonic() - t0,
+    )
+    return num_nodes, num_edges
+
+
+# ---------------------------------------------------------------------------
+# kg/ner_re.py
+# ---------------------------------------------------------------------------
+"""NER + RE phase — GLiNER2 (fastino/gliner2-base-v1).
+
+The 205 MB DeBERTa-v3-base GLiNER2 model handles both named-entity
+recognition and zero-shot relation extraction. It is roughly 20× faster
+than running NER+RE through a 4 B chat model (e.g. Qwen3.5-4B) on CPU
+and yields more consistent label boundaries because the network was
+trained on token-aligned NER targets rather than free-form generation.
+
+Incremental: tracks completed chunks in ``ner_chunks_log`` and
+``re_chunks_log``. Re-runs only process new chunks.
+
+Per ``/escalators-not-stairs``: a chunk that produces zero entities is
+still logged as processed — that is success, not failure. A chunk that
+errors out propagates the exception; we never silently skip.
+"""
+
+log = logging.getLogger(__name__)
+
+# Outer loop: chunks committed to SQLite per batch. Smaller values mean
+# more frequent visibility for the web app at the cost of slightly more
+# commit overhead.
+_OUTER_BATCH = 8
+# Inner GLiNER2 batch size — fits comfortably in CPU memory.
+_GLINER2_BATCH = 8
+
+# GLiNER2's DeBERTa-v3-base encoder has a 512 token window (~1500 chars
+# for code-dense content at ~3 chars/token). Larger inputs either get
+# silently truncated internally or send the relation extractor into an
+# N² pair-scoring loop that can take *minutes* per chunk. We truncate
+# defensively at the boundary so the chunker's edge cases (rare
+# multi-thousand-char single-paragraph prompts) can't stall the
+# pipeline. Truncation is at the END — entities near the start of long
+# prompts are usually the most informative anyway.
+_MAX_TEXT_CHARS = 1500
+
+
+def _safe_text(text: str) -> str:
+    if len(text) <= _MAX_TEXT_CHARS:
+        return text
+    return text[:_MAX_TEXT_CHARS]
+
+
+def _per_run_limit() -> int:
+    """Optional per-run chunk cap.
+
+    ``CLAUDE_SESSIONS_KG_NER_RE_BATCH=N`` processes at most N chunks per
+    server start, then the next start picks up from the next un-logged
+    chunk. Default ``0`` means "process every unprocessed chunk in one
+    run" — the production behavior the user explicitly requested under
+    ``/escalators-not-stairs`` (no skipping the first-time encoding).
+
+    The cap is purely operational pacing for very large corpora; it
+    never causes the pipeline to *skip* work, only to spread it across
+    multiple runs.
+    """
+    raw = os.environ.get("CLAUDE_SESSIONS_KG_NER_RE_BATCH", "").strip()
+    if not raw:
+        return 0
+    try:
+        return max(0, int(raw))
+    except ValueError:
+        return 0
+
+
+_NER_INSERT_SQL = (
+    "INSERT INTO entities (name, entity_type, source, chunk_id, confidence) VALUES (?, ?, ?, ?, ?)"
+)
+_RE_INSERT_SQL = (
+    "INSERT INTO relations (src, dst, rel_type, weight, chunk_id, source) VALUES (?, ?, ?, ?, ?, ?)"
+)
+
+
+def _unprocessed_chunks(conn: sqlite3.Connection) -> list[tuple[int, str]]:
+    """Return (chunk_id, text) tuples whose chunk_id is missing from ner_chunks_log."""
+    rows = conn.execute(
+        """
+        SELECT chunk_id, text
+        FROM event_message_chunks
+        WHERE chunk_id NOT IN (SELECT chunk_id FROM ner_chunks_log)
+        ORDER BY chunk_id
+        """
+    ).fetchall()
+    return [(int(r[0]), str(r[1])) for r in rows]
+
+
+def _extract_entities_for_batch(
+    model: Any,
+    texts: list[str],
+    chunk_ids: list[int],
+) -> list[tuple[str, str, str, int, float]]:
+    """Run GLiNER2 NER over a batch and flatten to insert-tuples.
+
+    Returns ``(name, entity_type, source, chunk_id, confidence)`` rows.
+    """
+    results = model.batch_extract_entities(
+        texts,
+        list(NER_LABELS),
+        batch_size=_GLINER2_BATCH,
+        include_confidence=True,
+    )
+    rows: list[tuple[str, str, str, int, float]] = []
+    for chunk_id, result in zip(chunk_ids, results, strict=True):
+        for label, ents in (result or {}).get("entities", {}).items():
+            for ent in ents:
+                name = (ent.get("text") or "").strip()
+                if not name:
+                    continue
+                rows.append(
+                    (
+                        name,
+                        label,
+                        "gliner2",
+                        chunk_id,
+                        float(ent.get("confidence", 1.0)),
+                    )
+                )
+    return rows
+
+
+def _extract_relations_for_batch(
+    model: Any,
+    texts: list[str],
+    chunk_ids: list[int],
+) -> list[tuple[str, str, str, float, int, str]]:
+    """Run GLiNER2 RE over a batch and flatten to insert-tuples.
+
+    Returns ``(src, dst, rel_type, weight, chunk_id, source)`` rows.
+    """
+    results = model.batch_extract_relations(
+        texts,
+        list(RE_LABELS),
+        batch_size=_GLINER2_BATCH,
+        include_confidence=True,
+    )
+    rows: list[tuple[str, str, str, float, int, str]] = []
+    for chunk_id, result in zip(chunk_ids, results, strict=True):
+        for rel_type, rels in (result or {}).get("relation_extraction", {}).items():
+            for rel in rels:
+                head = (rel.get("head", {}).get("text") or "").strip()
+                tail = (rel.get("tail", {}).get("text") or "").strip()
+                if not head or not tail or head == tail:
+                    continue
+                head_conf = float(rel.get("head", {}).get("confidence", 1.0))
+                tail_conf = float(rel.get("tail", {}).get("confidence", 1.0))
+                weight = (head_conf + tail_conf) / 2.0
+                rows.append((head, tail, rel_type, weight, chunk_id, "gliner2"))
+    return rows
+
+
+def sync_ner_re(conn: sqlite3.Connection) -> tuple[int, int]:
+    """Extract entities + relations from every unprocessed chunk via GLiNER2.
+
+    Returns ``(entities_added, relations_added)``.
+    """
+    chunks = _unprocessed_chunks(conn)
+    if not chunks:
+        log.info("  NER+RE: no new chunks to process")
+        return 0, 0
+
+    cap = _per_run_limit()
+    if cap and cap < len(chunks):
+        log.info(
+            "  NER+RE: per-run cap=%d (CLAUDE_SESSIONS_KG_NER_RE_BATCH); "
+            "remaining %d chunks will run on subsequent server starts",
+            cap,
+            len(chunks) - cap,
+        )
+        chunks = chunks[:cap]
+
+    log.info(
+        "  NER+RE processing %d chunks via GLiNER2 (fastino/gliner2-base-v1)",
+        len(chunks),
+    )
+    log.info("    entity labels: %s", list(NER_LABELS))
+    log.info("    relation labels: %s", list(RE_LABELS))
+
+    model = get_gliner2()
+    ts = datetime.now(UTC).isoformat()
+    total_entities = 0
+    total_relations = 0
+    t0 = time.monotonic()
+    last_log = t0
+
+    for batch_start in range(0, len(chunks), _OUTER_BATCH):
+        batch = chunks[batch_start : batch_start + _OUTER_BATCH]
+        chunk_ids = [cid for cid, _ in batch]
+        texts = [_safe_text(text) for _, text in batch]
+
+        ner_rows = _extract_entities_for_batch(model, texts, chunk_ids)
+        if ner_rows:
+            conn.executemany(_NER_INSERT_SQL, ner_rows)
+            total_entities += len(ner_rows)
+
+        re_rows = _extract_relations_for_batch(model, texts, chunk_ids)
+        if re_rows:
+            conn.executemany(_RE_INSERT_SQL, re_rows)
+            total_relations += len(re_rows)
+
+        conn.executemany(
+            "INSERT OR IGNORE INTO ner_chunks_log (chunk_id, processed_at) VALUES (?, ?)",
+            [(cid, ts) for cid in chunk_ids],
+        )
+        conn.executemany(
+            "INSERT OR IGNORE INTO re_chunks_log (chunk_id, processed_at) VALUES (?, ?)",
+            [(cid, ts) for cid in chunk_ids],
+        )
+        conn.commit()
+
+        processed = min(batch_start + len(batch), len(chunks))
+        now = time.monotonic()
+        if now - last_log >= 3.0 or processed == len(chunks):
+            rate = processed / (now - t0) if now > t0 else 0
+            eta = (len(chunks) - processed) / rate if rate > 0 else 0
+            log.info(
+                "  NER+RE progress: %d/%d (%.1f chunks/s, ETA %.0f s, %d ents, %d rels)",
+                processed,
+                len(chunks),
+                rate,
+                eta,
+                total_entities,
+                total_relations,
+            )
+            last_log = now
+
+    log.info(
+        "  NER+RE complete: %d entities + %d relations from %d chunks in %.1f s",
+        total_entities,
+        total_relations,
+        len(chunks),
+        time.monotonic() - t0,
+    )
+    return total_entities, total_relations
+
+
+# ---------------------------------------------------------------------------
+# kg/entity_embeddings.py
+# ---------------------------------------------------------------------------
+"""Entity-embeddings phase — embed unique entity names into HNSW.
+
+Uses ``muninn_embed()`` with the same NomicEmbed GGUF that
+``embeddings.sync_embeddings()`` uses for chunks. The HNSW virtual table
+``entities_vec`` is created here at runtime (it requires the
+``sqlite-muninn`` extension to be loaded first, so it can't live in the
+static ``SCHEMA_SQL``).
+
+Incremental: only entity names not yet present in ``entity_vec_map`` are
+embedded. Re-running with no new entities is a no-op.
+"""
+
+log = logging.getLogger(__name__)
+
+
+def _ensure_entities_vec(conn: sqlite3.Connection) -> None:
+    """Create the HNSW virtual table for entity embeddings if missing."""
+    conn.execute(
+        f"CREATE VIRTUAL TABLE IF NOT EXISTS entities_vec USING hnsw_index("
+        f"  dimensions={GGUF_EMBEDDING_DIM}, metric='cosine', m=16, ef_construction=200"
+        f")"
+    )
+
+
+def sync_entity_embeddings(conn: sqlite3.Connection) -> int:
+    """Embed every entity name not already in ``entity_vec_map``.
+
+    Returns the count of newly inserted vectors.
+    """
+    _ensure_entities_vec(conn)
+
+    new_names = [
+        str(r[0])
+        for r in conn.execute(
+            """
+            SELECT DISTINCT name FROM entities
+            WHERE name NOT IN (SELECT name FROM entity_vec_map)
+            ORDER BY name
+            """
+        ).fetchall()
+    ]
+    if not new_names:
+        log.info("  entity-embeddings: all %d entity names already embedded", _name_count(conn))
+        return 0
+
+    log.info("  entity-embeddings: embedding %d new entity names", len(new_names))
+    t0 = time.monotonic()
+
+    max_rowid_row = conn.execute("SELECT COALESCE(MAX(rowid), 0) FROM entity_vec_map").fetchone()
+    max_rowid = int(max_rowid_row[0]) if max_rowid_row else 0
+    inserted = 0
+
+    for offset, name in enumerate(new_names, start=1):
+        rowid = max_rowid + offset
+        vec_row = conn.execute("SELECT muninn_embed(?, ?)", (GGUF_MODEL_NAME, name)).fetchone()
+        if vec_row is None or vec_row[0] is None:
+            raise RuntimeError(f"muninn_embed returned NULL for entity name {name!r}")
+        conn.execute(
+            "INSERT INTO entities_vec (rowid, vector) VALUES (?, ?)",
+            (rowid, vec_row[0]),
+        )
+        conn.execute(
+            "INSERT INTO entity_vec_map (rowid, name) VALUES (?, ?)",
+            (rowid, name),
+        )
+        inserted += 1
+        if offset % 200 == 0:
+            conn.commit()
+
+    conn.commit()
+    log.info(
+        "  entity-embeddings: inserted %d vectors in %.1f s (total %d)",
+        inserted,
+        time.monotonic() - t0,
+        _name_count(conn),
+    )
+    return inserted
+
+
+def _name_count(conn: sqlite3.Connection) -> int:
+    return int(conn.execute("SELECT count(*) FROM entity_vec_map").fetchone()[0])
+
+
+# ---------------------------------------------------------------------------
+# kg/communities.py
+# ---------------------------------------------------------------------------
+"""Community-detection phase — Leiden communities at multiple resolutions.
+
+Uses sqlite-muninn's ``graph_leiden`` virtual-table module. The community
+membership is queried via SELECT against ``graph_leiden`` with the edge
+table parameters embedded as WHERE-clause column filters (this is the
+sqlite-muninn convention for table-valued functions).
+
+The graph is built off the canonical ``edges`` table. Multi-resolution
+output gives the cytoscape page coarse / medium / fine views with one
+SQL pass per resolution.
+"""
+
+log = logging.getLogger(__name__)
+
+
+def sync_communities(conn: sqlite3.Connection) -> int:
+    """Recompute Leiden communities at every configured resolution.
+
+    Returns total assignment rows written across all resolutions.
+    """
+    edge_count = int(conn.execute("SELECT count(*) FROM edges").fetchone()[0])
+    if edge_count == 0:
+        log.info("  communities: edges table empty — nothing to cluster")
+        conn.execute("DELETE FROM leiden_communities")
+        conn.commit()
+        return 0
+
+    have_resolutions = {
+        float(r[0])
+        for r in conn.execute("SELECT DISTINCT resolution FROM leiden_communities").fetchall()
+    }
+    expected_resolutions = set(LEIDEN_RESOLUTIONS)
+    nodes_now = int(conn.execute("SELECT count(*) FROM nodes").fetchone()[0])
+
+    # If every resolution is already populated AND the graph hasn't changed
+    # (membership row count == node count × resolution count), skip.
+    if have_resolutions >= expected_resolutions:
+        existing_total = int(conn.execute("SELECT count(*) FROM leiden_communities").fetchone()[0])
+        if existing_total >= nodes_now * len(LEIDEN_RESOLUTIONS):
+            log.info(
+                "  communities: %d resolutions already current — skip",
+                len(have_resolutions),
+            )
+            return 0
+
+    conn.execute("DELETE FROM leiden_communities")
+    t0 = time.monotonic()
+    total = 0
+    for resolution in LEIDEN_RESOLUTIONS:
+        rows = conn.execute(
+            """
+            SELECT node, community_id, modularity
+            FROM graph_leiden
+            WHERE edge_table = 'edges'
+              AND src_col = 'src'
+              AND dst_col = 'dst'
+              AND direction = 'both'
+              AND resolution = ?
+            """,
+            (resolution,),
+        ).fetchall()
+
+        if not rows:
+            log.warning("  communities: resolution=%.2f produced 0 rows", resolution)
+            continue
+
+        n_communities = len({int(r[1]) for r in rows})
+        modularity = float(rows[0][2]) if rows[0][2] is not None else 0.0
+        conn.executemany(
+            "INSERT INTO leiden_communities (node, resolution, community_id, modularity) "
+            "VALUES (?, ?, ?, ?)",
+            [(str(r[0]), float(resolution), int(r[1]), float(r[2] or 0.0)) for r in rows],
+        )
+        total += len(rows)
+        log.info(
+            "  communities: resolution=%.2f — %d nodes → %d communities (Q=%.4f)",
+            resolution,
+            len(rows),
+            n_communities,
+            modularity,
+        )
+
+    conn.commit()
+    log.info(
+        "  communities: %d total assignments across %d resolutions in %.1f s",
+        total,
+        len(LEIDEN_RESOLUTIONS),
+        time.monotonic() - t0,
+    )
+    return total
+
+
+# ---------------------------------------------------------------------------
+# kg/community_naming.py
+# ---------------------------------------------------------------------------
+"""Community-naming phase — LLM-generated labels for clusters and communities.
+
+Calls ``muninn_chat()`` once per group (entity cluster, then Leiden community
+at each resolution), assembling a small prompt with the group's member names
+and committing each label as soon as it lands. This keeps memory bounded
+and makes the phase resumable: a crash at row N means the next run starts
+at row N (already-labelled groups are skipped).
+
+Earlier versions used the bulk ``muninn_label_groups`` TVF which ran the
+entire phase as one atomic INSERT … SELECT. That approach OOM-killed the
+process on large corpora (~40 k clusters) because the TVF and SQLite both
+held intermediate state until the transaction committed. The per-row
+approach trades a small amount of throughput for crash-resilience and
+visible progress.
+"""
+
+log = logging.getLogger(__name__)
+
+
+_MIN_GROUP_SIZE = 3
+_MAX_MEMBERS_IN_PROMPT = 10
+_LABEL_PROMPT = "Output ONLY a concise label (3-8 words). No explanation."
+_COMMIT_EVERY = 10
+
+# The cytoscape page reads ``community_labels`` filtered by the active
+# resolution. We label communities at the default page resolution ONLY,
+# because labelling all three resolutions of a 40k-node graph means
+# tens of thousands of LLM calls (24+ hours on a 4B GGUF). Other
+# resolutions fall back to ``community #N`` placeholders, which the
+# frontend already handles. ``DEFAULT_RESOLUTION`` mirrors
+# ``payload.py``'s default; keep them in sync.
+_LABEL_RESOLUTION = 0.25
+
+# Skip entity_cluster_labels entirely — they are not consumed by the
+# current cytoscape page. Re-enabling is a one-line change here if a
+# future UI surfaces them.
+_LABEL_ENTITY_CLUSTERS = False
+
+
+def sync_community_labels(conn: sqlite3.Connection) -> tuple[int, int]:
+    """Rebuild community_labels (Leiden) — and entity_cluster_labels last.
+
+    Returns ``(entity_cluster_label_count, community_label_count)``.
+
+    Lazily registers the chat-model GGUF on first use. Resumable: if a
+    previous run stopped mid-phase, this skips groups that already have
+    a label.
+
+    Order matters: the cytoscape page consumes ``community_labels`` for
+    its community-parent compound boxes, so we name those FIRST. The
+    ``entity_cluster_labels`` table is internal (synonym-group labels)
+    and not displayed by the current UI; we still build it but only after
+    the user-visible labels are committed.
+    """
+    if not _has_groups_to_label(conn):
+        log.info("  community-naming: nothing to label — skipping chat model load")
+        return 0, 0
+
+    chat_path = ensure_chat_model_downloaded()
+    register_chat_model(conn, chat_path)
+
+    now = datetime.now(UTC).isoformat()
+    t0 = time.monotonic()
+    cl_count = _label_leiden_communities(conn, now)
+    if _LABEL_ENTITY_CLUSTERS:
+        ecl_count = _label_entity_clusters(conn, now)
+    else:
+        ecl_count = int(conn.execute("SELECT count(*) FROM entity_cluster_labels").fetchone()[0])
+        log.info("  community-naming: skipping entity_cluster_labels (UI does not use)")
+    log.info(
+        "  community-naming: %d community labels + %d cluster labels in %.1f s",
+        cl_count,
+        ecl_count,
+        time.monotonic() - t0,
+    )
+    return ecl_count, cl_count
+
+
+def _has_groups_to_label(conn: sqlite3.Connection) -> bool:
+    """True if any cluster or Leiden community needs labelling."""
+    try:
+        cluster_rows = int(conn.execute("SELECT count(*) FROM entity_clusters").fetchone()[0])
+        leiden_rows = int(conn.execute("SELECT count(*) FROM leiden_communities").fetchone()[0])
+    except sqlite3.OperationalError:
+        return False
+    return (cluster_rows + leiden_rows) > 0
+
+
+def _label_one(conn: sqlite3.Connection, members: list[str]) -> str:
+    """Run muninn_chat on a member list and return the cleaned label.
+
+    ``muninn_chat`` is a 2-arg SQL function: ``(model_name, prompt)``.
+    A third argument is interpreted as a GBNF grammar by llama.cpp,
+    so we fold the system instruction into a single prompt string.
+    """
+    sample = members[:_MAX_MEMBERS_IN_PROMPT]
+    member_block = "\n".join(f"- {m}" for m in sample)
+    prompt = f"{_LABEL_PROMPT}\n\nGroup members\n{member_block}\n\nLabel:"
+    row = conn.execute(
+        "SELECT muninn_chat(?, ?)",
+        (CHAT_MODEL_NAME, prompt),
+    ).fetchone()
+    raw = (row[0] if row and row[0] else "").strip()
+    # Strip leading bullet/quote chars, take first line.
+    first_line = raw.splitlines()[0] if raw else ""
+    return first_line.strip(" \"'`*-•") or "(unlabelled)"
+
+
+def _label_entity_clusters(conn: sqlite3.Connection, now: str) -> int:
+    """Label every entity cluster with ≥3 members. Resumable."""
+    # Build {canonical: [member_name_with_type, ...]} from entity_clusters.
+    # We only consider clusters with ≥3 members to match the legacy TVF
+    # behaviour and avoid wasting LLM calls on singletons.
+    rows = conn.execute(
+        """
+        SELECT ec.canonical,
+               ec.name || ' (' || COALESCE(n.entity_type, 'unknown') || ')' AS member
+        FROM entity_clusters ec
+        LEFT JOIN nodes n ON n.name = ec.canonical
+        """
+    ).fetchall()
+    grouped: dict[str, list[str]] = defaultdict(list)
+    for canonical, member in rows:
+        grouped[str(canonical)].append(str(member))
+
+    eligible = [(c, ms) for c, ms in grouped.items() if len(ms) >= _MIN_GROUP_SIZE]
+    if not eligible:
+        log.info(
+            "  community-naming: no entity clusters with >= %d members",
+            _MIN_GROUP_SIZE,
+        )
+        return int(conn.execute("SELECT count(*) FROM entity_cluster_labels").fetchone()[0])
+
+    # Resume support — skip canonicals we've already labelled.
+    already = {
+        str(r[0]) for r in conn.execute("SELECT canonical FROM entity_cluster_labels").fetchall()
+    }
+    todo = [(c, ms) for c, ms in eligible if c not in already]
+    log.info(
+        "  community-naming: %d entity clusters need labels (%d already done, %d eligible total)",
+        len(todo),
+        len(already),
+        len(eligible),
+    )
+    if not todo:
+        return int(conn.execute("SELECT count(*) FROM entity_cluster_labels").fetchone()[0])
+
+    t0 = time.monotonic()
+    last_log = t0
+    for i, (canonical, members) in enumerate(todo, start=1):
+        label = _label_one(conn, members)
+        conn.execute(
+            "INSERT OR REPLACE INTO entity_cluster_labels"
+            " (canonical, label, member_count, model, generated_at)"
+            " VALUES (?, ?, ?, ?, ?)",
+            (canonical, label, len(members), CHAT_MODEL_NAME, now),
+        )
+        if i % _COMMIT_EVERY == 0:
+            conn.commit()
+
+        now_t = time.monotonic()
+        if now_t - last_log >= 10.0 or i == len(todo):
+            rate = i / (now_t - t0) if now_t > t0 else 0
+            eta = (len(todo) - i) / rate if rate > 0 else 0
+            log.info(
+                "  community-naming/clusters: %d/%d (%.2f labels/s, ETA %.0f s)",
+                i,
+                len(todo),
+                rate,
+                eta,
+            )
+            last_log = now_t
+
+    conn.commit()
+    return int(conn.execute("SELECT count(*) FROM entity_cluster_labels").fetchone()[0])
+
+
+def _label_leiden_communities(conn: sqlite3.Connection, now: str) -> int:
+    """Label every Leiden community with ≥3 members at the page resolution. Resumable.
+
+    Restricts to ``_LABEL_RESOLUTION`` (the cytoscape page's default) so
+    the LLM workload is bounded — labelling all three resolutions on a
+    40k-node graph would be tens of thousands of inferences.
+    """
+    rows = conn.execute(
+        """
+        SELECT lc.resolution,
+               lc.community_id,
+               lc.node || ' (' || COALESCE(n.entity_type, 'unknown') || ')' AS member
+        FROM leiden_communities lc
+        LEFT JOIN nodes n ON n.name = lc.node
+        WHERE lc.resolution = ?
+        """,
+        (_LABEL_RESOLUTION,),
+    ).fetchall()
+    if not rows:
+        return 0
+
+    grouped: dict[tuple[float, int], list[str]] = defaultdict(list)
+    for resolution, community_id, member in rows:
+        grouped[(float(resolution), int(community_id))].append(str(member))
+
+    eligible = [(k, ms) for k, ms in grouped.items() if len(ms) >= _MIN_GROUP_SIZE]
+    if not eligible:
+        log.info(
+            "  community-naming: no Leiden communities with >= %d members",
+            _MIN_GROUP_SIZE,
+        )
+        return int(conn.execute("SELECT count(*) FROM community_labels").fetchone()[0])
+
+    already_rows = conn.execute("SELECT resolution, community_id FROM community_labels").fetchall()
+    already = {(float(r[0]), int(r[1])) for r in already_rows}
+    todo = [(k, ms) for k, ms in eligible if k not in already]
+    log.info(
+        "  community-naming: %d Leiden communities to label (%d done, %d eligible)",
+        len(todo),
+        len(already),
+        len(eligible),
+    )
+    if not todo:
+        return int(conn.execute("SELECT count(*) FROM community_labels").fetchone()[0])
+
+    t0 = time.monotonic()
+    last_log = t0
+    for i, ((resolution, community_id), members) in enumerate(todo, start=1):
+        label = _label_one(conn, members)
+        conn.execute(
+            "INSERT OR REPLACE INTO community_labels"
+            " (resolution, community_id, label, member_count, model, generated_at)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            (resolution, community_id, label, len(members), CHAT_MODEL_NAME, now),
+        )
+        if i % _COMMIT_EVERY == 0:
+            conn.commit()
+
+        now_t = time.monotonic()
+        if now_t - last_log >= 10.0 or i == len(todo):
+            rate = i / (now_t - t0) if now_t > t0 else 0
+            eta = (len(todo) - i) / rate if rate > 0 else 0
+            log.info(
+                "  community-naming/leiden: %d/%d (%.2f labels/s, ETA %.0f s)",
+                i,
+                len(todo),
+                rate,
+                eta,
+            )
+            last_log = now_t
+
+    conn.commit()
+    return int(conn.execute("SELECT count(*) FROM community_labels").fetchone()[0])
+
+
+# ---------------------------------------------------------------------------
+# kg/pipeline.py
+# ---------------------------------------------------------------------------
+"""KG pipeline orchestrator — sync_kg().
+
+Called from ``CacheManager.update()`` after ``sync_embeddings()`` on every
+server start. Each phase is incremental, so warm starts are O(1).
+
+Phase order:
+  1. NER + RE          — extract entities and relations from new chunks
+                         using the GLiNER2 zero-shot model (DeBERTa, ~205 MB)
+  2. entity_embeddings — embed unique entity names into HNSW (NomicEmbed)
+  3. entity_resolution — collapse synonyms via muninn_extract_er
+  4. communities       — Leiden community detection at multiple resolutions
+  5. community_naming  — LLM-generated labels (the only phase that needs a
+                         chat-model GGUF; loaded lazily inside that phase)
+"""
+
+log = logging.getLogger(__name__)
+
+
+class KGSyncResult(TypedDict):
+    entities_added: int
+    relations_added: int
+    entity_embeddings_added: int
+    nodes: int
+    edges: int
+    leiden_assignments: int
+    cluster_labels: int
+    community_labels: int
+
+
+def sync_kg(conn: sqlite3.Connection) -> KGSyncResult:
+    """Run every KG phase against ``conn``.
+
+    GLiNER2 weights download on first call (~205 MB). The chat-model GGUF
+    needed by ``community_naming`` is loaded inside that phase only —
+    server starts that have nothing new to label avoid the 2.6 GiB memory
+    cost entirely.
+
+    Per ``/escalators-not-stairs``: this function never silently skips a
+    phase. If a phase fails, the exception propagates and the cache stays
+    in a known-stale state for the next run.
+    """
+    log.info("──────── kg pipeline ────────")
+    t0 = time.monotonic()
+
+    # 1. NER + RE via GLiNER2.
+    entities_added, relations_added = sync_ner_re(conn)
+
+    # 2. Entity embeddings (uses the same NomicEmbed GGUF as chunk embeddings).
+    entity_embeddings_added = sync_entity_embeddings(conn)
+
+    # 3. Entity resolution (rebuild nodes/edges).
+    nodes, edges = sync_entity_clusters(conn)
+
+    # 4. Communities (Leiden, multi-resolution).
+    leiden_assignments = sync_communities(conn)
+
+    # 5. Community naming — registers the chat-model GGUF lazily.
+    cluster_labels, community_labels = sync_community_labels(conn)
+
+    log.info(
+        "──── kg pipeline complete in %.1f s "
+        "(ents +%d, rels +%d, ent-vecs +%d, nodes %d, edges %d, "
+        "leiden %d, cluster-labels %d, community-labels %d) ────",
+        time.monotonic() - t0,
+        entities_added,
+        relations_added,
+        entity_embeddings_added,
+        nodes,
+        edges,
+        leiden_assignments,
+        cluster_labels,
+        community_labels,
+    )
+    return KGSyncResult(
+        entities_added=entities_added,
+        relations_added=relations_added,
+        entity_embeddings_added=entity_embeddings_added,
+        nodes=nodes,
+        edges=edges,
+        leiden_assignments=leiden_assignments,
+        cluster_labels=cluster_labels,
+        community_labels=community_labels,
+    )
+
+
+# ============================================================================
 # SQLite Cache Manager
 # ============================================================================
 
@@ -1957,9 +3591,28 @@ class CacheManager:
 
         if not files_to_update:
             log.info("Cache is up to date")
+            # Still run downstream syncs — chunks / HNSW may be behind
+            # the events table after a schema version bump. Both calls
+            # are incremental and cheap no-ops when everything is in
+            # step.
+            chunks_added = sync_chunks(self.conn)
+            embeddings_added = 0
+            if os.environ.get(
+                "CLAUDE_SESSIONS_DISABLE_EMBEDDINGS", "",
+            ).strip().lower() not in {"1", "true", "yes", "on"}:
+                model_path = ensure_model_downloaded()
+                setup_embedding_runtime(self.conn, model_path)
+                embeddings_added = sync_embeddings(self.conn)
+                # KG phase mirrors the backend's wave-pipeline phase 7.
+                # Incremental + heavy on first run (GLiNER2 weights ~205 MB
+                # download). Same disable-knob as embeddings, since KG
+                # depends on the embedding HNSW being live.
+                sync_kg(self.conn)
             return {
                 "files_updated": 0,
                 "events_added": 0,
+                "chunks_added": chunks_added,
+                "embeddings_added": embeddings_added,
             }
 
         # Ingest updated files, tracking which sessions were touched
@@ -2009,11 +3662,20 @@ class CacheManager:
             if row and row[0]:
                 self.refresh_aggregates_for_range(str(row[0]), str(row[1]))
 
-        # Chunks/embeddings/entities/relations/communities are managed by
-        # the dashboard backend's wave pipeline, not by this script. See
-        # src/claude_code_sessions/database/sqlite/{embeddings,kg/pipeline}.py.
-        # We define the table schemas above so SELECTs work, but population
-        # is the backend's job — keeping a single producer prevents drift.
+        # Chunking + embeddings. Incremental; no-op when nothing is stale.
+        # First-run embedding downloads ~150 MB GGUF model and processes
+        # the backlog — takes minutes. Set the env var to skip in tests
+        # or when the introspect script is only used for its other
+        # subcommands.
+        chunks_added = sync_chunks(self.conn)
+        embeddings_added = 0
+        if os.environ.get(
+            "CLAUDE_SESSIONS_DISABLE_EMBEDDINGS", "",
+        ).strip().lower() not in {"1", "true", "yes", "on"}:
+            model_path = ensure_model_downloaded()
+            setup_embedding_runtime(self.conn, model_path)
+            embeddings_added = sync_embeddings(self.conn)
+            sync_kg(self.conn)
 
         # Update metadata
         self.conn.execute(
@@ -2022,10 +3684,15 @@ class CacheManager:
         )
         self.conn.commit()
 
-        log.info(f"Updated {len(files_to_update)} files, {total_events} events")
+        log.info(
+            f"Updated {len(files_to_update)} files, {total_events} events, "
+            f"{chunks_added} chunks, {embeddings_added} embeddings"
+        )
         return {
             "files_updated": len(files_to_update),
             "events_added": total_events,
+            "chunks_added": chunks_added,
+            "embeddings_added": embeddings_added,
         }
 
 
