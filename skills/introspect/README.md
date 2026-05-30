@@ -146,10 +146,79 @@ erDiagram
         REAL total_cost_usd
     }
 
+    event_message_chunks {
+        INTEGER chunk_id PK
+        INTEGER event_id FK
+        TEXT text
+    }
+
+    entities {
+        INTEGER entity_id PK
+        TEXT name
+        TEXT entity_type
+        INTEGER chunk_id FK
+        REAL confidence
+    }
+
+    relations {
+        INTEGER relation_id PK
+        TEXT src
+        TEXT dst
+        TEXT rel_type
+        REAL weight
+    }
+
+    entity_clusters {
+        TEXT name PK
+        TEXT canonical "synonym resolution"
+    }
+
+    nodes {
+        INTEGER node_id PK
+        TEXT name UK
+        TEXT entity_type
+        INTEGER mention_count
+    }
+
+    edges {
+        TEXT src PK
+        TEXT dst PK
+        TEXT rel_type PK
+        REAL weight
+    }
+
+    leiden_communities {
+        TEXT node PK
+        REAL resolution PK
+        INTEGER community_id
+        REAL modularity
+    }
+
+    entity_cluster_labels {
+        TEXT canonical PK
+        TEXT label
+        INTEGER member_count
+    }
+
+    community_labels {
+        REAL resolution PK
+        INTEGER community_id PK
+        TEXT label
+    }
+
     source_files ||--o{ events : "contains"
     source_files ||--o{ event_edges : "tracks"
     events ||--o{ event_calls : "emits"
     events ||--o{ agg : "rolled up into"
+    events ||--o{ event_message_chunks : "chunked into"
+    event_message_chunks ||--o{ entities : "NER extracts"
+    event_message_chunks ||--o{ relations : "RE extracts"
+    entities }o--|| nodes : "canonicalized to"
+    entity_clusters }o--|| nodes : "resolves to"
+    nodes ||--o{ edges : "src/dst of"
+    nodes ||--o{ leiden_communities : "member of"
+    nodes ||--o| entity_cluster_labels : "labeled"
+    leiden_communities ||--o| community_labels : "labeled"
 ```
 
 ### The `is_response_head` invariant (read this before summing)
@@ -215,17 +284,19 @@ versions price automatically. All families share the relative multipliers above.
 
 ## Knowledge graph
 
-The cache also hosts a resolved-entity knowledge graph derived from chunked
-human-prompt content (incremental, built at backend start). It is an independent
-SQL surface — any introspection query can read it directly.
+The cache also hosts a resolved-entity knowledge graph (the eight `entities`…
+`community_labels` tables in the diagram above). The pipeline runs incrementally
+during a cache update:
 
-| Table | Holds |
-|-------|-------|
-| `entities` / `relations` | Per-mention extractions |
-| `entity_clusters` | name → canonical (synonym resolution) |
-| `nodes` / `edges` | Canonical entities / coalesced relations |
-| `leiden_communities` | Multi-resolution community membership |
-| `entity_cluster_labels` / `community_labels` | LLM-generated labels |
+```
+events → event_message_chunks → entities/relations (NER/RE)
+       → entity_clusters (synonym resolution) → nodes/edges (canonical)
+       → leiden_communities → *_labels (LLM)
+```
+
+It's an independent SQL surface — any introspection query can read it directly.
+Tables, query recipes, and the update command are in
+[resources/kg.md](resources/kg.md).
 
 ## Relationship to the dashboard
 
@@ -238,6 +309,7 @@ ingesters produce byte-identical event rows at the same `SCHEMA_VERSION`.
 
 - [SKILL.md](SKILL.md) — agent operating manual (commands, message kinds, output formats)
 - [resources/cache.md](resources/cache.md) — cache flags, management commands, SQL fallback recipes
+- [resources/kg.md](resources/kg.md) — knowledge-graph tables, query recipes, update commands
 - [resources/commands.md](resources/commands.md) — full command reference
 - [resources/use-cases.md](resources/use-cases.md) — workflows, post-compaction recovery
 - [resources/reflect.md](resources/reflect.md) — reflection workflow
