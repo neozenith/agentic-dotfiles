@@ -8,6 +8,11 @@ user-invocable: true
 
 Self-introspection and analysis of Claude Code sessions.
 
+> **New here?** [README.md](README.md) is the human-facing explainer — what the
+> skill does, how the cache is built, the data model (ERD), and the analytics
+> fields (cost, TPS, context utilization, idle/active). This file is the
+> operating manual.
+
 ## Current Session ID
 
 ```
@@ -69,6 +74,11 @@ Events carry a `msg_kind` column for fine-grained filtering (use with `-t`):
 | `tool_use` | Tool call requests |
 | `other` | Progress, system, queue-operation events |
 
+**Subagent prefix:** events in a subagent context (sidechain or `subagent`/`agent_root`
+file) carry a `subagent-` prefix on `msg_kind` (e.g. `subagent-tool_use`). Strip the
+prefix to match on the base kind; filter `WHERE msg_kind LIKE 'subagent-%'` for
+subagent-only activity.
+
 ## Cache
 
 SQLite cache is at:
@@ -106,7 +116,7 @@ sqlite3 ~/.claude/cache/introspect_sessions.db \
 
 → See [resources/cache.md](resources/cache.md) for full schema and management commands.
 
-## Knowledge Graph (schema v13+)
+## Knowledge Graph (schema v13+, current v17)
 
 The cache also hosts a resolved-entity knowledge graph derived from the
 chunked human-prompt content. The pipeline is incremental and runs at
@@ -189,8 +199,23 @@ introspect_sessions.sh traverse ${CLAUDE_SESSION_ID} --all | jq 'sort_by(-.total
 introspect_sessions.sh traverse ${CLAUDE_SESSION_ID} --summary | jq 'sort_by(-.total_cost_usd)'
 ```
 
+**Analytics fields (tokenometrics).** Every event also carries `context_ratio`
+(window utilization, raw fraction), `is_response_head` (1 = canonical row per
+`requestId`), and `response_duration_ms`; response heads have a derived `tps`. The
+`sessions` table carries `avg_tps`, `total_idle_ms`, `total_active_ms`,
+`peak_context_ratio`. See [README › Analytics fields](README.md#analytics-fields-tokenometrics)
+for definitions.
+
+```bash
+# Fullest the context window got, and the deduped output total, per session
+sqlite3 ~/.claude/cache/introspect_sessions.db \
+  "SELECT session_id, ROUND(peak_context_ratio,3) AS peak, total_output_tokens, ROUND(avg_tps,1) AS tps
+   FROM sessions ORDER BY peak DESC LIMIT 10;"
+```
+
 ## Resources
 
-- [resources/cache.md](resources/cache.md) — SQLite schema, auto-update behavior, management commands
+- [README.md](README.md) — human-facing explainer: overview, data model (ERD), analytics fields, cost model
+- [resources/cache.md](resources/cache.md) — cache flags, management commands, column quick-reference, SQL fallback recipes
 - [resources/commands.md](resources/commands.md) — Full command reference with all options
 - [resources/use-cases.md](resources/use-cases.md) — Workflows, post-compaction recovery, architecture, JSONL schema

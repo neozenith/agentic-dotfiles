@@ -67,7 +67,7 @@ CACHE_DB_PATH = CACHE_DIR / "introspect_sessions.db"
 # Logging setup
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = "13"
+SCHEMA_VERSION = "17"
 
 # Sentinel key in cache_metadata used to gate the one-shot (session_id, uuid)
 # dedupe migration. Mirrors DEDUPE_SESSION_UUID_MIGRATION_KEY in
@@ -153,6 +153,72 @@ def _compute_event_costs(
     return token_rate, round(billable, 4), round(billable * token_rate / 1_000_000, 8)
 
 
+# Curated model_id → advertised context-window size (tokens). Matched by
+# substring like model_family(), since model ids carry date suffixes. 1M is
+# GA (not beta) on opus-4-6/4-7/4-8 and sonnet-4-6, so the window is a pure
+# function of model_id. Unknown / synthetic ids resolve to None (ratio
+# undefined). Mirror of pricing.py CONTEXT_WINDOWS in the backend package.
+CONTEXT_WINDOWS: dict[str, int] = {
+    "opus-4-6": 1_000_000,
+    "opus-4-7": 1_000_000,
+    "opus-4-8": 1_000_000,
+    "sonnet-4-6": 1_000_000,
+    "opus-4-5": 200_000,
+    "sonnet-4-5": 200_000,
+    "haiku-4-5": 200_000,
+    "qwen2.5-coder": 32_768,  # native default; YaRN 128k is off by default
+    "devstral-small-2": 256_000,
+}
+
+
+def context_window(model_id: str | None) -> int | None:
+    """Resolve a model id to its context-window size, or None if unknown."""
+    if not model_id:
+        return None
+    low = model_id.lower()
+    # Longest-key-first so a shorter key can't shadow a more specific
+    # superstring key (e.g. "opus-4-5" must not win over "opus-4-50").
+    for key in sorted(CONTEXT_WINDOWS, key=len, reverse=True):
+        if key in low:
+            return CONTEXT_WINDOWS[key]
+    return None
+
+
+def context_ratio(tokens: int, window: int | None) -> float | None:
+    """Raw context-window utilization: the fraction ``tokens / window``.
+
+    Returns None when the window is unknown/zero (ratio undefined). This is a
+    purely quantitative measure — no categorical "smart/caution/danger" zone
+    labeling (see the G2 ADR "Quantitative ratio only").
+    """
+    if not window:
+        return None
+    return tokens / window
+
+
+# "Too-fast" reply detection (G5): flag a human reply that arrived faster than
+# even a fast skim of the assistant's response could be read. READ_TOKENS_PER_SEC
+# ≈ 480 wpm fast-skim (~0.75 words/token); the min-token floor prevents flagging
+# instant replies to short outputs. See the G5 ADR for the WPM evidence.
+READ_TOKENS_PER_SEC = 8
+TOO_FAST_MIN_TOKENS = 200
+
+
+def _delta_ms(start_iso: str | None, end_iso: str | None) -> int | None:
+    """Milliseconds between two ISO-8601 timestamps, or None if either is
+    missing/unparseable or the span is negative (clock skew). Shared by the
+    response-duration (G4) and turn-timing (G5) passes."""
+    if not start_iso or not end_iso:
+        return None
+    try:
+        start = datetime.fromisoformat(start_iso.replace("Z", "+00:00"))
+        end = datetime.fromisoformat(end_iso.replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        return None
+    delta = (end - start).total_seconds() * 1000
+    return int(delta) if delta >= 0 else None
+
+
 def _first_content_block_type(content: Any) -> str | None:
     """Return the shape of a message's content field.
 
@@ -174,7 +240,9 @@ def _first_content_block_type(content: Any) -> str | None:
     return None
 
 
-def _message_kind(event_type: str, is_meta: bool, content: Any) -> str:
+def _message_kind(
+    event_type: str, is_meta: bool, content: Any, is_subagent: bool = False
+) -> str:
     """Classify an event into one of 9 fine-grained message kinds.
 
     Kinds:
@@ -187,7 +255,17 @@ def _message_kind(event_type: str, is_meta: bool, content: Any) -> str:
         thinking           — assistant, thinking list
         tool_use           — assistant, tool_use list
         other              — progress / system / queue-operation / etc.
+
+    When ``is_subagent`` is true (the event belongs to a subagent context),
+    the base kind is prefixed with ``subagent-`` so subagent activity is
+    distinguishable from main-thread activity.
     """
+    base = _base_message_kind(event_type, is_meta, content)
+    return f"subagent-{base}" if is_subagent else base
+
+
+def _base_message_kind(event_type: str, is_meta: bool, content: Any) -> str:
+    """The bare (non-subagent) message kind — one of 9 fine-grained kinds."""
     fct = _first_content_block_type(content)
     if event_type == "user":
         if is_meta:
@@ -739,6 +817,10 @@ CREATE TABLE IF NOT EXISTS sessions (
     total_cache_read_tokens INTEGER DEFAULT 0,
     total_cache_creation_tokens INTEGER DEFAULT 0,
     total_cost_usd REAL DEFAULT 0.0,
+    avg_tps REAL,
+    total_idle_ms INTEGER DEFAULT 0,
+    total_active_ms INTEGER DEFAULT 0,
+    peak_context_ratio REAL,
     UNIQUE(project_id, session_id)
 );
 
@@ -764,6 +846,13 @@ CREATE TABLE IF NOT EXISTS events (
     message_content TEXT,  -- Plain text for FTS
     message_content_json TEXT,  -- Original JSON structure
     model_id TEXT,
+    request_id TEXT,
+    stop_reason TEXT,
+    is_response_head INTEGER DEFAULT 1,
+    context_tokens INTEGER DEFAULT 0,
+    context_window INTEGER,
+    context_ratio REAL,
+    response_duration_ms INTEGER,
     input_tokens INTEGER DEFAULT 0,
     output_tokens INTEGER DEFAULT 0,
     cache_read_tokens INTEGER DEFAULT 0,
@@ -778,6 +867,7 @@ CREATE TABLE IF NOT EXISTS events (
 );
 
 CREATE INDEX IF NOT EXISTS idx_events_uuid ON events(uuid);
+CREATE INDEX IF NOT EXISTS idx_events_request_id ON events(request_id);
 CREATE INDEX IF NOT EXISTS idx_events_parent_uuid ON events(parent_uuid);
 CREATE INDEX IF NOT EXISTS idx_events_prompt_id ON events(prompt_id);
 CREATE INDEX IF NOT EXISTS idx_events_session ON events(session_id);
@@ -786,6 +876,7 @@ CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type);
 CREATE INDEX IF NOT EXISTS idx_events_msg_kind ON events(msg_kind);
 CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp);
 CREATE INDEX IF NOT EXISTS idx_events_source_file ON events(source_file_id);
+CREATE INDEX IF NOT EXISTS idx_events_session_ts ON events(session_id, timestamp);
 
 -- FTS5 virtual table for full-text search on message content
 CREATE VIRTUAL TABLE IF NOT EXISTS events_fts USING fts5(
@@ -2961,7 +3052,7 @@ class CacheManager:
                         detected_session_id = raw.get("sessionId")
 
                     event = self._parse_event_for_cache(
-                        raw, project_id, detected_session_id, filepath, line_num
+                        raw, project_id, detected_session_id, filepath, line_num, file_type
                     )
                     if event:
                         events_data.append(event)
@@ -2969,6 +3060,11 @@ class CacheManager:
         except (FileNotFoundError, PermissionError) as e:
             log.warning(f"Could not read {filepath}: {e}")
             return 0
+
+        # Mark response heads + zero duplicated multi-block usage, and stamp
+        # response_duration_ms on each head. Must run before the rows are
+        # written so the per-event columns reflect the deduped values.
+        self._annotate_responses(events_data)
 
         # Insert source file record
         cursor.execute(
@@ -3014,11 +3110,14 @@ class CacheManager:
                    (uuid, parent_uuid, prompt_id, event_type, msg_kind, timestamp, timestamp_local,
                     session_id, project_id, is_sidechain, agent_id, agent_slug,
                     message_role, message_content, message_content_json, model_id,
+                    request_id, stop_reason, is_response_head,
+                    context_tokens, context_window, context_ratio,
+                    response_duration_ms,
                     input_tokens, output_tokens, cache_read_tokens,
                     cache_creation_tokens, cache_5m_tokens,
                     token_rate, billable_tokens, total_cost_usd,
                     source_file_id, line_number, raw_json)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     event["uuid"],
                     event["parent_uuid"],
@@ -3036,6 +3135,13 @@ class CacheManager:
                     event["message_content"],
                     event["message_content_json"],
                     event["model_id"],
+                    event["request_id"],
+                    event["stop_reason"],
+                    event["is_response_head"],
+                    event["context_tokens"],
+                    event["context_window"],
+                    event["context_ratio"],
+                    event["response_duration_ms"],
                     event["input_tokens"],
                     event["output_tokens"],
                     event["cache_read_tokens"],
@@ -3099,6 +3205,57 @@ class CacheManager:
 
         return len(events_data)
 
+    # Additive per-event usage measures that downstream SUM()s read. A
+    # multi-block response repeats these on every content block, so the
+    # post-pass keeps them on the head and zeroes them on the non-heads.
+    _USAGE_COLS: tuple[str, ...] = (
+        "input_tokens",
+        "output_tokens",
+        "cache_read_tokens",
+        "cache_creation_tokens",
+        "cache_5m_tokens",
+        "billable_tokens",
+        "total_cost_usd",
+    )
+
+    def _annotate_responses(self, events: list[dict[str, Any]]) -> None:
+        """Mark one head event per ``requestId`` and zero duplicated usage.
+
+        A single model response is logged as N content-block events that
+        each repeat the same request-level usage. Summing per event would
+        over-count N-fold. We keep the usage on exactly one **head** — the
+        last block, which carries the final ``stop_reason`` and timestamp —
+        and zero it on the continuation blocks, so every downstream
+        ``SUM()`` is correct with no query rewrites.
+
+        Operates in place on the already-ordered per-file event list.
+        """
+        groups: dict[str, list[int]] = {}
+        order: list[str] = []
+        for i, e in enumerate(events):
+            rid = e.get("request_id")
+            if e["event_type"] != "assistant" or rid is None:
+                e["is_response_head"] = 1  # its own head (synthetic / non-assistant)
+                continue
+            if rid not in groups:
+                groups[rid] = []
+                order.append(rid)
+            groups[rid].append(i)
+        for rid in order:
+            idxs = groups[rid]
+            head = idxs[-1]  # last block carries stop_reason + final timestamp
+            for j in idxs:
+                events[j]["is_response_head"] = 1 if j == head else 0
+                if j != head:
+                    for c in self._USAGE_COLS:
+                        events[j][c] = 0
+            # Response duration = triggering (preceding) event → head timestamp,
+            # falling back to the first block's ts when there is no preceding
+            # event. The JSONL has no per-assistant durationMs, so we derive it.
+            first = idxs[0]
+            start_ts = events[first - 1]["timestamp"] if first > 0 else events[first]["timestamp"]
+            events[head]["response_duration_ms"] = _delta_ms(start_ts, events[head]["timestamp"])
+
     def _parse_event_for_cache(
         self,
         raw: dict[str, Any],
@@ -3106,6 +3263,7 @@ class CacheManager:
         session_id: str | None,
         filepath: str,
         line_number: int,
+        file_type: str = "main_session",
     ) -> dict[str, Any] | None:
         """Parse a raw event dict for cache insertion."""
         event_type = raw.get("type", "")
@@ -3122,11 +3280,13 @@ class CacheManager:
         is_sidechain = raw.get("isSidechain", False)
         agent_id = raw.get("agentId")
         agent_slug = raw.get("slug")
+        request_id = raw.get("requestId")
 
         # Extract message info
         is_meta = raw.get("isMeta", False)
         message = raw.get("message", {}) or {}
         message_role = message.get("role") if isinstance(message, dict) else None
+        stop_reason = message.get("stop_reason") if isinstance(message, dict) else None
         message_content_raw = message.get("content") if isinstance(message, dict) else None
         model_id = message.get("model") if isinstance(message, dict) else None
 
@@ -3141,8 +3301,14 @@ class CacheManager:
                 for block in message_content_raw
             ]
 
+        # Subagent context: per-event sidechain flag OR the file's type
+        # (belt-and-braces union per the G3 ADR). Prefixes the kind so
+        # subagent activity is distinguishable from the main thread.
+        is_subagent = bool(is_sidechain) or file_type in ("subagent", "agent_root")
         # Classify into one of the 9 fine-grained message kinds
-        msg_kind = _message_kind(event_type, bool(is_meta), message_content_raw)
+        msg_kind = _message_kind(
+            event_type, bool(is_meta), message_content_raw, is_subagent=is_subagent
+        )
 
         # Extract plain text for FTS
         message_content_text = self._extract_text_content(message_content_raw)
@@ -3160,6 +3326,16 @@ class CacheManager:
         token_rate, billable_tokens, total_cost_usd = _compute_event_costs(
             model_id, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens
         )
+
+        # Live context-window occupancy: the full prompt sent for an assistant
+        # response (input + cache_read + cache_creation). Only assistant events
+        # carry a meaningful occupancy/window/ratio; others stay 0/None.
+        if event_type == "assistant":
+            ctx_tokens = input_tokens + cache_read_tokens + cache_creation_tokens
+        else:
+            ctx_tokens = 0
+        ctx_window = context_window(model_id)
+        ctx_ratio = context_ratio(ctx_tokens, ctx_window)
 
         # Compute local timestamp
         timestamp_local = None
@@ -3188,6 +3364,17 @@ class CacheManager:
             if message_content_raw
             else None,
             "model_id": model_id,
+            "request_id": request_id,
+            "stop_reason": stop_reason,
+            # Default to its own head; _annotate_responses (a per-file
+            # post-pass) demotes the duplicated continuation blocks of a
+            # multi-block response to is_response_head=0 and zeroes their usage.
+            "is_response_head": 1,
+            "context_tokens": ctx_tokens,
+            "context_window": ctx_window,
+            "context_ratio": ctx_ratio,
+            # Stamped on the response head by _annotate_responses; None elsewhere.
+            "response_duration_ms": None,
             "input_tokens": input_tokens,
             "output_tokens": output_tokens,
             "cache_read_tokens": cache_read_tokens,
@@ -3367,8 +3554,77 @@ class CacheManager:
             )
         """)
 
+        self._compute_session_timing(cursor)
+
         self.conn.commit()
         log.info("Aggregate tables rebuilt")
+
+    def _compute_session_timing(self, cursor: sqlite3.Cursor) -> None:
+        """Populate the per-session timing/throughput rollups on the sessions
+        table: avg_tps, peak_context_ratio, total_idle_ms, total_active_ms.
+
+        Called inside rebuild_aggregates once the sessions rows exist, so the
+        hot sessions-list read serves precomputed values instead of windowing
+        over events per request. Idle/active use the same main-thread turn walk
+        as get_session_metrics (LEAD for idle; running-max human ts for active).
+        Timestamps are UTC 'Z'; stripping the suffix lets julianday parse the
+        naive form — the delta is unaffected.
+        """
+        # avg_tps + peak_context_ratio: correlated subqueries over the heads.
+        cursor.execute("""
+            UPDATE sessions SET
+                peak_context_ratio = (
+                    SELECT MAX(e.context_ratio) FROM events e
+                    WHERE e.session_id = sessions.session_id
+                      AND e.project_id = sessions.project_id
+                ),
+                avg_tps = (
+                    SELECT CASE WHEN SUM(e.response_duration_ms) > 0
+                                THEN ROUND(SUM(e.output_tokens) * 1000.0
+                                           / SUM(e.response_duration_ms), 4)
+                                ELSE NULL END
+                    FROM events e
+                    WHERE e.session_id = sessions.session_id
+                      AND e.project_id = sessions.project_id
+                      AND e.is_response_head = 1 AND e.event_type = 'assistant'
+                      AND e.response_duration_ms > 0
+                )
+        """)
+        # idle/active: one windowed turn walk, summed per (project, session).
+        cursor.execute("""
+            UPDATE sessions SET
+                total_idle_ms = COALESCE(tt.idle_ms, 0),
+                total_active_ms = COALESCE(tt.active_ms, 0)
+            FROM (
+                WITH walk AS (
+                    SELECT project_id, session_id, event_type, stop_reason,
+                           is_response_head, timestamp,
+                           LEAD(timestamp) OVER w AS next_ts,
+                           MAX(CASE WHEN msg_kind = 'human' THEN timestamp END) OVER (
+                               PARTITION BY session_id ORDER BY timestamp
+                               ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                           ) AS last_human
+                    FROM events
+                    WHERE is_sidechain = 0
+                    WINDOW w AS (PARTITION BY session_id ORDER BY timestamp)
+                )
+                SELECT project_id, session_id,
+                       CAST(ROUND(SUM(CASE WHEN next_ts IS NOT NULL THEN MAX(0,
+                           (julianday(REPLACE(next_ts, 'Z', ''))
+                            - julianday(REPLACE(timestamp, 'Z', ''))) * 86400000)
+                           ELSE 0 END)) AS INTEGER) AS idle_ms,
+                       CAST(ROUND(SUM(CASE WHEN last_human IS NOT NULL THEN MAX(0,
+                           (julianday(REPLACE(timestamp, 'Z', ''))
+                            - julianday(REPLACE(last_human, 'Z', ''))) * 86400000)
+                           ELSE 0 END)) AS INTEGER) AS active_ms
+                FROM walk
+                WHERE event_type = 'assistant' AND is_response_head = 1
+                  AND stop_reason = 'end_turn'
+                GROUP BY project_id, session_id
+            ) AS tt
+            WHERE sessions.session_id = tt.session_id
+              AND sessions.project_id = tt.project_id
+        """)
 
     def migrate_dedupe_session_uuid(self) -> dict[str, int] | None:
         """Prune (session_id, uuid) duplicates left behind by rsync-mirror

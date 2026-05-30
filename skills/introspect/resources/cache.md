@@ -35,104 +35,37 @@ Cache is stored at `~/.claude/cache/introspect_sessions.db`.
 
 ## Schema
 
-```mermaid
-erDiagram
-    cache_metadata {
-        TEXT key PK
-        TEXT value
-    }
+> The full entity-relationship diagram (kept current with `SCHEMA_VERSION`,
+> presently **`17`**) lives in the human-facing
+> [**README › Data model**](../README.md#data-model). This section is the
+> column quick-reference for direct `sqlite3` fallback.
 
-    source_files {
-        INTEGER id PK
-        TEXT filepath UK
-        REAL mtime
-        INTEGER size_bytes
-        INTEGER line_count
-        TEXT last_ingested_at
-        TEXT project_id
-        TEXT session_id "nullable for orphan agents"
-        TEXT file_type "main_session subagent agent_root"
-    }
+The tables you'll touch most for introspection queries:
 
-    projects {
-        INTEGER id PK
-        TEXT project_id UK
-        TEXT first_activity
-        TEXT last_activity
-        INTEGER session_count
-        INTEGER event_count
-    }
+| Table | What it holds |
+|-------|---------------|
+| `events` | One row per content block (see column groups below) |
+| `sessions` | Per-session rollups incl. v17 timing (`avg_tps`, `total_idle_ms`, `total_active_ms`, `peak_context_ratio`) |
+| `source_files` | Ingested JSONL files (`file_type` = `main_session`/`subagent`/`agent_root`) |
+| `projects` | Per-project activity + counts |
+| `event_edges` | `event_uuid` → `parent_event_uuid` for tree traversal (incl. cross-agent) |
+| `event_calls` | One row per tool/skill/subagent/cli/rule call inside an event |
+| `agg` | Time-bucketed rollups, grain `(granularity, time_bucket, project_id, session_id, model_id)` |
 
-    sessions {
-        INTEGER id PK
-        TEXT session_id
-        TEXT project_id
-        TEXT first_timestamp
-        TEXT last_timestamp
-        INTEGER event_count
-        INTEGER subagent_count
-        INTEGER total_input_tokens
-        INTEGER total_output_tokens
-        INTEGER total_cache_read_tokens
-        INTEGER total_cache_creation_tokens
-        REAL total_cost_usd
-    }
+`events` columns, grouped:
 
-    events {
-        INTEGER id PK
-        TEXT uuid
-        TEXT parent_uuid
-        TEXT prompt_id "joins subagent first events to parent tool_result/tool_use"
-        TEXT event_type "raw: user assistant system etc"
-        TEXT msg_kind "human task_notification tool_result user_text meta assistant_text thinking tool_use other"
-        TEXT timestamp
-        TEXT session_id
-        TEXT project_id
-        INTEGER is_sidechain
-        TEXT agent_id
-        TEXT message_role
-        TEXT message_content "plain text for FTS"
-        TEXT model_id
-        INTEGER input_tokens
-        INTEGER output_tokens
-        INTEGER cache_read_tokens
-        INTEGER cache_creation_tokens
-        REAL token_rate "$/Mtok input rate for this event's model"
-        REAL billable_tokens "weighted input-equivalent token count"
-        REAL total_cost_usd "cost for this event in USD"
-        INTEGER source_file_id FK
-        INTEGER line_number
-        TEXT raw_json "intentionally empty; source-of-truth is the JSONL file"
-    }
+- **Identity / routing**: `uuid`, `parent_uuid`, `prompt_id`, `session_id`, `project_id`, `source_file_id`, `line_number`.
+- **Classification**: `event_type`, `msg_kind` (9 kinds; `subagent-` prefixed for sidechain events), `is_sidechain`, `model_id`, `timestamp`.
+- **Usage**: `input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_creation_tokens`.
+- **Cost** (pre-computed at ingest): `token_rate`, `billable_tokens`, `total_cost_usd`.
+- **Response accounting (v14)**: `request_id`, `stop_reason`, `is_response_head`.
+- **Context utilization (v15)**: `context_tokens`, `context_window`, `context_ratio` (raw fraction, no zones).
+- **Performance (v16)**: `response_duration_ms` (TPS = `output_tokens / (response_duration_ms/1000)`).
 
-    event_edges {
-        INTEGER id PK
-        TEXT project_id
-        TEXT session_id
-        TEXT event_uuid
-        TEXT parent_event_uuid
-        INTEGER source_file_id FK
-    }
-
-    agg {
-        TEXT granularity PK "hourly daily weekly monthly"
-        TEXT time_bucket PK
-        TEXT project_id PK
-        TEXT session_id PK "'' for NULL"
-        TEXT model_id PK "'' for NULL"
-        INTEGER event_count
-        INTEGER input_tokens
-        INTEGER output_tokens
-        INTEGER cache_read_tokens
-        INTEGER cache_creation_tokens
-        REAL total_cost_usd
-        REAL billable_tokens
-    }
-
-    source_files ||--o{ events : "contains"
-    source_files ||--o{ event_edges : "tracks"
-    events ||--o{ agg : "rolled up into"
-```
+⚠️ **`is_response_head`** — a response is N blocks repeating identical usage; only the
+head keeps the usage (non-heads are zeroed), so token/cost `SUM()`s are correct
+**without** a head filter. When *counting responses*, filter `is_response_head = 1`.
+See the [README invariant](../README.md#the-is_response_head-invariant-read-this-before-summing).
 
 **FTS5 virtual tables** (auto-synced via triggers):
 - `events_fts` — full-text search on `events.message_content`
