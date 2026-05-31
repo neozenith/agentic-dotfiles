@@ -32,7 +32,7 @@ flowchart TD
 | --- | --- |
 | Node + npm/yarn/pnpm | `actions/setup-node@v6` with `cache:` parameter |
 | Python + pip | `actions/setup-python@v6` with `cache: 'pip'` |
-| Python + uv | `astral-sh/setup-uv@v8` with `enable-cache: true` |
+| Python + uv | `astral-sh/setup-uv@v8.1.0` with `enable-cache: true` (no floating `v8` tag — see `latest-versions.md`) |
 | Bun | `actions/cache@v5` on `~/.bun/install/cache` (setup-bun has no built-in cache) |
 | pnpm with store-path control | `pnpm/action-setup@v6` + explicit `actions/cache@v5` on the store |
 | C/C++ compilation | `hendrikmuhs/ccache-action@v1.2.22` |
@@ -75,7 +75,7 @@ If the exact key misses, GitHub walks `restore-keys` from top to bottom and rest
 ### uv (Python) — preferred
 
 ```yaml
-- uses: astral-sh/setup-uv@v8
+- uses: astral-sh/setup-uv@v8.1.0   # no floating `v8` tag exists upstream — pin a concrete patch
   with:
     enable-cache: true
     cache-dependency-glob: "**/uv.lock"   # default; override only for monorepos with non-standard locations
