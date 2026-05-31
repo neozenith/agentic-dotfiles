@@ -1,383 +1,394 @@
-# Gap Analysis Document Body Specification
+# Gap Analysis Spec Structure Specification
 
-Single source of truth for the structure and content requirements of a gap analysis
-document body. Applies identically whether the document is stored as a local markdown
-file or as the body of a GitHub issue.
+Single source of truth for the **structure** of a gap analysis spec — the tiers, their sections, and
+the per-tier templates. For the **voice and format** rules that govern every chunk (front-loading,
+no bold-pseudo-headings, container-by-shape, gap-scoped ADRs, …) read `resources/style.md` first;
+this file assumes them.
 
-## Section Order
+A gap analysis spec is a **set of files** sharing a kebab-case stem (`<plan>`), not one monolithic
+document. The split is driven by context economy — see the document-set table and rationale in
+`resources/style.md`. The mapping to a GitHub-issue backend (one parent issue + per-gap sub-issues)
+is in `resources/gh-issues.md`.
 
-The document MUST contain exactly these seven sections in this order. When stored as a
-GitHub issue, the issue title serves as the `# [Title]` — do not duplicate it in the
-body.
+```
+<plan>.md              index     — Execution Plan, Overview, Gap Analysis, Decisions, Measures
+<plan>-G<n>.md         gap       — one per gap: Context, Outputs, Key logic?, ADRs, Tickets table
+<plan>-G<n>-T<x.y>.md  ticket    — one per ticket: Done checkbox, contract, Test/Implements table
+<plan>-DISCOVERY.md    discovery — Current State + Desired State (review only, not in the loop)
+```
+
+A small spec (1–2 gaps, no per-gap ADRs) MAY inline gap and ticket detail into the index. The moment
+a gap grows its own ADRs, a key-logic snippet, or ≥3 tickets, split it into its own file.
+
+---
+
+## Tier 1 — Index (`<plan>.md`)
+
+Genre: navigation + framing. The index holds the diagrams and the rolled-up tables; per-gap and
+per-ticket detail are pointers to their files. Current State and Desired State are **not** in the
+index — they live in the Discovery file (rule 12, context economy).
+
+### Section order
 
 ```
 # [Title]
-## Execution Plan          ← populated in Phase 4 (TDD decomposition); placeholder before
+<!-- VERIFICATION / WARNING comments, if any -->
+<details> Table of Contents </details>        ← folded (rule 11)
+## Execution Plan                              ← heading visible; body folded in <details>
 ## Overview
-## Current State
-## Desired State
 ## Gap Analysis
-  ### Gap Map
-  ### Dependencies
-  ### G1: ...
-    #### Tickets           ← populated in Phase 4; one row per TDD vertical slice
-  ### G2: ...
-    #### Tickets
+  ### Gap Map            (MANDATORY diagram)
+  ### Dependencies       (MANDATORY diagram)
+  ### Gaps (detailed specs)                    ← table linking to each <plan>-G<n>.md
+## Decisions (ADRs)                            ← roll-up table of every settled ADR
 ## Success Measures
+  ### Project Quality Bar (CI Gates)
+  ### Domain-Specific Measures
 ## Negative Measures
+  ### Quality Bar Violations
+  ### Domain-Specific Failures
 ```
-
-## Section Specifications
 
 ### Execution Plan
 
-The first section in the body. It is the entry point for autonomous spec execution
-via the `/loop` construct. Until Phase 4 (TDD Ticket Decomposition) runs, this section
-is a placeholder — once Phase 4 completes it contains the runner prompt, a progress
-roll-up, and explicit done criteria.
-
-MUST include three subsections, in order:
+The entry point for autonomous execution via `/loop`. Until Phase 4 runs it is a placeholder; after
+Phase 4 it holds the runner prompt, a progress roll-up, and the done criteria. The whole body is
+wrapped in `<details>` (the runner prompt is one expand away); only the `## Execution Plan` heading
+stays visible.
 
 #### Loop Runner Prompt
 
-A self-contained prompt that an agent in a fresh context can execute. The prompt
-embeds the spec's own location so the loop can re-enter without external arguments.
-
-The exact prompt template (substitute `<SPEC_PATH>` with the document's path or
-`<owner/repo#N>` with the issue reference):
+A self-contained prompt an agent in a fresh context can execute. It embeds the spec's own location so
+the loop re-enters without external arguments. Substitute `<SPEC_PATH>` with the index file's path
+(relative to the repo root), or `<owner/repo#N>` for a GitHub-issue spec.
 
 ````markdown
 ```
-/loop Read the gap analysis spec at <SPEC_PATH>.
+/loop Read the gap analysis spec index at <SPEC_PATH>.
 
-1. Read `resources/tdd/tdd.md` and apply its red-green-refactor workflow.
-2. Find the next ticket whose status is `[ ]` and whose `Depends on` are all `[x]`.
-   If none exists, write "spec complete" and exit the loop.
-3. RED — write the test described in the ticket's `Test outline`. Run the test
-   suite. Confirm the new test fails.
-4. GREEN — write the minimum code described in `Implementation outline`. Run the
-   test suite. Confirm the new test passes and no existing tests regressed.
-5. REFACTOR (optional) — apply the ticket's `Refactor candidates` while staying
-   green. Re-run the test suite after each refactor step.
-6. Mark the ticket's status checkbox `[x]` in <SPEC_PATH>.
-7. Update the Progress table in the Execution Plan section.
-8. Commit the changes with message `T<N>.<M>: <ticket title>`.
-9. Return — the loop will fire again for the next eligible ticket.
+1. Read `.claude/skills/plan-gap/resources/tdd/tdd.md` and apply its red-green-refactor workflow.
+2. In the index Progress table, find the lowest-numbered "Next eligible" ticket whose `Depends on`
+   are all `[x]`. Open that ticket file. If none is eligible, write "spec complete" and exit the loop.
+3. RED — write the test named in the ticket's `Test` row. Run the suite. Confirm the new test fails.
+4. GREEN — write the minimum code named in the ticket's `Implements` row. Run the suite. Confirm the
+   new test passes and nothing regressed.
+5. REFACTOR (optional) — apply the ticket's `Refactor` row while staying green; re-run after each step.
+6. Mark the ticket file's `- [ ] **Done**` checkbox `[x]`.
+7. Update the Progress table in the index (`[x]` done count, Next eligible, Blocked on).
+8. Commit with message `T<n>.<m>: <ticket title>`.
+9. Return — the loop fires again for the next eligible ticket.
 
-If you encounter an ambiguity that the spec does not resolve, STOP the loop:
-add an `<!-- UNRESOLVED -->` ADR placeholder under the relevant `G<N>`,
-write a short status note explaining what blocked progress, and exit.
-The user must re-enter Phase 2 refinement to resolve the ADR before the
-loop can resume.
+If you hit an ambiguity the spec does not resolve, STOP the loop: add an `<!-- UNRESOLVED -->` ADR
+placeholder under the relevant gap file, write a short status note on what blocked progress, and exit.
+The user must re-enter Phase 2 refinement to resolve the ADR before the loop can resume.
 ```
 ````
 
-When the document is a GitHub issue, replace the file path with `<owner/repo#N>`
-and instruct the runner to read the body via `gh issue view N --repo owner/repo
---json body` and write back via `gh issue edit`.
+For a GitHub-issue spec, replace the path with `<owner/repo#N>`, read the body via
+`gh issue view N --repo owner/repo --json body`, and write back via `gh issue edit` (see
+`resources/gh-issues.md`).
 
 #### Progress
 
-A roll-up table of ticket status across all gaps. One row per gap. Columns:
+A roll-up table, one row per gap, gap and ticket IDs linked to their files:
 
+```markdown
 | Gap | Tickets total | `[x]` done | `[ ]` todo | Next eligible | Blocked on |
 |-----|---------------|-----------|-----------|---------------|------------|
-| G1  | 4             | 0         | 4         | T1.1          | —          |
-| G2  | 3             | 0         | 3         | —             | T1.2       |
+| [G1](./<plan>-G1.md) | 4 | 0 | 4 | [T1.1](./<plan>-G1-T1.1.md) | — |
+| [G2](./<plan>-G2.md) | 3 | 0 | 3 | — | [T1.2](./<plan>-G1-T1.2.md) |
+```
 
-The runner updates this table after every completed ticket. "Next eligible" is the
-lowest-numbered `[ ]` ticket whose `Depends on` are all `[x]`. "Blocked on" lists
-the dependencies still `[ ]`.
+"Next eligible" is the lowest-numbered `[ ]` ticket whose `Depends on` are all `[x]`; "Blocked on"
+lists the dependencies still `[ ]`. Record any **dropped** tickets here with their reason (they count
+as `[x]`, no work owed — see the dropped-ticket convention in `resources/style.md`).
 
 #### Done Criteria
 
-A short checklist that the runner uses to detect "spec complete":
+The checklist the runner uses to detect "spec complete":
 
-- [ ] Every ticket in every `G<N>` is marked `[x]`
-- [ ] Every Success Measure (Project Quality Bar + Domain-Specific) passes when
-      executed (commands listed in the Success Measures table)
-- [ ] No `<!-- UNRESOLVED -->` ADR markers remain
-- [ ] No `<!-- LINK_NOT_VERIFIED -->`, `<!-- ASSUMPTION -->`, or `<!-- PAYWALLED -->`
-      markers requiring user resolution
-
-When all four are true, the spec is complete. The runner emits "spec complete" and
-exits.
+- [ ] Every ticket file is marked `[x]`
+- [ ] Every Success Measure (Project Quality Bar + Domain-Specific) passes when executed
+- [ ] No `<!-- UNRESOLVED -->` ADR markers remain in any gap file
+- [ ] No `<!-- LINK_NOT_VERIFIED -->`, `<!-- ASSUMPTION -->`, or `<!-- PAYWALLED -->` markers
+      requiring user resolution
 
 ### Overview
 
-Brief description of the initiative, its scope, and why this gap analysis exists.
+Front-loaded prose stating the initiative's scope and purpose, then:
 
-MUST include:
-- A **bullet-point summary** of each identified gap (`G<N>: Title` — one line each)
-  that serves as a navigable index into the Gap Analysis section.
-- The **Dependencies diagram** (same `flowchart LR` from the Gap Analysis section)
-  embedded directly, so readers see the implementation order before diving into details.
-
-The gap list and dependency diagram are populated after Phase 1 research completes
-and updated as gaps are added, merged, or reordered during Phase 2 refinement.
-
-### Current State
-
-What exists today. Describe the system, process, or situation as it is now.
-MUST contain at least one Mermaid diagram visualizing the current architecture,
-data flow, or relationships. Text alone is not sufficient.
-
-### Desired State
-
-What the target looks like when done. Describe the system, process, or situation
-as it should be after the work is complete.
-MUST contain at least one Mermaid diagram visualizing the target architecture,
-data flow, or relationships. Text alone is not sufficient.
+- A **bullet list of gaps** — each `[G<n>: Title](./<plan>-G<n>.md)` linked, with a one-line outcome.
+- The **Dependencies diagram** (the same `flowchart LR` as in Gap Analysis) embedded so readers see
+  the implementation order before diving in.
+- A one-line **Background** blockquote linking the Discovery file:
+  `> **Background — Current vs Desired State:** … lives in [<plan>-DISCOVERY.md](./<plan>-DISCOVERY.md) — review context, not needed once the loop starts.`
 
 ### Gap Analysis
 
-The delta between Current State and Desired State. Each gap should be a concrete,
-actionable item — not a vague aspiration.
-
 #### Gap Map (MANDATORY)
 
-Fixed heading. A `flowchart TD` Mermaid diagram mapping the Current State items
-through each identified gap to the corresponding Desired State items. Three subgraphs:
-Current (what exists), Gaps (what must change), Desired (what results). Each
-current-state item connects through a gap node to its desired-state counterpart.
+Fixed heading. A `flowchart TD` mapping Current-State items through each gap to its Desired-State
+counterpart. Three subgraphs — Current, Gaps, Desired — with each current item flowing through a gap
+node to its desired item. This diagram MAY run detail-density (caption it as such); gap-to-gap
+ordering is left to the Dependencies diagram.
 
 #### Dependencies (MANDATORY)
 
-Fixed heading. Immediately follows the Gap Map. A `flowchart LR` Mermaid diagram
-showing the dependency ordering between gaps — which gaps must be resolved before
-others can begin. Use solid arrows for hard dependencies and dotted arrows (with
-labels) for validation/feedback relationships. Include a recommended implementation
-order below the diagram.
+Fixed heading, immediately after the Gap Map. A `flowchart LR` of the ordering between gaps — solid
+arrows for hard dependencies, dotted labeled arrows for validation/parity relationships. Follow it
+with a one-line recommended implementation order.
 
-#### Per-Gap Detail
+#### Gaps (detailed specs)
 
-After the two mandatory diagrams, each gap gets its own `### G<N>: <Title>` subsection
-with these fields:
+A table pointing to each gap file — full Current/Gap/Outputs/References/ADRs/Tickets live there, not
+inline:
 
-- **Current:** What exists today for this specific area.
-- **Gap:** What must change and why.
-- **Output(s):** Tangible deliverables produced when this gap is closed. This section
-  completes the sentence "When complete I will have..." List concrete artifacts: source
-  files created or modified (specify language — C, Python, TypeScript, SQL, etc.), test
-  files, configuration changes, documentation updates, new CLI commands, database
-  schema changes, etc. Be specific about file types and locations, not vague ("updated
-  code").
-- **References** *(optional but strongly encouraged):* Exact code snippets of critical
-  logic discovered during the research phase, or parametrised versions representing a
-  pattern. This serves two purposes:
-  1. **Early code review** — surfaces nuanced logic before full implementation, where
-     the failure mode is ambiguity about how the logic should actually work.
-  2. **Few-shot context for agentic execution** — when an agent picks up this plan in
-     a clean context, these snippets act as concrete examples of the intended approach,
-     preventing the agent from reinventing the logic differently.
+```markdown
+| Gap | Spec | Tickets | Summary |
+|-----|------|:-------:|---------|
+| G1 | [<short title>](./<plan>-G1.md) | 4 | <one-line outcome> |
+```
 
-  Include: function signatures, SQL queries, algorithm pseudocode, API call patterns,
-  grammar definitions, or configuration templates. Annotate with comments explaining
-  non-obvious choices.
+### Decisions (ADRs)
 
-- **Tickets** *(populated during Phase 4 TDD decomposition):* A nested
-  `#### Tickets` subsection containing one entry per TDD vertical slice. Each
-  ticket maps to a single red-green-refactor cycle from `resources/tdd/tdd.md`
-  — one test verifying one user-observable behavior, plus the minimum code to
-  pass it. Tickets are the unit of work the `/loop` runner consumes.
+A roll-up of every settled ADR across all gaps — a primary review lens. Columns **ADR, Decision,
+Why**; one row per ADR; the ID links to its owning gap file. Full Decision/Why/Rejected text stays in
+the gap file (rule 13).
 
-  Ticket format:
-  ```markdown
-  ##### T<N>.<M>: <Behavior phrased as "<actor> can <observable action>">
-
-  - [ ] **Done**
-  - **Cycle:** RED → GREEN → REFACTOR
-  - **Behavior:** Single user-observable behavior this ticket verifies. No
-    implementation details. Survives internal refactors.
-  - **Test outline:**
-    - File: `<path/to/test_file.ext>`
-    - Name: `<test name matching the behavior>`
-    - Asserts: <assertion against a public interface — no private methods,
-      no call counts, no direct DB inspection>
-  - **Implementation outline:**
-    - File(s): `<path/to/source_file.ext>`
-    - Minimum code to pass the test. No speculative scope.
-  - **Mocks:** `none` | <list — only system boundaries per
-    `resources/tdd/mocking.md`: external APIs, time/randomness, file
-    system if unavoidable. Never internal collaborators.>
-  - **Refactor candidates:** *(optional)* <hints from
-    `resources/tdd/refactoring.md` — duplication to extract, shallow
-    modules to deepen, etc.>
-  - **Depends on:** `T<N>.<M-1>` | `T<other>.<M>` | `none`
-  ```
-
-  Ticket numbering: `T<N>.<M>` where `<N>` matches the parent gap and `<M>`
-  is the 1-based ticket index within that gap. The first ticket per gap
-  (`T<N>.1`) is the **tracer bullet** — the smallest end-to-end slice
-  proving the path works through the public interface. Subsequent tickets
-  layer behaviors on top.
-
-  Anti-patterns (reject any ticket exhibiting these — see
-  `resources/tdd/tdd.md` and `resources/tdd/tests.md`):
-  - **Horizontal slice** — one ticket that bundles multiple tests OR multiple
-    tickets that all write tests before any implementation. Each ticket is
-    one test → one impl.
-  - **Implementation-detail behavior** — "calls X.process()" rather than
-    "produces Y output."
-  - **Internal mocking** — mocking your own modules; the test no longer
-    proves the system works.
-  - **External-channel verification** — asserting via direct DB query,
-    log scraping, or filesystem inspection rather than the public interface.
-  - **Speculative scope** — implementation that goes beyond what the test
-    requires.
-
-- **Architecture Decision Records (ADRs)** *(populated during Phase 2 refinement):*
-  Each gap may accumulate one or more `#### ADR: <Decision Title>` subsections that
-  capture resolved design decisions and their rationale. ADRs serve three purposes:
-  1. **Structured ambiguity tracking** — before a question is resolved, the ADR exists
-     as an `<!-- UNRESOLVED -->` placeholder listing the question, options, and trade-offs.
-     This makes remaining ambiguities per gap visible and rankable.
-  2. **Cross-gap question optimization** — when selecting "the next most important
-     question," the skill can scan all unresolved ADRs across all gaps and select the
-     single question whose answer resolves the most ADRs simultaneously.
-  3. **Decision provenance** — once resolved, the ADR records what was decided, why,
-     and what alternatives were rejected. This prevents future agents from relitigating
-     settled decisions.
-
-  ADR format:
-  ```markdown
-  #### ADR: <Decision Title>
-  <!-- UNRESOLVED -->   ← remove this marker once resolved
-
-  | Option | Pros | Cons |
-  |--------|------|------|
-  | Option A | ... | ... |
-  | Option B | ... | ... |
-
-  **Decision:** [Option chosen, or "pending — see refinement question"]
-  **Rationale:** [Why this option was selected]
-  ```
+```markdown
+| ADR | Decision | Why |
+|-----|----------|-----|
+| [ADR1.1](./<plan>-G1.md) | <concise decision> | <one-line rationale> |
+```
 
 ### Success Measures
 
-Escalator criteria. Each measure is a mandatory requirement that MUST be satisfied
-for the work to be considered complete. These are not "nice to haves."
+Escalator criteria — each a mandatory, testable requirement, never a "nice to have". Two subsections:
 
-MUST include two subsections:
-
-#### Project Quality Bar (CI Gates)
-
-When the gap analysis targets a code project change, a dedicated research subagent
-(see Phase 1, Step 1f in SKILL.md) scans the project for codified quality standards.
-The sources it searches — in priority order:
-
-1. **Agentic configuration** — `CLAUDE.md`, `AGENTS.md`, `.claude/rules/`, agentic
-   memory files, and similar AI-assistant instruction files
-2. **CI/CD pipelines** — GitHub Actions workflows, Makefiles, build scripts
-3. **Project tooling** — `pyproject.toml` (ruff, mypy, pytest config),
-   `biome.json`, `.eslintrc`, `tsconfig.json`, etc.
-4. **README and contributing docs** — `README.md`, `CONTRIBUTING.md`, `docs/`
-
-Present findings as a concrete table of CI gates: command, threshold, and which
-deliverables each gate applies to. The project's own bar is the minimum — the gap
-analysis may add domain-specific measures on top, but must never fall below what
-the project already enforces.
-
-#### Domain-Specific Measures
-
-Measures specific to the initiative that go beyond the project's existing quality
-bar. Every gap in the Gap Analysis section must have at least one corresponding
-domain-specific measure.
+- **Project Quality Bar (CI Gates)** — a table of the project's existing gates (command, threshold,
+  applies-to), discovered by the Phase 1f quality subagent across `CLAUDE.md` / `AGENTS.md` /
+  `.claude/rules/`, CI workflows, and project tooling. The project's own bar is the minimum.
+- **Domain-Specific Measures** — one bullet per gap minimum, each linking the gap
+  (`**[G1](./<plan>-G1.md):** …`) and stating a falsifiable check.
 
 ### Negative Measures
 
-Expensive-stairs criteria. Each negative measure describes a failure mode where the
-system appears to work but silently fails to deliver the intended value. These are
-the Type 2 failures — false signals of success.
+Expensive-stairs criteria — Type 2 failures where the system *looks* done but silently isn't. Two
+subsections:
 
-MUST include two subsections:
+- **Quality Bar Violations** — failure modes that silently breach the project's own standards
+  (forbidden anti-patterns, historical gotchas from agentic memory/rules).
+- **Domain-Specific Failures** — initiative-specific false signals of success.
 
-#### Quality Bar Violations
+### Index skeleton
 
-Failure modes where deliverables appear to pass but silently violate the project's
-own quality standards. A dedicated research subagent (see Phase 1, Step 1f in
-SKILL.md) scans the same sources as the Success Measures subagent, but looks for:
-
-- Common anti-patterns the project explicitly forbids (e.g., mocking, graceful
-  degradation, specific import patterns)
-- Historical "gotchas" recorded in agentic memory or rules files
-- Conventions that are easy to accidentally violate when adding new code
-
-#### Domain-Specific Failures
-
-Type 2 failures specific to the initiative — scenarios where the system gives a
-false signal of success while silently failing to deliver the intended value.
-
-## Skeleton Template
-
-Use this as the initial body when creating a new gap analysis document:
+Use this as the initial index body when creating a new spec (gap and ticket files are generated later
+from their templates; the Discovery file is created alongside this one):
 
 ```markdown
+# [Title]
+
+<details>
+<summary><b>Table of Contents</b></summary>
+<!--TOC-->
+<!--TOC-->
+</details>
+
 ## Execution Plan
 
-<!-- TODO: Populated in Phase 4 (TDD Ticket Decomposition). Placeholder until then. -->
+<details>
+<summary><b>Loop runner, progress, done criteria</b> — execution detail for the <code>/loop</code> agent</summary>
 
 ### Loop Runner Prompt
-
 <!-- TODO: Self-contained /loop prompt embedding <SPEC_PATH>. Pending Phase 4. -->
 
 ### Progress
-
 <!-- TODO: Roll-up table — one row per gap. Pending Phase 4. -->
 
 ### Done Criteria
-
 <!-- TODO: Checklist — all tickets [x], all Success Measures pass, no UNRESOLVED markers. Pending Phase 4. -->
+
+</details>
 
 ## Overview
 
-<!-- TODO: Brief description of the initiative, scope, and purpose -->
-
-**Gaps identified:**
-
-<!-- TODO: Bullet-point list of G<N>: Title (one line each) -->
-
-<!-- TODO: Dependencies flowchart LR (same diagram as in Gap Analysis) -->
-
-## Current State
-
-<!-- TODO: Description + at least one Mermaid diagram -->
-
-## Desired State
-
-<!-- TODO: Description + at least one Mermaid diagram -->
+<!-- TODO: Scope + purpose; bullet list of linked gaps; Dependencies diagram; Background blockquote → DISCOVERY -->
 
 ## Gap Analysis
 
 ### Gap Map
-
-<!-- TODO: flowchart TD with Current → Gaps → Desired subgraphs -->
+<!-- TODO: flowchart TD — Current → Gaps → Desired subgraphs -->
 
 ### Dependencies
+<!-- TODO: flowchart LR — gap ordering + recommended implementation order -->
 
-<!-- TODO: flowchart LR showing gap dependency ordering -->
+### Gaps (detailed specs)
+<!-- TODO: table linking each <plan>-G<n>.md -->
 
-<!-- TODO: ### G1: Title — with Current, Gap, Output(s), References, Tickets, ADRs fields -->
-<!--      Tickets subsection populated in Phase 4 (TDD decomposition).            -->
-<!-- TODO: ### G2: Title, etc.                                                    -->
+## Decisions (ADRs)
+<!-- TODO: roll-up table (ADR, Decision, Why), one row per settled ADR, populated in Phase 2 -->
 
 ## Success Measures
 
 ### Project Quality Bar (CI Gates)
-
-<!-- TODO: Table of CI gates — command, threshold, applies-to -->
+<!-- TODO: table of CI gates — command, threshold, applies-to -->
 
 ### Domain-Specific Measures
-
-<!-- TODO: Mandatory, testable requirements — every gap must have at least one -->
+<!-- TODO: one falsifiable measure per gap minimum -->
 
 ## Negative Measures
 
 ### Quality Bar Violations
-
-<!-- TODO: Type 2 failures against the project's own quality standards -->
+<!-- TODO: Type 2 failures against the project's own standards -->
 
 ### Domain-Specific Failures
-
-<!-- TODO: Type 2 failure modes — false signals of success -->
+<!-- TODO: initiative-specific false signals of success -->
 ```
+
+---
+
+## Tier 2 — Gap (`<plan>-G<n>.md`)
+
+Genre: explanation (why) + reference (what) + pointer (tickets). Created as a stub in Phase 1
+(title + lead + Context) and enriched through Phases 1e–4.
+
+````markdown
+# G<n>: <Title>
+
+> - **Index:** [<plan>.md](./<plan>.md)
+> - **Depends on:** [G..](./<plan>-G...md), … — or none
+> - **Blocks:** [G..](./<plan>-G...md), … — or none
+> - **Prev:** [G..](./<plan>-G...md)        ← omit on the first gap
+> - **Next:** [G..](./<plan>-G...md)        ← omit on the last gap
+
+<1–2 sentences: what closing this gap delivers — front-loaded.>
+
+## Context
+<Current state for this gap and the binding constraint, 1–3 sentences, semantic line breaks.>
+
+## Outputs
+| File | Change |
+|------|--------|
+| `path` (lang) | <what changes> |
+
+## Key logic              ← optional; include only when a snippet de-risks the work
+```python
+…                         # function signatures, SQL, pseudocode, config — annotate non-obvious choices
+```
+
+## ADR<n>.<m>: <concise decision summary>    ← gap-scoped id, one heading per settled ADR
+- **Decision:** <full sentence>.
+- **Why:** <1–2 sentences>.
+- **Rejected:** <option (reason); …>          ← only when options were weighed
+- **Superseded:** <prior ADR withdrawn + why> ← only when a decision is reversed
+
+## Tickets
+Each ticket is a standalone TDD vertical slice (one test → one implementation); full outlines live in
+the linked files.
+
+| Ticket | Behavior | Depends on |
+|--------|----------|------------|
+| [T<n>.1](./<plan>-G<n>-T<n>.1.md) | <actor> <observable outcome> | — |
+````
+
+The **Output(s)** table answers "when complete I will have…": concrete artifacts (source files with
+language, test files, config, schema/CLI changes), never vague "updated code". The optional
+**Key logic** snippet is the early-review + few-shot-context lever — critical logic discovered in
+research, so a fresh-context agent reproduces the intended approach instead of reinventing it.
+
+### Unresolved ADRs (Phase 2)
+
+Before a decision is settled it lives as an `<!-- UNRESOLVED -->` placeholder — the *only* place a
+Pros/Cons table is allowed (rule 8). It makes the open question rankable across gaps:
+
+```markdown
+## ADR<n>.<m>: <Question title>
+<!-- UNRESOLVED -->
+
+| Option | Pros | Cons |
+|--------|------|------|
+| A | … | … |
+| B | … | … |
+
+- **Decision:** pending — see refinement question.
+```
+
+When resolved, delete the marker and the table, and rewrite the body as the bulleted Decision/Why/
+Rejected form above. Add a row to the index **Decisions (ADRs)** roll-up.
+
+---
+
+## Tier 3 — Ticket (`<plan>-G<n>-T<x.y>.md`)
+
+Genre: austere reference — one behavior, one test, the implementation target, the dependencies.
+Generated in Phase 4, one file per TDD vertical slice.
+
+```markdown
+# T<x.y>: <actor> <observable outcome>
+
+> - **Gap:** [G<n>: <title>](./<plan>-G<n>.md)
+> - **Index:** [<plan>.md](./<plan>.md)
+> - **Prev:** [T..](./<plan>-G<n>-T...md)   ← omit on the first ticket
+> - **Next:** [T..](./<plan>-G<n>-T...md)   ← omit on the last ticket
+
+- [ ] **Done**
+
+<One sentence stating the precise, assertion-worthy contract — exact endpoint/args/return or the
+concrete fact the test checks.> <_(tracer bullet)_ — only on T<n>.1>
+
+| | |
+|--|--|
+| Test | `path::test_name` — <assertion against the public interface> |
+| Implements | `file` <symbol>, `file` |
+| Depends on | [T..](./<plan>-G<a>-T<a>.<b>.md), … — or — |
+| Mocks | <only if not none — system boundaries per `resources/tdd/mocking.md`> |
+| Refactor | <only if present — hints from `resources/tdd/refactoring.md`> |
+```
+
+Numbering: `<n>` matches the parent gap, `<x.y>` is `<n>.<m>` with `<m>` 1-based within the gap. The
+first ticket per gap (`T<n>.1`) is the **tracer bullet** — the smallest end-to-end slice proving the
+path through the public interface; mark it `_(tracer bullet)_`. Subsequent tickets layer on top.
+
+Reject any ticket exhibiting these anti-patterns (see `resources/tdd/tdd.md`, `resources/tdd/tests.md`):
+
+- **Horizontal slice** — one ticket bundling multiple tests, or tickets that write all tests before
+  any implementation. Each ticket is one test → one impl.
+- **Implementation-detail behavior** — "calls `X.process()`" rather than "produces Y output".
+- **Internal mocking** — mocking your own modules; the test no longer proves the system works.
+- **External-channel verification** — asserting via direct DB query, log scraping, or filesystem
+  inspection rather than the public interface.
+- **Speculative scope** — implementation beyond what the test requires.
+
+---
+
+## Tier 4 — Discovery (`<plan>-DISCOVERY.md`)
+
+Review/background only — not loaded during the loop. Holds the before/after architecture that
+motivates the gaps.
+
+```markdown
+# <Title> — Discovery (Current & Desired State)
+
+> - **Index:** [<plan>.md](./<plan>.md)
+
+Review/background context: the before/after architecture, not loaded during the implementation loop.
+
+## Current State
+<What exists today — file:line citations from Track A research.>
+
+```mermaid
+flowchart TD
+    …            ← current architecture / data flow; problem nodes in the danger fill
+```
+
+## Desired State
+<The target end state — informed by verified Track B research.>
+
+```mermaid
+flowchart TD
+    …            ← target architecture; new/changed nodes in the good/process fills
+```
+```
+
+Both diagrams are MANDATORY and must be visually distinguishable (Phase 3 cross-consistency check).
+They obey the same mermaid gates as the index diagrams (`resources/style.md` → Diagrams).

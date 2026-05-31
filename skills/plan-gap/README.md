@@ -113,81 +113,61 @@ flowchart LR
 
 ## Document Structure
 
+A spec is a **tiered file set** sharing a stem, not one document. The index + the one gap + the one ticket an agent is on are its `/loop` working-set; Current/Desired State and background move to a review-only Discovery file (**context economy**).
+
 ```mermaid
-flowchart LR
-    subgraph DOC["Gap Analysis Spec Document"]
-        subgraph OV["Overview"]
-            OV1["Scope + Purpose"]
-            OV2["Gap Index<br/>(navigable bullet list)"]
-            OV3["Dependencies Diagram"]
-        end
-
-        subgraph CS["Current State"]
-            CS1["Architecture Description"]
-            CS2["Mermaid Diagram"]
-            CS3["Known Limitations"]
-        end
-
-        subgraph DS["Desired State"]
-            DS1["Target Architecture"]
-            DS2["Mermaid Diagram"]
-            DS3["Design Decisions<br/>+ Literature"]
-        end
-
-        subgraph GA["Gap Analysis"]
-            GM["Gap Map Diagram<br/>(Current --> Gap --> Desired)"]
-            DEP["Dependencies Diagram<br/>(implementation order)"]
-            subgraph GN["G&lt;N&gt;: Per-Gap Detail"]
-                GN1["Current / Gap / Output(s)"]
-                GN2["References<br/>(code snippets, SQL, pseudocode)"]
-                GN3["ADRs<br/>(resolved + unresolved decisions)"]
-            end
-        end
-
-        subgraph SM["Success Measures"]
-            SM1["Project Quality Bar<br/>(CI gates table)"]
-            SM2["Domain-Specific<br/>Measures"]
-        end
-
-        subgraph NM["Negative Measures"]
-            NM1["Quality Bar Violations"]
-            NM2["Domain-Specific<br/>Failures"]
-        end
+flowchart TD
+    subgraph IDX["Index — &lt;plan&gt;.md (loop entry)"]
+        EP["Execution Plan<br/>(folded: runner, progress, done)"]
+        OV["Overview<br/>(linked gap list + deps diagram)"]
+        GA["Gap Analysis<br/>(Gap Map + Dependencies + Gaps table)"]
+        DEC["Decisions (ADRs)<br/>roll-up table"]
+        SM["Success + Negative<br/>Measures"]
     end
 
-    OV --> CS --> DS --> GA --> SM --> NM
+    subgraph GAP["Gap — &lt;plan&gt;-G&lt;n&gt;.md (per-gap)"]
+        GC["Context"]
+        GO["Outputs table"]
+        GK["Key logic<br/>(snippet, optional)"]
+        GADR["ADR&lt;n&gt;.&lt;m&gt;<br/>(bulleted decision)"]
+        GT["Tickets table"]
+    end
 
-    classDef ovStyle fill:#1e40af,stroke:#1e3a8a,color:#e0e7ff,stroke-width:2px
-    classDef csStyle fill:#b45309,stroke:#92400e,color:#fef3c7,stroke-width:2px
-    classDef dsStyle fill:#047857,stroke:#065f46,color:#d1fae5,stroke-width:2px
-    classDef gaStyle fill:#6d28d9,stroke:#5b21b6,color:#ede9fe,stroke-width:2px
-    classDef gnStyle fill:#7c3aed,stroke:#6d28d9,color:#f5f3ff,stroke-width:1px
-    classDef smStyle fill:#0e7490,stroke:#155e75,color:#cffafe,stroke-width:2px
-    classDef nmStyle fill:#b91c1c,stroke:#991b1b,color:#fee2e2,stroke-width:2px
+    subgraph TKT["Ticket — &lt;plan&gt;-G&lt;n&gt;-T&lt;x.y&gt;.md (per-ticket)"]
+        TD["[ ] Done checkbox"]
+        TC["Contract sentence"]
+        TT["Test / Implements /<br/>Depends-on table"]
+    end
 
-    class OV1,OV2,OV3 ovStyle
-    class CS1,CS2,CS3 csStyle
-    class DS1,DS2,DS3 dsStyle
-    class GM,DEP gaStyle
-    class GN1,GN2,GN3 gnStyle
-    class SM1,SM2 smStyle
-    class NM1,NM2 nmStyle
+    subgraph DISC["Discovery — &lt;plan&gt;-DISCOVERY.md (review only)"]
+        DCUR["Current State<br/>+ diagram"]
+        DDES["Desired State<br/>+ diagram"]
+    end
 
-    style OV fill:#1e3a8a22,stroke:#1e40af,color:#93c5fd
-    style CS fill:#92400e22,stroke:#b45309,color:#fbbf24
-    style DS fill:#065f4622,stroke:#047857,color:#34d399
-    style GA fill:#5b21b622,stroke:#6d28d9,color:#a78bfa
-    style GN fill:#6d28d922,stroke:#7c3aed,color:#c4b5fd
-    style SM fill:#155e7522,stroke:#0e7490,color:#22d3ee
-    style NM fill:#991b1b22,stroke:#b91c1c,color:#f87171
+    GA -->|"links each gap"| GAP
+    GT -->|"links each ticket"| TKT
+    OV -.background.-> DISC
+
+    classDef idxStyle fill:#1e40af,color:#e0e7ff
+    classDef gapStyle fill:#6d28d9,color:#f5f3ff
+    classDef tktStyle fill:#0e7490,color:#cffafe
+    classDef discStyle fill:#92400e,color:#fef3c7
+
+    class EP,OV,GA,DEC,SM idxStyle
+    class GC,GO,GK,GADR,GT gapStyle
+    class TD,TC,TT tktStyle
+    class DCUR,DDES discStyle
+
+    style IDX fill:#172554,color:#dbeafe
+    style GAP fill:#3b0764,color:#ede9fe
+    style TKT fill:#083344,color:#ecfeff
+    style DISC fill:#431407,color:#ffedd5
 ```
 
-- **Overview** — one-screen orientation: what this is, which gaps exist, and what order to tackle them
-- **Current State** — grounded in codebase exploration with file:line citations and architecture diagrams
-- **Desired State** — informed by SOTA research with verified external citations (no hallucinated URLs)
-- **Gap Analysis** — each gap has concrete deliverables (Output(s)), code-level References for agentic execution, and ADRs tracking every design decision
-- **Success Measures** — anchored to your project's actual CI gates (not vague aspirations), plus domain-specific measures per gap
-- **Negative Measures** — Type 2 failures where it *looks* done but silently isn't — discovered by scanning your project's own rules and historical gotchas
+- **Index** (`<plan>.md`) — one-screen orientation: scope, the linked gap list, dependency order, a Decisions roll-up, and the CI-anchored Success/Negative Measures. The TOC and Execution Plan fold behind `<details>` so humans skim while the `/loop` agent still reads them.
+- **Gap files** (`<plan>-G<n>.md`) — one per gap: Context, an Outputs table, an optional Key-logic snippet for agentic few-shot, gap-scoped bulleted ADRs, and a Tickets table — all cross-linked by ID.
+- **Ticket files** (`<plan>-G<n>-T<x.y>.md`) — one austere TDD slice each: a Done checkbox, a precise contract sentence, and a Test/Implements/Depends-on table. The `/loop` runner consumes one per iteration.
+- **Discovery** (`<plan>-DISCOVERY.md`) — Current State (codebase exploration, file:line citations) and Desired State (SOTA research, verified URLs), each with a Mermaid diagram. Human review only — never loaded during the loop.
 
 
 
