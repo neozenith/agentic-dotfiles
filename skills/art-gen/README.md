@@ -10,6 +10,133 @@ reproducible and the next prompt can be curated from the prompts that worked.
 so you don't pay for a fresh generation every time you only need a transparent
 background or a text overlay.
 
+---
+
+<details>
+<summary><b>Table of Contents</b></summary>
+<!--TOC-->
+
+- [art-gen](#art-gen)
+  - [Quickstart](#quickstart)
+  - [Architecture](#architecture)
+  - [Requirements](#requirements)
+  - [Backends](#backends)
+  - [The prompt file (maximise every token)](#the-prompt-file-maximise-every-token)
+  - [Command reference](#command-reference)
+    - [`generate`](#generate)
+    - [`history`](#history)
+  - [Examples](#examples)
+  - [Output & sidecars](#output--sidecars)
+    - [Estimated cost](#estimated-cost)
+  - [The iteration loop](#the-iteration-loop)
+  - [Troubleshooting](#troubleshooting)
+  - [For maintainers](#for-maintainers)
+
+<!--TOC-->
+</details>
+
+---
+
+## Quickstart
+
+Install the skill into your project:
+
+```bash
+npx skills@latest add neozenith/agentic-dotfiles --skill art-gen
+```
+
+Then invoke it in Claude Code with a natural-language brief:
+
+```text
+/art-gen a minimalist flat-vector compass rose icon, charcoal on white, no text — give me 3 variants
+```
+
+Or drive the script directly:
+
+```bash
+# 1. Write a prompt file (see reference/prompt_template.md for a starting point)
+# 2. Generate
+uv run .claude/skills/art-gen/scripts/art_gen.py generate --prompt-file prompt.md
+
+# Review the output
+ls art/gen/
+#   art_20260601_120000_0.png   art_20260601_120000_0.json
+```
+
+## Architecture
+
+A prompt file flows through generation to a timestamped PNG and a metadata sidecar; the
+`history` view feeds the strongest prior prompts back into the next one.
+
+```mermaid
+flowchart LR
+    PF["Prompt file (.md)<br/>comments stripped"]:::src
+    GEN["art_gen generate<br/>gemini / imagen"]:::proc
+    API["Google GenAI API"]:::infra
+    OUT["PNG + JSON sidecar<br/>prompt, model, cost"]:::data
+    HIST["art_gen history<br/>running + itemised cost"]:::proc
+    PF --> GEN --> API --> OUT --> HIST
+    HIST -. "curate next prompt" .-> PF
+    classDef src fill:#2563eb,stroke:#fff,color:#fff,stroke-width:2px
+    classDef proc fill:#7c3aed,stroke:#fff,color:#fff,stroke-width:2px
+    classDef infra fill:#475569,stroke:#fff,color:#fff,stroke-width:2px
+    classDef data fill:#0f766e,stroke:#fff,color:#fff,stroke-width:2px
+```
+
+*Generate → review → curate loop.* | VCS: 5.5 ✅
+
+<details>
+<summary>Complete diagram (15 nodes) — pure core, boundary seams, cost</summary>
+
+```mermaid
+flowchart TD
+    subgraph in["Inputs"]
+        PF["Prompt files (.md)"]:::src
+        KEY["GOOGLE_API_KEY"]:::src
+    end
+    subgraph pure["Pure core - tested offline"]
+        LP["load_prompt_file"]:::proc
+        RP["resolve_prompts<br/>fan-out"]:::proc
+        RM["resolve_model<br/>alias to GA id"]:::proc
+        RK["require_api_key"]:::proc
+        GG["gemini_generate /<br/>imagen_generate"]:::proc
+        BM["build_metadata<br/>+ estimate_image_cost"]:::proc
+        SI["save_image"]:::proc
+        RH["read_history"]:::proc
+        FH["format_history<br/>cost summary"]:::proc
+    end
+    subgraph bnd["Boundary - no-cover"]
+        MC["make_client"]:::infra
+        CF["config factories"]:::infra
+    end
+    API["Google GenAI<br/>gemini / imagen"]:::infra
+    OUT["PNG + JSON sidecar"]:::data
+    PF --> LP --> RP --> GG
+    KEY --> RK --> MC --> GG
+    RM --> GG
+    CF --> GG
+    GG --> API --> GG
+    GG --> BM --> SI --> OUT
+    OUT --> RH --> FH
+    FH -. curate .-> PF
+    classDef src fill:#2563eb,stroke:#fff,color:#fff,stroke-width:2px
+    classDef proc fill:#7c3aed,stroke:#fff,color:#fff,stroke-width:2px
+    classDef infra fill:#475569,stroke:#fff,color:#fff,stroke-width:2px
+    classDef data fill:#0f766e,stroke:#fff,color:#fff,stroke-width:2px
+    class in sgBlue
+    class pure sgViolet
+    class bnd sgSlate
+    classDef sgBlue fill:#dbeafe,stroke:#3b82f6,color:#1e293b
+    classDef sgViolet fill:#ede9fe,stroke:#8b5cf6,color:#1e293b
+    classDef sgSlate fill:#f1f5f9,stroke:#64748b,color:#334155
+```
+
+The injected **boundary** (`make_client`, config factories) is the only part that imports
+`google-genai`; everything in the **pure core** is tested offline with fakes. See
+[`CLAUDE.md`](./CLAUDE.md) for the rationale (ADR-003/004/008).
+
+</details>
+
 ## Requirements
 
 | Need | Why |
@@ -24,24 +151,17 @@ export GOOGLE_API_KEY='…'
 
 ## Backends
 
-| Backend | `--model` aliases | Best for |
-|---------|-------------------|----------|
-| `gemini` (default) | `flash`, `pro` | Iteration, prompt **+ reference image** conditioning, 4K |
-| `imagen` | `standard`, `ultra`, `fast` | High-fidelity standalone batches (`--count`), 1K/2K |
+| Backend | `--model` alias → API id | Best for |
+|---------|--------------------------|----------|
+| `gemini` (default) | `pro` → `gemini-3-pro-image` (Nano Banana Pro) | 4K, best text rendering, complex layouts |
+| | `flash` → `gemini-3.1-flash-image` (Nano Banana 2) | Cheap high-volume iteration; supports 0.5K–4K |
+| | `flash-2.5` → `gemini-2.5-flash-image` (Nano Banana) | The original; fast/cheap |
+| `imagen` | `standard`/`ultra`/`fast` → `imagen-4.0-*-generate-001` | Photoreal standalone batches (`--count`); 1K/2K |
 
-A raw model id passed to `--model` is forwarded verbatim.
+A raw model id passed to `--model` is forwarded verbatim. Ids are pinned to GA releases
+(captured 2026-06-01) and do drift — re-verify against
+[Google's model list](https://ai.google.dev/gemini-api/docs/models) when they change.
 
-## Quickstart
-
-```bash
-# 1. Write a prompt file (see reference/prompt_template.md for a starting point)
-# 2. Generate
-uv run .claude/skills/art-gen/scripts/art_gen.py generate --prompt-file prompt.md
-
-# Review the output
-ls art/gen/
-#   art_20260601_120000_0.png   art_20260601_120000_0.json
-```
 
 ## The prompt file (maximise every token)
 
@@ -70,9 +190,9 @@ Copy `reference/prompt_template.md` to start.
 | `--prompt TEXT` | — | Inline prompt (wins over `--prompt-file`) |
 | `--prompt-file FILE` | — | Prompt markdown file; **repeatable** to fan out variants in one run |
 | `--backend {gemini,imagen}` | `gemini` | Generation backend |
-| `--model ALIAS` | backend default | `flash`/`pro` or `standard`/`ultra`/`fast`, or a raw model id |
-| `--aspect RATIO` | `1:1` | One of `1:1 2:3 3:2 3:4 4:3 4:5 5:4 9:16 16:9` |
-| `--size {1K,2K,4K}` | model default | 4K is gemini-only; imagen clamps to 1K/2K |
+| `--model ALIAS` | backend default | `pro`/`flash`/`flash-2.5` (gemini) or `standard`/`ultra`/`fast` (imagen), or a raw model id |
+| `--aspect RATIO` | `1:1` | gemini: `1:1 2:3 3:2 3:4 4:3 4:5 5:4 9:16 16:9 21:9 4:1 8:1 1:4 1:8`; imagen: only the first five |
+| `--size {512,1K,2K,4K}` | model default | `512` is Nano-Banana-2 only; `4K` is gemini-only; imagen clamps to 1K/2K |
 | `--count N` | `1` | Variants per prompt (imagen only) |
 | `--ref IMG` | — | Reference image (repeatable; gemini only) |
 | `--out-dir DIR` | `art/gen` | Output directory |
@@ -113,19 +233,43 @@ Each image is `art_<YYYYMMDD_HHMMSS>_<index>.png` with a matching `.json`:
 ```json
 {
   "prompt": "…the exact text sent…",
-  "model": "gemini-3-pro-image-preview",
+  "model": "gemini-3-pro-image",
   "backend": "gemini",
   "timestamp": "20260601_120000",
   "index": 0,
   "dimensions": "1024x1024",
   "aspect": "1:1",
   "requested_size": null,
+  "estimated_cost_usd": 0.134,
   "prompt_file": "prompt.md"
 }
 ```
 
 Timestamped filenames sort chronologically, and the sidecars preserve the full
 provenance of a sweep.
+
+### Estimated cost
+
+Each sidecar records `estimated_cost_usd` — a budgeting estimate from the model id and the
+**actual** output resolution. Gemini models are resolution-tiered (per output token);
+Imagen is a flat per-image rate. It's `null` for an unrecognised model. `history` rolls
+these up into a running total with a per-model breakdown:
+
+```text
+[0] art_20260601_134322_0.png  ($0.067, gemini-3.1-flash-image, 1:1)
+    A flat-vector compass rose icon, charcoal on white, no text.
+[1] art_20260601_134336_0.png  ($0.134, gemini-3-pro-image, 16:9)
+    A flat-vector mountain range banner, charcoal on white, no text.
+
+── Estimated cost summary ──
+  gemini-3-pro-image         × 1   $0.134
+  gemini-3.1-flash-image     × 1   $0.067
+  Total (2 images): $0.201
+```
+
+Prices are a dated estimate captured 2026-06-01 from
+[Google's pricing page](https://ai.google.dev/gemini-api/docs/pricing) — treat them as a
+planning aid, not a billing record.
 
 ## The iteration loop
 

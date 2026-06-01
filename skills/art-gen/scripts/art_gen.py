@@ -55,9 +55,12 @@ SCRIPT_DIR = SCRIPT.parent.resolve()
 
 API_KEY_ENV = "GOOGLE_API_KEY"
 
+# Marketing name → API model id. Pin GA ids, not "-preview" (see CLAUDE.md ADR-009).
+# Captured 2026-06-01 from ai.google.dev/gemini-api/docs/models — model ids churn; re-verify.
 GEMINI_MODELS = {
-    "flash": "gemini-2.5-flash-image",
-    "pro": "gemini-3-pro-image-preview",
+    "flash": "gemini-3.1-flash-image",  # Nano Banana 2 (GA) — mainstream, supports 0.5K
+    "flash-2.5": "gemini-2.5-flash-image",  # Nano Banana (original, GA)
+    "pro": "gemini-3-pro-image",  # Nano Banana Pro (GA) — 4K, best text rendering
 }
 IMAGEN_MODELS = {
     "standard": "imagen-4.0-generate-001",
@@ -67,8 +70,37 @@ IMAGEN_MODELS = {
 DEFAULT_GEMINI_ALIAS = "pro"
 DEFAULT_IMAGEN_ALIAS = "standard"
 
-ASPECT_RATIOS = ["1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9"]
-IMAGE_SIZES = ["1K", "2K", "4K"]  # 4K is gemini-only; imagen tops out at 2K.
+# Gemini image models accept wide/panoramic ratios; Imagen accepts only the first five.
+ASPECT_RATIOS = [
+    "1:1",
+    "2:3",
+    "3:2",
+    "3:4",
+    "4:3",
+    "4:5",
+    "5:4",
+    "9:16",
+    "16:9",
+    "21:9",
+    "4:1",
+    "8:1",
+    "1:4",
+    "1:8",
+]
+IMAGE_SIZES = ["512", "1K", "2K", "4K"]  # 512 = Nano-Banana-2 only; 4K = gemini-only; imagen ≤ 2K.
+
+# Estimated USD per generated image, by API model id. Gemini models are resolution-tiered
+# (billed per output token → a {tier: price} map); Imagen models are a flat per-image rate.
+# These are ESTIMATES for budgeting only — captured 2026-06-01 from
+# ai.google.dev/gemini-api/docs/pricing. Re-verify whenever the model catalogue above changes.
+IMAGE_PRICING_USD: dict[str, dict[str, float] | float] = {
+    "gemini-3-pro-image": {"0.5K": 0.134, "1K": 0.134, "2K": 0.134, "4K": 0.24},
+    "gemini-3.1-flash-image": {"0.5K": 0.045, "1K": 0.067, "2K": 0.101, "4K": 0.151},
+    "gemini-2.5-flash-image": {"0.5K": 0.039, "1K": 0.039, "2K": 0.039, "4K": 0.039},
+    "imagen-4.0-ultra-generate-001": 0.06,
+    "imagen-4.0-generate-001": 0.04,
+    "imagen-4.0-fast-generate-001": 0.02,
+}
 
 DEFAULT_OUTPUT_DIR = Path("art/gen")
 
@@ -128,6 +160,37 @@ def timestamp_now() -> str:
     return datetime.now().strftime("%Y%m%d_%H%M%S")
 
 
+def resolution_tier(dimensions: str) -> str:
+    """Map an actual ``"WxH"`` pixel size to a pricing tier (``0.5K``/``1K``/``2K``/``4K``)."""
+    try:
+        w, h = (int(part) for part in dimensions.lower().split("x"))
+    except ValueError:
+        return "1K"
+    longest = max(w, h)
+    if longest <= 512:
+        return "0.5K"
+    if longest <= 1024:
+        return "1K"
+    if longest <= 2048:
+        return "2K"
+    return "4K"
+
+
+def estimate_image_cost(model: str, dimensions: str) -> float | None:
+    """Estimated USD for one generated image, or ``None`` if the model isn't priced.
+
+    Gemini ids resolve through a per-resolution table; Imagen ids are a flat per-image rate.
+    The estimate is for budgeting only — see ``IMAGE_PRICING_USD`` for provenance.
+    """
+    price = IMAGE_PRICING_USD.get(model)
+    if price is None:
+        return None
+    if isinstance(price, dict):
+        tier_price = price.get(resolution_tier(dimensions))
+        return None if tier_price is None else round(tier_price, 4)
+    return round(price, 4)
+
+
 def build_metadata(
     *,
     prompt: str,
@@ -151,6 +214,7 @@ def build_metadata(
         "dimensions": dimensions,
         "aspect": aspect,
         "requested_size": requested_size,
+        "estimated_cost_usd": estimate_image_cost(model, dimensions),
     }
     if prompt_file is not None:
         meta["prompt_file"] = str(prompt_file)
@@ -223,17 +287,39 @@ def read_history(out_dir: Path) -> list[dict[str, Any]]:
 
 
 def format_history(items: Sequence[Mapping[str, Any]]) -> str:
-    """Render history entries as a human/agent-readable curation digest."""
+    """Render history entries as a curation digest with per-image and aggregated costs.
+
+    Each line shows the estimated cost (``$?`` when a model isn't priced); a footer breaks
+    the running total down per model and reports how many images lacked an estimate.
+    """
     if not items:
         return "No prior generations found."
     blocks: list[str] = []
+    counts: dict[str, int] = {}
+    totals: dict[str, float] = {}
+    grand_total = 0.0
+    unpriced = 0
     for i, it in enumerate(items):
+        model = str(it.get("model", "?"))
+        counts[model] = counts.get(model, 0) + 1
+        cost = it.get("estimated_cost_usd")
+        if isinstance(cost, (int, float)) and not isinstance(cost, bool):
+            grand_total += float(cost)
+            totals[model] = totals.get(model, 0.0) + float(cost)
+            cost_str = f"${float(cost):.3f}"
+        else:
+            unpriced += 1
+            cost_str = "$?"
         prompt = str(it.get("prompt", "")).replace("\n", " ")
         preview = prompt if len(prompt) <= 280 else prompt[:277] + "..."
-        blocks.append(
-            f"[{i}] {it.get('_image', '?')}  ({it.get('model', '?')}, {it.get('aspect', '?')})\n    {preview}"
-        )
-    return "\n".join(blocks)
+        blocks.append(f"[{i}] {it.get('_image', '?')}  ({cost_str}, {model}, {it.get('aspect', '?')})\n    {preview}")
+
+    lines = [*blocks, "", "── Estimated cost summary ──"]
+    for model in sorted(counts):
+        lines.append(f"  {model:<26} × {counts[model]:<3} ${totals.get(model, 0.0):.3f}")
+    note = f"   ({unpriced} without a price estimate)" if unpriced else ""
+    lines.append(f"  Total ({len(items)} images): ${grand_total:.3f}{note}")
+    return "\n".join(lines)
 
 
 # ── Backend boundary (import-guarded; covered by the GOOGLE_API_KEY integration test) ──
@@ -396,7 +482,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     gen.add_argument("--model", default=None, help="Model alias (flash/pro, standard/ultra/fast) or raw model id")
     gen.add_argument("--aspect", default="1:1", choices=ASPECT_RATIOS, help="Aspect ratio (default: 1:1)")
-    gen.add_argument("--size", default=None, choices=IMAGE_SIZES, help="Resolution (1K/2K/4K; 4K is gemini-only)")
+    gen.add_argument(
+        "--size",
+        default=None,
+        choices=IMAGE_SIZES,
+        help="Resolution (512/1K/2K/4K; 512 is Nano-Banana-2 only, 4K is gemini-only, imagen ≤ 2K)",
+    )
     gen.add_argument("--count", type=int, default=1, help="Variants per prompt (imagen only; default: 1)")
     gen.add_argument("--ref", action="append", default=[], type=Path, help="Reference image (repeatable; gemini only)")
     gen.add_argument(

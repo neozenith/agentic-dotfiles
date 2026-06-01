@@ -67,7 +67,12 @@ CACHE_DB_PATH = CACHE_DIR / "introspect_sessions.db"
 # Logging setup
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = "17"
+# v18 (Summariser G2): session_summaries table mirrored from the backend
+#   schema so both ingesters share one cache file. The summarisation *logic*
+#   parity (producing identical summary rows) is G11; this is the DDL mirror.
+# v19 (Summariser G3): rollup_summaries table mirrored from the backend schema
+#   (same DDL-mirror rationale as v18).
+SCHEMA_VERSION = "19"
 
 # Sentinel key in cache_metadata used to gate the one-shot (session_id, uuid)
 # dedupe migration. Mirrors DEDUPE_SESSION_UUID_MIGRATION_KEY in
@@ -1137,6 +1142,43 @@ CREATE TABLE IF NOT EXISTS community_labels (
     generated_at TEXT NOT NULL,
     PRIMARY KEY (resolution, community_id)
 );
+
+-- Summariser layer (schema v18) — mirrored from the backend schema so both
+-- ingesters coexist on one cache file. One row per (session, model).
+CREATE TABLE IF NOT EXISTS session_summaries (
+    project_id TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    model TEXT NOT NULL,
+    content_hash TEXT NOT NULL,
+    task_summary TEXT NOT NULL,
+    patterns TEXT NOT NULL,
+    decisions_values TEXT NOT NULL,
+    generated_at TEXT NOT NULL,
+    human_event_count INTEGER NOT NULL,
+    PRIMARY KEY (project_id, session_id, model)
+);
+CREATE INDEX IF NOT EXISTS idx_session_summaries_model
+    ON session_summaries(model);
+
+-- Roll-up layer (schema v19) — mirrored from the backend schema. One row per
+-- merged scope×grain×bucket per (strategy, model).
+CREATE TABLE IF NOT EXISTS rollup_summaries (
+    strategy TEXT NOT NULL,
+    model TEXT NOT NULL,
+    scope_path TEXT NOT NULL,
+    scope_depth INTEGER NOT NULL,
+    time_granularity TEXT NOT NULL,
+    time_bucket TEXT NOT NULL,
+    task_summary TEXT NOT NULL,
+    patterns TEXT NOT NULL,
+    decisions_values TEXT NOT NULL,
+    child_count INTEGER NOT NULL,
+    source_hash TEXT NOT NULL,
+    generated_at TEXT NOT NULL,
+    PRIMARY KEY (strategy, model, scope_path, time_granularity, time_bucket)
+);
+CREATE INDEX IF NOT EXISTS idx_rollup_summaries_scope
+    ON rollup_summaries(strategy, model, scope_path);
 """
 
 
