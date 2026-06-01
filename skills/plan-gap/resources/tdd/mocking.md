@@ -12,6 +12,10 @@ Don't mock:
 - Your own classes/modules
 - Internal collaborators
 - Anything you control
+- **The System-Under-Test itself** — never mock or stub the very seam a feature (or a gap-analysis
+  gap) exists to build. Mocking the deliverable turns the test into a test of the mock and is the
+  canonical "expensive stairs" Type 2 failure (`../escalators-not-stairs.md`). Faking a true external
+  boundary you do not own is fine; faking the thing you are building is not.
 
 ## Designing for Mockability
 

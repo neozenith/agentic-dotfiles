@@ -9,28 +9,41 @@ user-invocable: true
 
 You are now in **planning mode**. Your sole purpose is to iteratively refine a gap analysis document at the target provided as an argument. The target may be a local markdown file or a GitHub issue.
 
+## First principle — escalators, not expensive stairs
+
+Read `resources/escalators-not-stairs.md` now; it governs **every phase**, not just final validation. A
+gap analysis exists to make **real, demonstrable work** happen — so every gap and every ticket must
+have an **evidenceable real outcome**: a committed artifact produced by running the real code path on
+real input. Bake this into the gaps you draft (Phase 1), the Success Measures
+(Phase 1g), the tickets you decompose (Phase 4), and the validation gates (Phases 3–4e).
+
 ## Target Document
 
-The argument is a **file path**, a **directory path**, or a **GitHub issue reference**.
+A spec is a **folder** (`<plan>/`) whose `README.md` is the index — the GitHub-repo convention where
+`README.md` is the default page. The sibling files strip the stem: `G<n>.md`, `G<n>-T<x.y>.md`,
+`DISCOVERY.md` (+ optional `STYLE.md`). The argument is a **directory path**, an **`.md` index path**,
+or a **GitHub issue reference**.
 
 ### Resolving the target
 
-1. **Argument ends with `.md`** — treat it as the **index** file path; its stem (minus `.md`) is the
-   `<plan>` stem the rest of the file set shares.
-   - If the file exists, read it and the sibling `<plan>-G*.md` / `<plan>-*-T*.md` / `<plan>-DISCOVERY.md`
-     files, and continue refining from the set's current state.
-   - If the file does not exist, create it with the index skeleton from `resources/spec-body.md` and a
-     companion `<plan>-DISCOVERY.md` from the discovery template. Gap and ticket files are added later
-     (gap stubs in Phase 1e, ticket files in Phase 4).
+1. **Argument is a directory** — the directory *is* the plan folder (`<plan>/`); its name is the
+   `<plan>` stem.
+   - If it contains a `README.md`, read it and every sibling `G*.md` / `*-T*.md` / `DISCOVERY.md`, and
+     continue refining from the set's current state.
+   - If it has no `README.md`, treat it as a new plan: ask the user to describe the initiative in one
+     sentence (the folder name is the slug — confirm or refine it with the user using `kebab-case`),
+     then create `README.md` from the index skeleton in `resources/spec-body.md` and `DISCOVERY.md` from
+     the discovery template inside it. Gap and ticket files are added later (gap stubs in Phase 1e,
+     ticket files in Phase 4). Create the directory if it does not exist.
+   - **Convenience:** if the directory is a plans *container* (it already holds other plan folders, e.g.
+     `docs/plans/`), do not author into it directly — ask the user for the initiative, derive a
+     `kebab-case` slug, confirm it, and create the new plan folder as `<container>/<slug>/`.
 
-2. **Argument is a directory** (no `.md` extension, or ends with `/`) — create a new
-   markdown file inside that directory.
-   - Ask the user to describe the initiative in one sentence.
-   - Derive a filename from that description using `kebab-case`: strip filler words,
-     lowercase, join with hyphens, append `.md`.
-     Example: "Migrate auth service to OAuth2" → `migrate-auth-to-oauth2.md`
-   - Confirm the proposed filename with the user before creating it.
-   - If the directory does not exist, create it.
+2. **Argument ends with `.md`** — treat it as the **index** path. Its parent directory is the plan
+   folder; the stem is the folder name. Read it and the siblings (`G*.md` / `*-T*.md` / `DISCOVERY.md`)
+   if present, else create the `README.md` + `DISCOVERY.md` skeletons in that folder.
+   (A bare `<plan>/README.md` is the canonical index path; a legacy flat `<plan>.md` is read-compatible
+   — see "Legacy flat sets" below.)
 
 3. **Argument matches `owner/repo#N`** or is a **GitHub issue URL**
    (`https://github.com/owner/repo/issues/N`) — treat it as an existing GitHub issue.
@@ -67,20 +80,25 @@ When the target is a GitHub issue, these rules apply throughout all phases:
 
 ## Document Structure
 
-A gap analysis spec is a **tiered file set** sharing a kebab-case stem (`<plan>`), not a single
-document. Read `resources/spec-body.md` (relative to this skill's directory) for the full structure —
-the tiers, their sections, and the per-tier templates — and `resources/style.md` for the voice and
-format rules (front-loading, no bold-pseudo-headings, container-by-shape, gap-scoped ADRs, context
-economy) that govern every chunk. **Read both before authoring or editing any spec file.**
+A gap analysis spec is a **folder** (`<plan>/`) of tiered files, not a single document. Read
+`resources/spec-body.md` (relative to this skill's directory) for the full structure — the tiers, their
+sections, and the per-tier templates — and `resources/style.md` for the voice and format rules
+(front-loading, no bold-pseudo-headings, container-by-shape, gap-scoped ADRs, context economy) that
+govern every chunk. **Read both before authoring or editing any spec file.**
 
-**Quick reference — the four tiers:**
+**Quick reference — the four tiers (all inside `<plan>/`):**
 
 | File | Tier | Holds | Loaded |
 |------|------|-------|--------|
-| `<plan>.md` | index | Execution Plan, Overview, Gap Analysis (Gap Map + Dependencies + Gaps table), Decisions (ADRs) roll-up, Success/Negative Measures | loop entry |
-| `<plan>-G<n>.md` | gap | Context, Outputs, optional Key logic, gap-scoped ADRs, Tickets table | per-gap work |
-| `<plan>-G<n>-T<x.y>.md` | ticket | Done checkbox, contract sentence, Test/Implements/Depends-on table | per-ticket work |
-| `<plan>-DISCOVERY.md` | discovery | Current State + Desired State (each with a Mermaid diagram) | human review only |
+| `README.md` | index | Execution Plan, Overview, Gap Analysis (Gap Map + Dependencies + Gaps table), Decisions (ADRs) roll-up, Success/Negative Measures | loop entry |
+| `G<n>.md` | gap | Context, Outputs, optional Key logic, gap-scoped ADRs, Tickets table | per-gap work |
+| `G<n>-T<x.y>.md` | ticket | Done checkbox, contract sentence, Test/Implements/Depends-on table | per-ticket work |
+| `DISCOVERY.md` | discovery | Current + Desired State (multi-lens diagrams) + per-gap increment stack | human review only |
+
+> **Legacy flat sets.** Older specs use a flat sibling layout sharing a stem
+> (`<plan>.md`, `<plan>-G1.md`, `<plan>-G1-T1.1.md`, `<plan>-DISCOVERY.md`). These remain
+> read-compatible — resolve the stem from the index filename and read its `<plan>-*` siblings — but
+> author **new** specs in the `<plan>/` folder form above.
 
 The driving principle is **context economy**: the index + the one gap + the one ticket an agent is on
 are its `/loop` working-set, so Current/Desired State and SOTA background move out to the Discovery
@@ -91,390 +109,96 @@ the parent issue and each gap to a sub-issue — see `resources/gh-issues.md`.
 
 ## Workflow
 
+Four phases, each with a detailed playbook in `resources/` — read the playbook before running that
+phase. The summaries below are the one-line shape of each step; the mechanics live in the playbooks.
+
 ### Phase 1: Bootstrap
 
-#### Step 1a: Target setup
+Stand up the file set and fill it from research. **Read `resources/phase1-bootstrap.md` for the full
+step-by-step playbook**; the steps are:
 
-**Local markdown file (the index):**
-1. If the index does not exist, create it with the index skeleton from `resources/spec-body.md`
-   (placeholder title) and a companion `<plan>-DISCOVERY.md` from the discovery template.
-2. If the index exists, read it and every sibling `<plan>-G*.md` / `<plan>-*-T*.md` /
-   `<plan>-DISCOVERY.md`, and assess completeness across the set.
+- **1a — Target setup.** Create the index + Discovery skeleton, or read an existing set and assess
+  completeness (local file or GitHub issue).
+- **1b — Dual deep research.** Two parallel subagents: Track A (codebase → Current State), Track B
+  (web/SOTA → Desired State), with every external URL recorded for verification.
+- **1c — Link verification.** Verify every external URL at the highest available tier
+  (`playwright-cli` → `WebFetch` → mark unverified). Hallucination is a critical failure: every claim
+  traces to a `file:line` or a verified URL.
+- **1d — Research synthesis.** Populate Current/Desired State as **2–3 lens diagrams each** (menu in
+  `resources/mermaidjs_diagrams.md`), seed the per-gap increment stack in `DISCOVERY.md`, draft the
+  `G<N>` gaps + stubs, the Overview, the index Gap Map + Dependencies diagrams, and any
+  `<!-- UNRESOLVED -->` ADR placeholders.
+- **1e — Per-gap deep research.** One fresh-context subagent per gap to enrich `## Outputs`
+  (including the gap's proof-of-execution artifact) and `## Key logic`.
+- **1f — Quality & failure-mode research.** Two subagents: the project's CI gates (→ Success Measures)
+  and its known gotchas/anti-patterns (→ Negative Measures).
+- **1g — Final assembly.** Populate Success/Negative Measures. Every domain-specific Success Measure is
+  an **executable-evidence escalator** — satisfied only by the gap's committed proof-of-execution
+  Output, never by "a test exists" or "it ran". Ensure each gap's `## Outputs` names that artifact.
 
-**GitHub issue:**
-1. If creating a new issue (`owner/repo`), create it with the skeleton from
-   `resources/spec-body.md` as the body via `gh issue create`.
-2. If resuming an existing issue (`owner/repo#N`), read it via
-   `gh issue view N --repo owner/repo --json number,title,body,state,labels,comments`
-   and assess completeness of each section in the body.
-3. In both cases, cache the issue body locally — see `resources/gh-issues.md` for the
-   local cache pattern.
+### Phase 2: Iterative refinement loop
 
-#### Step 1b: Dual deep research
+Settle the open design decisions by asking the human **one maximally-leveraged question at a time**.
+**Read `resources/phase2-refinement.md` for the full step-by-step playbook**; the cycle is:
 
-After reading the user's initial brief, launch **two parallel research tracks** using
-Agent subagents. These run concurrently to maximize throughput.
-
-**Track A — Internal research (codebase exploration)**
-
-Launch an `Explore` subagent (or `feature-dev:code-explorer`) to deeply analyze the
-areas of the codebase specified in the user's brief. The agent should:
-
-- Trace execution paths, map architecture layers, identify patterns and abstractions
-- Document dependencies, data flows, and integration points
-- Build a thorough picture of the current implementation state
-- Note technical debt, limitations, and constraints in the existing code
-- Report concrete file paths, function names, and line numbers — not summaries
-
-This research directly feeds the **Current State** section of `<plan>-DISCOVERY.md`.
-
-**Track B — External research (SOTA and prior art)**
-
-Launch a `general-purpose` subagent to research the external landscape. The agent should:
-
-- Search the web for state-of-the-art approaches relevant to the initiative
-- Find documentation, blog posts, and tutorials for technologies being considered
-- Identify open-source projects solving similar problems — note their approach,
-  maturity, license, and community activity
-- Look for research papers or conference talks on the topic
-- Identify what has become a "solved problem" since the current implementation was
-  built — easy wins the desired state could leverage
-- Collect all URLs discovered during research for verification in Step 1c
-
-The agent MUST record every URL it references along with a one-line summary of what
-content it expects to find there. This list is the input for link verification.
-
-This research directly feeds the **Desired State** section of `<plan>-DISCOVERY.md` and the **Gap
-Analysis** in the index.
-
-#### Step 1c: Link verification
-
-After Track B completes, verify **every external URL** cited in the research.
-Read `resources/playwright-cli.md` (relative to this skill's directory) for the full
-detection logic, command reference, and marker definitions.
-
-**Step 1: Detect available verification tooling**
-
-```bash
-which playwright-cli && playwright-cli --version
-```
-
-Select the highest-available tier for the entire verification batch:
-
-| Priority | Tool | Capability |
-|----------|------|------------|
-| Tier 1 | `playwright-cli` (the `/playwright-cli` skill, NOT Playwright MCP) | Full browser — JS rendering, screenshots, interaction |
-| Tier 2 | `WebFetch` tool | HTTP fetch — static content, no JS rendering |
-| Tier 3 | *(none)* | Mark all external links `<!-- LINK_NOT_VERIFIED -->` |
-
-**Step 2: Verify each URL using the selected tier**
-
-For each URL, classify the outcome:
-
-| Outcome | Action |
-|---------|--------|
-| Page loads, content matches assertion | Keep citation as-is |
-| Dead link / 404 / 5xx | Remove citation, note it was unverifiable |
-| Paywall / login wall | Keep citation, mark `<!-- PAYWALLED -->` |
-| Content mismatch (page exists, wrong content) | Remove or correct the citation |
-| JS-required page with Tier 2 only | Mark `<!-- UNVERIFIED: requires browser rendering -->` |
-
-**Step 3: Add document-level warning if any links are unverified**
-
-If operating at Tier 2 or Tier 3, or if any individual URL could not be confirmed,
-add a warning comment at the top of the document:
-
-```markdown
-<!-- WARNING: N external link(s) could not be independently verified. Search for LINK_NOT_VERIFIED to review. -->
-```
-
-**Hallucination is a critical failure.** Every factual claim in the research must be
-traceable to either:
-- A specific location in the codebase (file:line), OR
-- A verified external URL
-
-Any finding that cannot be corroborated by one of these must be removed or flagged
-with the appropriate marker (see `resources/playwright-cli.md`) for the user to confirm.
-
-#### Step 1d: Research synthesis
-
-Combine the verified findings from both tracks across the file set:
-
-1. Populate **Current State** in `<plan>-DISCOVERY.md` from Track A findings (with codebase citations)
-2. Populate **Desired State** in `<plan>-DISCOVERY.md` from Track B findings (with verified URLs)
-3. Draft the initial **Gap Analysis** in the index from the delta between the two — identify the
-   top-level `G<N>` gaps with titles, and create a stub `<plan>-G<n>.md` for each (nav header + lead +
-   `## Context`)
-4. Populate the index **Overview** with the linked gap bullet list, the Dependencies diagram, and the
-   one-line **Background** blockquote pointing to `<plan>-DISCOVERY.md`
-5. Add Mermaid diagrams: Current State + Desired State in the Discovery file, Gap Map + Dependencies in
-   the index (minimum one each)
-6. In each gap file, seed any obvious `<!-- UNRESOLVED -->` ADR placeholders (with the Pros/Cons table
-   form from `resources/spec-body.md`) for design decisions that surfaced but lack clear answers
-
-#### Step 1e: Per-gap deep research
-
-Once the top-level gaps are identified, launch **N parallel subagents** (one per gap)
-for a focused second pass. Each subagent receives a fresh context containing only:
-
-- The gap title, the Current and Gap fields as drafted in Step 1d
-- The specific area of the codebase or external landscape to investigate
-
-Each per-gap subagent should:
-
-- Perform deeper codebase exploration (`Explore` or `feature-dev:code-explorer`)
-  targeting the specific files, functions, and data flows relevant to that single gap
-- Identify concrete **Output(s)** — exact file paths to create or modify, with
-  languages, line numbers, and function signatures
-- Draft **References** — code snippets, SQL patterns, algorithm pseudocode, or
-  configuration templates that capture the intended implementation approach
-- Surface any design decisions that need resolution as candidate ADR entries
-
-The per-gap agents run in parallel. Their findings are incorporated into the respective
-`<plan>-G<n>.md` files — enriching the `## Outputs` table and the optional `## Key logic` snippet
-(the gap-file analogues of Output(s) and References) beyond what the broad Phase 1b research could
-provide.
-
-#### Step 1f: Quality and failure mode research
-
-Launch **two parallel subagents** to research the project's quality standards and
-potential failure modes. These run concurrently with each other (and may overlap
-with Step 1e if context allows).
-
-**Subagent A — Quality standards (feeds Success Measures)**
-
-Launch an `Explore` subagent to scan the project for codified quality standards.
-Search locations in priority order:
-
-1. Agentic configuration — `CLAUDE.md`, `AGENTS.md`, `.claude/rules/`, agentic
-   memory files (`~/.claude/projects/*/memory/`)
-2. CI/CD pipelines — GitHub Actions workflows (`.github/workflows/`), Makefiles,
-   build scripts
-3. Project tooling — `Makefile`, `package.json`, `pyproject.toml`, `biome.json`, `.eslintrc`, `tsconfig.json`,
-   coverage configs, linter configs
-4. README and contributing docs — `README.md`, `CONTRIBUTING.md`, `docs/`
-
-The agent should return a concrete table of CI gates (command, threshold, enforcement
-status) and a list of coding conventions that apply to the gap analysis deliverables.
-
-**Subagent B — Failure modes (feeds Negative Measures)**
-
-Launch an `Explore` subagent to proactively discover potential "gotchas" and failure
-modes. Search locations:
-
-1. Agentic memory — `~/.claude/projects/*/memory/` files, especially feedback-type
-   memories recording past corrections and anti-patterns
-2. Agentic rules — `.claude/rules/` directories for explicit prohibitions and
-   conventions
-3. Lessons learned — project memory entries, `CLAUDE.md` sections on known pitfalls
-4. Test patterns — existing test suites for patterns the project enforces (e.g., no
-   mocking, real database connections, specific assertion patterns)
-
-The agent should return a list of project-specific failure modes that could apply to
-the gap analysis deliverables — scenarios where code appears correct but violates a
-project convention or repeats a known historical mistake.
-
-#### Step 1g: Final assembly
-
-Incorporate findings from Steps 1e and 1f:
-
-1. Update each `<plan>-G<n>.md` with an enriched `## Outputs` table, an optional `## Key logic`
-   snippet, and any `<!-- UNRESOLVED -->` ADR placeholders
-2. Populate the index **Success Measures** with the Project Quality Bar (from Subagent A) and draft
-   domain-specific measures (one per gap minimum, each linking its gap file)
-3. Populate the index **Negative Measures** with Quality Bar Violations (from Subagent B) and draft
-   domain-specific failures
-4. Update the index Overview gap list and the Gaps table if any gaps were added, merged, or reordered
-5. Summarize what is present and what remains ambiguous — transition to Phase 2
-
-### Phase 2: Iterative Refinement Loop
-
-Repeat the following cycle until the document is complete and unambiguous:
-
-1. **Scan unresolved ADRs** — Collect all `<!-- UNRESOLVED -->` ADR entries across every
-   `<plan>-G<n>.md` file. Each represents a concrete design decision that needs human input. Also
-   identify any non-ADR ambiguities (missing details, implicit assumptions, unclear requirements) and
-   create ADR placeholders for them in the relevant gap file.
-
-2. **Rank by cross-gap impact** — From all unresolved ADRs, determine the single
-   question whose answer would resolve the most ADRs simultaneously. Prefer questions
-   that span multiple gaps — a single answer that resolves ADRs in G2, G5, and G6
-   is better than three separate questions. This is the key mechanism for reducing
-   total questions asked of the human.
-
-3. **Ask one question** — Present the question to the user clearly. Explain:
-   - Why this question matters
-   - Which `G<N>` gaps and ADRs it affects (list them)
-   - What other ambiguities would be resolved by the answer (cascade effect)
-   - Also provide your own list of plausible researched recommendations (and reasoning) 
-     for the user to allow easy confirmation for sensible suggestions.
-
-4. **Incorporate the answer** — Update the file set with the new information:
-   - Resolve the affected ADRs in their gap files: rewrite each from the `<!-- UNRESOLVED -->`
-     Pros/Cons placeholder into the settled bulleted form (`ADR<n>.<m>:` heading + **Decision** /
-     **Why** / optional **Rejected** / **Superseded**) per `resources/style.md` rule 8, and remove
-     the marker
-   - Add or update the corresponding row in the index **Decisions (ADRs)** roll-up table
-   - Propagate cascading effects to the `## Outputs` / `## Key logic` of the gap files and to the
-     index Success/Negative Measures in all affected gaps
-   - Update the index Overview gap list and Gaps table if gaps were added, merged, or reordered
-
-5. **Re-evaluate** — After updating, reassess remaining unresolved ADRs. If no
-   `<!-- UNRESOLVED -->` markers remain and the document is internally consistent,
-   exit the loop. Otherwise, return to step 1.
+- **2a — Scan unresolved ADRs.** Collect every `<!-- UNRESOLVED -->` entry across all `G<n>.md` files,
+  and create placeholders for any non-ADR ambiguity (missing details, implicit assumptions).
+- **2b — Rank by cross-gap impact.** Pick the single question whose answer resolves the most ADRs
+  across the most gaps — the key lever for reducing total questions asked.
+- **2c — Ask one question.** Explain why now, which gaps/ADRs it affects, the cascade, and your
+  researched recommendations so the user can confirm a default in one word.
+- **2d — Incorporate the answer.** Settle the affected ADRs into bulleted form, update the index
+  Decisions roll-up, cascade into Outputs/Key logic/Measures and the affected `DISCOVERY.md` diagrams,
+  and restructure the Overview/Gap Map/Dependencies if gaps changed.
+- **2e — Re-evaluate.** Fold any new sub-questions into the next ranking; exit when no
+  `<!-- UNRESOLVED -->` markers remain and the set is internally consistent.
 
 ### Phase 3: Validation
 
-After the refinement loop converges:
+Gate the converged spec before decomposition. **Read `resources/phase3-validation.md` for the full
+step-by-step playbook**; the three checks are:
 
-1. **Diagram validation** — `<plan>-DISCOVERY.md` MUST contain a Current State diagram and a Desired
-   State diagram; the index MUST contain the Gap Map (`flowchart TD`) and Dependencies (`flowchart LR`)
-   diagrams. If any is missing, that is a validation failure — add it before proceeding. Read
-   `resources/mermaidjs_diagrams.md` (relative to this skill's directory) for rendering commands,
-   complexity thresholds, and common pitfalls, and follow the palette/gate rules in
-   `resources/style.md` (Diagrams). Render every file that carries a diagram with mmdc (both dark and
-   light variants) and verify exit code 0. Diagrams must stay within medium-density thresholds
-   (<=20 nodes, VCS <=40) unless a detailed subsystem view justifies high-density (the Gap Map is the
-   common exception — caption it as detail-density).
-
-2. **Requirement integrity** — Read `resources/escalators-not-stairs.md` (relative to
-   this skill's directory) and apply its principles to audit the full document. Specifically:
-   - Every **Success Measure** must be a mandatory, testable requirement — not a
-     "nice to have," not a vague aspiration, not something that degrades gracefully.
-   - Every **Negative Measure** must describe a concrete Type 2 failure — a scenario
-     where the system gives a false signal of success while silently failing to
-     deliver the intended value.
-   - No requirement from the Gap Analysis should be silently downgraded in the
-     Success Measures section.
-
-3. **Cross-consistency** — Verify that:
-   - Every gap has at least one corresponding Success Measure
-   - Success Measures are falsifiable (can be objectively tested)
-   - Negative Measures are the complement of Success Measures (what "looks done but isn't")
-   - The Current State and Desired State diagrams in the Discovery file are visually distinguishable
-   - Every cross-link resolves: each gap file's Depends-on/Blocks/Prev/Next, each ticket's Gap/Depends-on,
-     and every index → gap → ticket link points at a file that exists (rule 13)
-   - Every settled ADR appears both in its gap file and as a row in the index Decisions roll-up
+- **3a — Diagram validation.** `DISCOVERY.md` MUST hold ≥2 Current and ≥2 Desired lens diagrams plus one
+  increment diagram per gap; the index MUST hold the Gap Map (`flowchart TD`) and Dependencies
+  (`flowchart LR`). Render every diagram-bearing file with mmdc (dark + light, exit 0) and pass the
+  contrast + complexity gates (`resources/mermaidjs_diagrams.md`, `resources/style.md` → Diagrams).
+- **3b — Requirement integrity.** Apply `resources/escalators-not-stairs.md` across every gap and ticket:
+  every Success Measure is mandatory and falsifiable, every gap names a real proof-of-execution Output,
+  every Negative Measure is a concrete Type 2 failure, and no requirement is silently downgraded.
+- **3c — Cross-consistency.** Every gap has a Success Measure; Negative Measures complement them; every
+  cross-link resolves (gap nav, ticket nav, `DISCOVERY.md#g<n>-increment` back-links, index→gap→ticket);
+  every settled ADR appears in both its gap file and the index roll-up.
 
 ### Phase 4: TDD Ticket Decomposition
 
-After Phase 3 validation passes, decompose each `G<N>` into TDD vertical-slice tickets — **one ticket
-file per slice** (`<plan>-G<n>-T<x.y>.md`) plus the gap file's `## Tickets` table — and write the
-index Execution Plan that drives the spec to completion via `/loop`. The bundled TDD reference lives
-in `resources/tdd/`; the ticket-file template and anti-pattern list are in `resources/spec-body.md`.
+Decompose each `G<N>` into TDD vertical-slice tickets and write the index Execution Plan that drives
+the spec to completion via `/loop`. **Read `resources/phase4-decomposition.md` for the full
+step-by-step playbook** (and `resources/tdd/tdd.md` once before starting); the steps are:
 
-Read `resources/tdd/tdd.md` once before starting Phase 4. Pay particular
-attention to the **horizontal-slice anti-pattern** — every ticket MUST be a single
-vertical slice (one test → one minimum implementation), never "all tests first then
-all implementation."
+- **4a — Per-gap behavior enumeration.** One subagent per gap enumerates user-observable behaviors,
+  rejecting the anti-patterns in `resources/tdd/` and `resources/escalators-not-stairs.md` — including
+  any behavior that mocks/stubs the gap's own deliverable, re-implements production logic in a parallel
+  path, or could pass without ever running the real deliverable on real input.
+- **4b — Ticket structuring.** One ticket file per behavior (template in `resources/spec-body.md`).
+  The first ticket per gap (`T<n>.1`) is the **tracer bullet** — the smallest slice that threads the
+  gap's highest-risk, load-bearing path end-to-end through the **real** production interface and
+  produces the gap's first proof-of-execution Output. It is never the cheapest peripheral leaf.
+- **4c — Dependency ordering.** Cross-link tickets; the DAG must be acyclic and topologically
+  sortable; leaves are the tracer-bullet candidates.
+- **4d — Execution Plan.** Write the index Loop Runner Prompt (substitute `<SPEC_PATH>`), Progress
+  table, and Done Criteria (verbatim from `resources/spec-body.md`).
+- **4e — Validation of the decomposition.** Verify every gap has a tracer that produces its
+  proof-of-execution Output, no ticket mocks the deliverable or re-implements production logic, the DAG
+  is sound, and the Progress/links are consistent.
 
-#### Step 4a: Per-gap behavior enumeration
-
-For each `G<N>`, launch a focused subagent (parallel across gaps when N > 1). Each
-subagent receives a fresh context containing only:
-
-- The gap file's lead, `## Context`, `## Outputs`, optional `## Key logic`, and settled `ADR<n>.<m>`
-  sections (`<plan>-G<n>.md`)
-- Read access to `resources/tdd/` (tdd.md, tests.md, mocking.md,
-  interface-design.md, deep-modules.md, refactoring.md) and `resources/style.md`
-
-The subagent enumerates the user-observable behaviors the gap's Outputs must support. Each behavior:
-
-- Is phrased declaratively as `<actor> <observable outcome>` (rule 7) — precondition detail belongs
-  in the ticket's lead/contract sentence, not the title
-- Is verifiable through a public interface — see `resources/tdd/interface-design.md`
-- Is the smallest unit that delivers a falsifiable signal — one assertion per behavior
-- Survives an internal refactor — see `resources/tdd/tests.md` for the
-  good-vs-bad-test contrast
-
-The subagent rejects any candidate behavior matching the anti-patterns in
-`resources/tdd/tdd.md` and `resources/tdd/tests.md`:
-
-- "Tests the shape of things" rather than user-facing behavior
-- Asserts on call counts, call order, or private methods
-- Verifies via direct DB inspection, log scraping, or filesystem reads instead of
-  the public interface
-- Mocks an internal collaborator the project owns (only system boundaries per
-  `resources/tdd/mocking.md`)
-
-#### Step 4b: Ticket structuring
-
-For each behavior, write one **ticket file** `<plan>-G<n>-T<x.y>.md` using the ticket template in
-`resources/spec-body.md`. Numbering: `<n>` matches the parent gap, `<x.y>` is `<n>.<m>` with `<m>`
-1-based within that gap. The first ticket per gap (`T<n>.1`) is the **tracer bullet** — the smallest
-end-to-end slice proving the path through the public interface; mark it `_(tracer bullet)_`.
-Subsequent tickets layer behaviors on top.
-
-Each ticket file holds, in the austere form (rules 3–5 — no `Cycle:` line, no `Mocks: none`, no
-3-level nesting):
-
-- A blockquote nav header (Gap, Index, optional Prev/Next)
-- A status checkbox `- [ ] **Done**` the `/loop` runner toggles to `[x]`
-- One lead sentence stating the precise, assertion-worthy contract (exact endpoint/args/return or the
-  concrete fact the test checks)
-- A two-column table: `Test` (`path::test_name` + assertion against a public interface), `Implements`
-  (file(s) + symbol, minimum code only), `Depends on` (linked ticket files or `—`), `Mocks` (only
-  when non-empty — system boundaries per `resources/tdd/mocking.md`), `Refactor` (only when present —
-  hints from `resources/tdd/refactoring.md`)
-
-Then add the ticket's row to the gap file's `## Tickets` table (ID link, behavior, Depends-on links).
-Validate every ticket against the anti-pattern list in `resources/spec-body.md` before accepting it.
-Any ticket exhibiting a horizontal slice (multiple tests bundled, or test-first without matching
-implementation) is rejected and split into N separate tickets.
-
-#### Step 4c: Dependency ordering
-
-Cross-link tickets across gaps. A ticket in `G2` may depend on a ticket in `G1`
-when it requires deliverables from `G1`. Capture dependencies in each ticket's
-`Depends on` field.
-
-The complete dependency DAG must be topologically sortable — no cycles. If a cycle
-is detected:
-
-1. Identify the smallest ticket in the cycle that can be split into a "minimal stub"
-   plus a "full implementation" pair.
-2. Replace the original with the two new tickets.
-3. Re-check the DAG.
-
-Confirm the DAG by walking it from the leaves (no incoming dependencies) to the
-roots. The leaves are the candidates for `T<N>.1` tracer bullets.
-
-#### Step 4d: Write the Execution Plan section
-
-Populate the `## Execution Plan` section of the **index** (`<plan>.md`) — body wrapped in `<details>`,
-heading visible — per the spec in `resources/spec-body.md`:
-
-1. **Loop Runner Prompt** — substitute `<SPEC_PATH>` with the index file's path (relative to the repo
-   root) or `<owner/repo#N>` for a GitHub issue. The prompt is self-contained — an agent in a fresh
-   context invoked by `/loop` can execute it without external arguments, finding the next ticket via
-   the index Progress table and opening its ticket file. Do not modify the prompt skeleton from
-   `resources/spec-body.md`; only substitute the path.
-
-2. **Progress** — emit one row per gap with the ticket counts, gap and ticket IDs linked to their
-   files. Initial state is `0` done, all `[ ]` todo, "Next eligible" set to the lowest-numbered ticket
-   with no unresolved dependencies, "Blocked on" lists outstanding dependencies.
-
-3. **Done Criteria** — copy the four-item checklist verbatim from `resources/spec-body.md`. The
-   `/loop` runner uses it to detect "spec complete."
-
-#### Step 4e: Validation of the decomposition
-
-After Steps 4a–4d, verify that:
-
-- Every `G<N>` has at least one ticket file — no gap is left without execution material
-- Every ticket file exists, opens with `- [ ] **Done**`, and has its Test, Implements, and Depends-on
-  rows populated (Mocks and Refactor only when non-empty)
-- Every ticket-file row in a gap's `## Tickets` table links a file that exists, and vice versa
-- The dependency DAG is acyclic and topologically sortable
-- The index Progress table totals match the per-gap ticket-file counts
-- The Loop Runner Prompt's `<SPEC_PATH>` substitution is correct and points at the index file
-
-The user can now invoke `/loop` with the runner prompt to drive the spec to
-completion. Each iteration of the loop consumes one ticket via the
-RED→GREEN→(REFACTOR) cycle from `resources/tdd/tdd.md` and updates the
-Progress table. The loop exits when Done Criteria are satisfied or when an
-`<!-- UNRESOLVED -->` ADR placeholder appears (returning control to Phase 2
-refinement).
+The user then runs `/loop` with the runner prompt; each iteration consumes one ticket via
+RED→GREEN→(REFACTOR). The loop exits on Done Criteria, on an `<!-- UNRESOLVED -->` ADR, or on a
+`<!-- CHANGE-REQUEST -->` marker. A Change Request is the **last resort**, not a reflex: before raising
+one, run the 5-Whys root-cause check (`resources/5ys.md`) on "why can't this be real yet?" — most
+blockers resolve into real work rather than a scope change. Raise it only when the chain bottoms out at
+a genuine plan defect (the gap as written cannot produce real evidence); then control returns to
+Phase 2 to rescope. See `resources/phase4-decomposition.md` and the loop-runner protocol in
+`resources/spec-body.md`.
 
 ## Questioning Principles
 
@@ -516,14 +240,23 @@ This skill bundles the following reference documents in its `resources/` directo
 |------|---------|
 | `resources/spec-body.md` | Spec structure — the tiers, the index/gap/ticket/discovery templates, the Execution Plan + Done Criteria, and the index skeleton |
 | `resources/style.md` | Authoring style contract — the voice/format rules every file obeys; read alongside `spec-body.md` before authoring or restyling |
-| `resources/escalators-not-stairs.md` | Requirement integrity principles — read during Phase 3 validation |
+| `resources/phase1-bootstrap.md` | Phase 1 full playbook — Steps 1a–1g (target setup, dual research, link verification, synthesis, per-gap + quality/failure research, assembly) |
+| `resources/phase2-refinement.md` | Phase 2 full playbook — Steps 2a–2e (scan ADRs, rank by cross-gap impact, ask one question, incorporate, re-evaluate) |
+| `resources/phase3-validation.md` | Phase 3 full playbook — Steps 3a–3c (diagram lenses + increment gate, requirement integrity, cross-consistency) |
+| `resources/phase4-decomposition.md` | Phase 4 full playbook — Steps 4a–4e (behavior enumeration, ticket structuring, DAG, Execution Plan, validation) + loop-exit conditions |
+| `resources/escalators-not-stairs.md` | Requirement integrity + executable-evidence principles (no stubs, no mocks of the deliverable) — read at the start of planning and applied in every phase |
+| `resources/5ys.md` | 5 Whys root-cause analysis — the precheck before raising a `<!-- CHANGE-REQUEST -->`, and for retrospectives of Type 2 failures |
 | `resources/mermaidjs_diagrams.md` | Mermaid diagram reference — rendering, complexity thresholds, pitfalls |
 | `resources/playwright-cli.md` | Link verification — detection, fallback chain, and unverified markers |
 | `resources/gh-cli.md` | GitHub CLI reference — detection, authentication, issue CRUD commands |
 | `resources/gh-issues.md` | GitHub issues backend — local cache, sync protocol, edit history lineage |
 | `resources/tdd/tdd.md` | TDD workflow — red-green-refactor, vertical slicing, anti-patterns. Read at the start of Phase 4 |
 | `resources/tdd/tests.md` | Good-vs-bad test examples — used in Phase 4 to reject implementation-detail behaviors |
-| `resources/tdd/mocking.md` | When to mock — system-boundaries-only rule applied to ticket `Mocks` field |
+| `resources/tdd/mocking.md` | When to mock — external-boundaries-only rule (never the deliverable) applied to the ticket `Mocks` field |
 | `resources/tdd/interface-design.md` | Testable interface design — accept dependencies, return results, small surface |
 | `resources/tdd/deep-modules.md` | Deep module guidance — small interface, deep implementation |
 | `resources/tdd/refactoring.md` | Refactor candidates — populates the optional ticket `Refactor candidates` field |
+
+A skill-root **`CLAUDE.md`** documents how to audit this skill's own usage — using the `introspect`
+skill to extract a timeline of which `resources/*` loaded in a session (and at what token cost) and
+render it as a Mermaid gantt. Read it when reviewing whether a planning session followed the playbooks.

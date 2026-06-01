@@ -124,6 +124,33 @@ flowchart LR
 **Tip:** Use consistent node IDs between Current State and Desired State diagrams so the
 reader can visually diff what changed, what was added, and what was removed.
 
+## Lens Menu (Discovery)
+
+The Discovery file's Current State and Desired State each pick **2–3 lenses** from this menu — only the
+ones that genuinely illuminate the initiative (do not force a lens that adds no signal). Use the **same**
+lenses for Current and Desired so each pair reads as a before/after.
+
+| Lens | Shows | Recommended type | Pick when |
+|------|-------|------------------|-----------|
+| **Component** | Modules/services and their boundaries | `flowchart TD` | The change reshapes structure or ownership |
+| **Data-flow** | How data moves through the system | `flowchart LR` | The change is about a pipeline or transform |
+| **Sequence** | Time-ordered interaction between actors | `sequenceDiagram` | The change alters a call/handshake order |
+| **Deployment** | Runtime/process/host topology | `flowchart TD` | The change moves where things run |
+| **State** | Lifecycle states and transitions | `stateDiagram-v2` | The change adds/reorders states or modes |
+| **Entity** | Schema / data model relationships | `erDiagram` | The change touches tables, columns, or keys |
+
+## Increment Chain (Gap Increments)
+
+The `## Gap Increments` section stacks one diagram per gap, each building on the previous:
+
+- Start each increment from the **prior baseline** — `G1` extends Current State, `G2` extends `G1`'s
+  result, and so on — so the stack reads as the system growing one gap at a time.
+- Reuse node IDs from the Current-State lens it derives from, and highlight **only** the nodes that gap
+  changes with the process/good fill; leave untouched nodes in the neutral baseline fill.
+- Put each increment under the **exact** heading `### G<n> increment` (descriptor on the next line, not
+  in the heading). GitHub slugifies it deterministically to `#g<n>-increment` — the anchor the gap
+  file's `Architecture` nav link targets — so keep the heading stable.
+
 ## Color Theming
 
 **Full reference:** See `resources/color_theming.md`
