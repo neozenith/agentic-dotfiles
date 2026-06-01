@@ -69,6 +69,11 @@ Events carry a `msg_kind` column for fine-grained filtering (use with `-t`):
 | `tool_use` | Tool call requests |
 | `other` | Progress, system, queue-operation events |
 
+**Subagent prefix:** events in a subagent context (sidechain or `subagent`/`agent_root`
+file) carry a `subagent-` prefix on `msg_kind` (e.g. `subagent-tool_use`). Strip the
+prefix to match on the base kind; filter `WHERE msg_kind LIKE 'subagent-%'` for
+subagent-only activity.
+
 ## Cache
 
 SQLite cache is at:
@@ -106,51 +111,13 @@ sqlite3 ~/.claude/cache/introspect_sessions.db \
 
 → See [resources/cache.md](resources/cache.md) for full schema and management commands.
 
-## Knowledge Graph (schema v13+)
+## Knowledge Graph
 
-The cache also hosts a resolved-entity knowledge graph derived from the
-chunked human-prompt content. The pipeline is incremental and runs at
-backend start time. Tables:
+The cache hosts a resolved-entity knowledge graph (`nodes`, `edges`,
+`entity_clusters`, `leiden_communities`, …) over the prompt history. Build it with
+`cache update`/`rebuild` (embeddings enabled); query the tables directly.
 
-| Table | Description |
-|---|---|
-| `entities` | Per-mention entity rows (name, entity_type, source, chunk_id, confidence) |
-| `relations` | Per-mention relations (src, dst, rel_type, weight, chunk_id) |
-| `entity_clusters` | name → canonical mapping (synonym resolution) |
-| `nodes` | Canonical entities (name, entity_type, mention_count) |
-| `edges` | Coalesced canonical relations (src, dst, rel_type, weight) |
-| `leiden_communities` | Multi-resolution Leiden community membership |
-| `entity_cluster_labels` | LLM-generated labels per canonical |
-| `community_labels` | LLM-generated labels per (resolution, community_id) |
-
-Useful queries:
-
-```bash
-# Top entities by mention count
-sqlite3 ~/.claude/cache/introspect_sessions.db \
-  "SELECT name, entity_type, mention_count FROM nodes
-   ORDER BY mention_count DESC LIMIT 20;"
-
-# Edges by relation type
-sqlite3 ~/.claude/cache/introspect_sessions.db \
-  "SELECT rel_type, count(*) AS n FROM edges
-   GROUP BY rel_type ORDER BY n DESC;"
-
-# Community sizes at the default resolution
-sqlite3 ~/.claude/cache/introspect_sessions.db \
-  "SELECT community_id, count(*) AS members
-   FROM leiden_communities WHERE resolution = 0.25
-   GROUP BY community_id ORDER BY members DESC LIMIT 10;"
-
-# Synonyms resolved to a canonical name
-sqlite3 ~/.claude/cache/introspect_sessions.db \
-  "SELECT name FROM entity_clusters WHERE canonical = 'YourEntity';"
-```
-
-The graph is consumed by the analytics dashboard's Knowledge Graph page
-(cytoscape rendering) but the SQL surface is independent — any
-introspection query that needs entity-resolved structure can read these
-tables directly.
+→ See [resources/kg.md](resources/kg.md) for tables, query recipes, and update commands.
 
 ## Command Reference
 
@@ -189,8 +156,20 @@ introspect_sessions.sh traverse ${CLAUDE_SESSION_ID} --all | jq 'sort_by(-.total
 introspect_sessions.sh traverse ${CLAUDE_SESSION_ID} --summary | jq 'sort_by(-.total_cost_usd)'
 ```
 
+**Analytics fields (tokenometrics).** Events: `context_ratio`, `is_response_head`,
+`response_duration_ms`, derived `tps` (on heads). Sessions: `avg_tps`, `total_idle_ms`,
+`total_active_ms`, `peak_context_ratio`. Definitions: [README](README.md#analytics-fields-tokenometrics).
+
+```bash
+sqlite3 ~/.claude/cache/introspect_sessions.db \
+  "SELECT session_id, ROUND(peak_context_ratio,3) AS peak, total_output_tokens, ROUND(avg_tps,1) AS tps
+   FROM sessions ORDER BY peak DESC LIMIT 10;"
+```
+
 ## Resources
 
-- [resources/cache.md](resources/cache.md) — SQLite schema, auto-update behavior, management commands
+- [README.md](README.md) — human-facing explainer: overview, data model (ERD), analytics fields, cost model
+- [resources/cache.md](resources/cache.md) — cache flags, management commands, column quick-reference, SQL fallback recipes
+- [resources/kg.md](resources/kg.md) — knowledge-graph tables, query recipes, update commands
 - [resources/commands.md](resources/commands.md) — Full command reference with all options
 - [resources/use-cases.md](resources/use-cases.md) — Workflows, post-compaction recovery, architecture, JSONL schema

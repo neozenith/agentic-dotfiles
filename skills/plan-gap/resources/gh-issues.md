@@ -4,8 +4,11 @@ Reference for using GitHub issues as the storage backend for gap analysis docume
 Covers argument parsing, local cache for iteration and Mermaid rendering, the
 sync-back protocol with changelog comments, and edit history lineage.
 
-The **document body specification** (six sections, per-gap fields, skeleton template)
-lives in `spec-body.md` — this file covers only the GitHub-specific mechanics.
+The **spec structure** (the index sections, the per-gap/ticket/discovery templates, and the index
+skeleton) lives in `spec-body.md`, and the voice/format rules in `style.md` — this file covers only
+the GitHub-specific mechanics. The local file tiers map onto GitHub as: the index → the parent issue
+body, each `<plan>-G<n>.md` → a per-gap sub-issue (see Body Size and Sub-Issues below), and the
+`<plan>-DISCOVERY.md` → a clearly-marked review-only section or companion issue.
 
 ## Argument Parsing
 

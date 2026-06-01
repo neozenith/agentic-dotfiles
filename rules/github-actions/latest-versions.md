@@ -21,13 +21,26 @@ When you write a fresh workflow, these are the safe defaults:
 - uses: actions/cache@v5
 - uses: actions/upload-artifact@v7
 - uses: actions/download-artifact@v8
-- uses: astral-sh/setup-uv@v8
+- uses: actions/configure-pages@v6
+- uses: actions/upload-pages-artifact@v5
+- uses: actions/deploy-pages@v5
+- uses: astral-sh/setup-uv@v8.1.0   # no floating `v8` tag — pin a concrete patch; see note below
 - uses: oven-sh/setup-bun@v2
 - uses: docker/setup-buildx-action@v4
 - uses: docker/build-push-action@v7
 - uses: aws-actions/configure-aws-credentials@v6
 - uses: google-github-actions/auth@v3
 ```
+
+> **Exception — `astral-sh/setup-uv` does not publish a floating major tag past `v7`.**
+> The general rule (pin the floating major, e.g. `@v8`) assumes the maintainer keeps a moving
+> `vN` tag pointed at the newest `vN.x.y`. `setup-uv` does **not** do this for v8: only concrete
+> tags `v8.0.0` and `v8.1.0` exist, while `@v8` is an unresolvable ref that fails the job at the
+> "Set up job" step with `Unable to resolve action astral-sh/setup-uv@v8, unable to find version v8`.
+> Pin a concrete patch (`@v8.1.0`) until a floating `@v8` tag appears upstream. Verify with:
+> ```bash
+> gh api repos/astral-sh/setup-uv/tags --jq '.[].name' | grep -E '^v8'   # lists v8.0.0, v8.1.0 — no bare v8
+> ```
 
 ## Pinning policy
 
@@ -54,6 +67,8 @@ Never pin to `@main`, `@master`, or `@latest`. Those resolve to whatever HEAD lo
 | `github/codeql-action@v3` and earlier | Node 20 runtime — deprecated. | `github/codeql-action@v4` |
 | `tj-actions/changed-files` (any version) | **Compromised in the March 2025 supply-chain attack (CVE-2025-30066).** Even though the maintainer rotated tags and now publishes new releases (v47+), the trust model is broken: an attacker pushed malicious code retroactively to all existing tags, exfiltrating CI secrets from thousands of repos. Several large orgs have a hard ban on this action. | `dorny/paths-filter@v4` for path-change detection, or `git diff` with explicit `fetch-depth: 0` checkout. If you must use it, pin to a specific commit SHA reviewed after 2025-03-15 and audit secrets exposure. |
 | `tibdex/github-app-token` | Archived; no longer maintained. | `actions/create-github-app-token@v3` |
+| `actions/upload-pages-artifact@v3` and earlier | Node 20 — deprecated. The `v3` composite calls Node 20 sub-actions. | `actions/upload-pages-artifact@v5` |
+| `actions/deploy-pages@v4` and earlier | Node 20 runtime — deprecated. `v5` declares `using: node24`. | `actions/deploy-pages@v5` |
 | Any action pinned to `@main` / `@master` / `@latest` | Resolves to mutable HEAD at runtime — breaks reproducibility and bypasses security review of upstream changes. | Pin to a major tag or commit SHA. |
 | Any action whose `action.yml` declares `using: node16` or `using: node20` | Both runtimes are deprecated on GitHub Actions. Workflows will warn now and fail later. | Upgrade to a major release that declares `using: node24`. |
 
