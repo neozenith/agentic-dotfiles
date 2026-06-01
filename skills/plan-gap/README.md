@@ -110,14 +110,15 @@ flowchart LR
 - **Quality + failure discovery** — agents scan your CI gates, agentic rules, and memory for codified standards and historical gotchas
 - **ADR-driven questions** — unresolved decisions tracked per gap; the skill picks the single question that resolves the most ADRs across all gaps simultaneously
 - **Human-in-the-loop** — you answer one focused question per iteration; the skill propagates your answer across all affected sections
+- **Executable evidence — no stubs, no mocks of the deliverable** — every gap's Outputs include a *proof-of-execution* artifact produced by running the real code path on real input (the tracer bullet produces it); a ticket that can only ship a stub triggers a 5-Whys root-cause check (`resources/5ys.md`), and a `<!-- CHANGE-REQUEST -->` only if a genuine plan defect is confirmed — the `/loop` stops and returns to refinement
 
 ## Document Structure
 
-A spec is a **tiered file set** sharing a stem, not one document. The index + the one gap + the one ticket an agent is on are its `/loop` working-set; Current/Desired State and background move to a review-only Discovery file (**context economy**).
+A spec is a **folder** (`<plan>/`) of tiered files with `README.md` as the index, not one document. The index + the one gap + the one ticket an agent is on are its `/loop` working-set; Current/Desired State and background move to a review-only Discovery file (**context economy**).
 
 ```mermaid
 flowchart TD
-    subgraph IDX["Index — &lt;plan&gt;.md (loop entry)"]
+    subgraph IDX["Index — README.md (loop entry)"]
         EP["Execution Plan<br/>(folded: runner, progress, done)"]
         OV["Overview<br/>(linked gap list + deps diagram)"]
         GA["Gap Analysis<br/>(Gap Map + Dependencies + Gaps table)"]
@@ -125,7 +126,7 @@ flowchart TD
         SM["Success + Negative<br/>Measures"]
     end
 
-    subgraph GAP["Gap — &lt;plan&gt;-G&lt;n&gt;.md (per-gap)"]
+    subgraph GAP["Gap — G&lt;n&gt;.md (per-gap)"]
         GC["Context"]
         GO["Outputs table"]
         GK["Key logic<br/>(snippet, optional)"]
@@ -133,20 +134,22 @@ flowchart TD
         GT["Tickets table"]
     end
 
-    subgraph TKT["Ticket — &lt;plan&gt;-G&lt;n&gt;-T&lt;x.y&gt;.md (per-ticket)"]
+    subgraph TKT["Ticket — G&lt;n&gt;-T&lt;x.y&gt;.md (per-ticket)"]
         TD["[ ] Done checkbox"]
         TC["Contract sentence"]
         TT["Test / Implements /<br/>Depends-on table"]
     end
 
-    subgraph DISC["Discovery — &lt;plan&gt;-DISCOVERY.md (review only)"]
-        DCUR["Current State<br/>+ diagram"]
-        DDES["Desired State<br/>+ diagram"]
+    subgraph DISC["Discovery — DISCOVERY.md (review only)"]
+        DCUR["Current State<br/>(2-3 lens diagrams)"]
+        DDES["Desired State<br/>(same lenses)"]
+        DINC["Gap Increments<br/>(one per gap, stacked)"]
     end
 
     GA -->|"links each gap"| GAP
     GT -->|"links each ticket"| TKT
     OV -.background.-> DISC
+    GAP -.arch link.-> DINC
 
     classDef idxStyle fill:#1e40af,color:#e0e7ff
     classDef gapStyle fill:#6d28d9,color:#f5f3ff
@@ -156,7 +159,7 @@ flowchart TD
     class EP,OV,GA,DEC,SM idxStyle
     class GC,GO,GK,GADR,GT gapStyle
     class TD,TC,TT tktStyle
-    class DCUR,DDES discStyle
+    class DCUR,DDES,DINC discStyle
 
     style IDX fill:#172554,color:#dbeafe
     style GAP fill:#3b0764,color:#ede9fe
@@ -164,10 +167,10 @@ flowchart TD
     style DISC fill:#431407,color:#ffedd5
 ```
 
-- **Index** (`<plan>.md`) — one-screen orientation: scope, the linked gap list, dependency order, a Decisions roll-up, and the CI-anchored Success/Negative Measures. The TOC and Execution Plan fold behind `<details>` so humans skim while the `/loop` agent still reads them.
-- **Gap files** (`<plan>-G<n>.md`) — one per gap: Context, an Outputs table, an optional Key-logic snippet for agentic few-shot, gap-scoped bulleted ADRs, and a Tickets table — all cross-linked by ID.
-- **Ticket files** (`<plan>-G<n>-T<x.y>.md`) — one austere TDD slice each: a Done checkbox, a precise contract sentence, and a Test/Implements/Depends-on table. The `/loop` runner consumes one per iteration.
-- **Discovery** (`<plan>-DISCOVERY.md`) — Current State (codebase exploration, file:line citations) and Desired State (SOTA research, verified URLs), each with a Mermaid diagram. Human review only — never loaded during the loop.
+- **Index** (`<plan>/README.md`) — one-screen orientation: scope, the linked gap list, dependency order, a Decisions roll-up, and the CI-anchored Success/Negative Measures. The TOC and Execution Plan fold behind `<details>` so humans skim while the `/loop` agent still reads them.
+- **Gap files** (`G<n>.md`) — one per gap: Context, an Outputs table (at least one row is a *proof-of-execution* artifact — the gap's evidence it really runs), an optional Key-logic snippet for agentic few-shot, gap-scoped bulleted ADRs, a Tickets table, and an `Architecture` nav link to its increment diagram — all cross-linked by ID.
+- **Ticket files** (`G<n>-T<x.y>.md`) — one austere TDD slice each: a Done checkbox, a precise contract sentence, and a Test/Implements/Depends-on table. The `/loop` runner consumes one per iteration.
+- **Discovery** (`DISCOVERY.md`) — Current State and Desired State as **2–3 lens diagrams each** (component, data-flow, sequence, deployment, …), plus a **Gap Increments** stack: one diagram per gap, each building on the Current baseline to show what that gap changes. Human review only — never loaded during the loop.
 
 
 

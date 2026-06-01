@@ -52,16 +52,16 @@ loop-time files free of review-only context.
 
 ## Document set
 
-A gap analysis spec is a **set of files** sharing a stem (`<plan>` below is the kebab-case stem
-derived from the initiative). Each tier has a distinct genre and a distinct load profile.
+A gap analysis spec is a **folder** (`<plan>/`, a kebab-case stem derived from the initiative) whose
+`README.md` is the index; the siblings strip the stem. Each tier has a distinct genre and load profile.
 
 | File | Tier | Genre | Loaded |
 |------|------|-------|--------|
-| `<plan>.md` | index | navigation + framing + execution plan | loop entry |
-| `<plan>-G<n>.md` | gap | explanation + reference + ticket pointers | per-gap work |
-| `<plan>-G<n>-T<x.y>.md` | ticket | austere reference — one TDD slice | per-ticket work |
-| `<plan>-DISCOVERY.md` | discovery | Current & Desired State | human review only |
-| `<plan>-STYLE.md` *(optional)* | style | per-spec deviations from this contract | when editing the set |
+| `README.md` | index | navigation + framing + execution plan | loop entry |
+| `G<n>.md` | gap | explanation + reference + ticket pointers | per-gap work |
+| `G<n>-T<x.y>.md` | ticket | austere reference — one TDD slice | per-ticket work |
+| `DISCOVERY.md` | discovery | Current + Desired State (multi-lens) + per-gap increments | human review only |
+| `STYLE.md` *(optional)* | style | per-spec deviations from this contract | when editing the set |
 
 The split exists for **context economy** (rule 12): an agent executing the `/loop` pays
 attention-tokens for the index + the one gap + the one ticket it is on. Current/Desired State,
@@ -71,7 +71,7 @@ the moment a gap grows its own ADRs, key-logic snippet, or ≥3 tickets, split i
 
 ## Tier voice and shape
 
-### Index (`<plan>.md`)
+### Index (`README.md`)
 
 Genre: navigation + framing. Keep the diagrams and the rolled-up tables here; everything else is a
 pointer to a gap file.
@@ -86,7 +86,7 @@ pointer to a gap file.
 - Gaps, Progress, and Success/Negative measures are tables; gap and ticket IDs are links.
 - Diagrams (Overview dependencies, Gap Map, Dependencies) obey the mermaid gates below.
 
-### Gap (`<plan>-G<n>.md`)
+### Gap (`G<n>.md`)
 
 Genre: explanation (why) + reference (what) + pointer (tickets). A blockquote-list nav header, a
 front-loaded lead, then austere sections. See the template in `resources/spec-body.md`.
@@ -95,7 +95,7 @@ Cut from any older inline format: the `**Current:** / **Gap:**` bold labels (fol
 a `## Context` section), the ADR Pros/Cons tables (settled ADRs are bulleted), and any Outputs row
 that merely restates a ticket.
 
-### Ticket (`<plan>-G<n>-T<x.y>.md`)
+### Ticket (`G<n>-T<x.y>.md`)
 
 Genre: austere reference — one behavior, one test, the implementation target, the dependencies. A
 blockquote nav header, a `- [ ] **Done**` checkbox, one lead sentence stating the precise
@@ -106,14 +106,23 @@ the loop prompt, not on each ticket), `Mocks: none` (state mocks only when non-e
 `Behavior:` label (the title *is* the behavior; the lead sentence adds precision), and the 3-level
 Test/Implementation bullet nest (collapse to table rows).
 
-### Discovery (`<plan>-DISCOVERY.md`)
+### Discovery (`DISCOVERY.md`)
 
-Review/background only — the before/after architecture, not loaded during the implementation loop.
-Nav is a blockquote-list backlink to the index, followed by a one-line note marking it review-only.
-Holds `## Current State` and `## Desired State`, each with its Mermaid diagram.
+Review/background only — the architecture that motivates the gaps, not loaded during the loop. Nav is a
+blockquote-list backlink to the index, followed by a one-line review-only note. Holds `## Current State`
+and `## Desired State` — **each as 2–3 lens diagrams** picked from the menu in
+`resources/mermaidjs_diagrams.md` — and `## Gap Increments`, **one diagram per gap** under the exact
+heading `### G<n> increment`. Gap files link to their increment by anchor (`DISCOVERY.md#g<n>-increment`); the
+diagram never lives inline in the gap (rule 12).
 
 ## Diagrams
 
+- **Lens menu, not one mega-diagram.** Current and Desired State each pick the 2–3 lenses (component,
+  data-flow, sequence, deployment, state, entity — `resources/mermaidjs_diagrams.md`) that genuinely
+  illuminate the initiative. Do not force a lens that adds no signal.
+- **Reuse node IDs across the chain.** Current → Desired → every gap increment share node IDs so the
+  reader diffs visually. Each increment starts from the prior baseline and highlights only the nodes
+  *that* gap changes (process/good fills); `G<n+1>` builds on `G<n>`.
 - Derive the palette from `resources/color_theming.md`. Use **`fill` + `color` only, no `stroke`** —
   a same-hue stroke fails the 3:1 border check; pick fills dark enough for white text (greens ≥
   `#166534`).

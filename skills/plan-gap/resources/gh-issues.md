@@ -7,8 +7,8 @@ sync-back protocol with changelog comments, and edit history lineage.
 The **spec structure** (the index sections, the per-gap/ticket/discovery templates, and the index
 skeleton) lives in `spec-body.md`, and the voice/format rules in `style.md` — this file covers only
 the GitHub-specific mechanics. The local file tiers map onto GitHub as: the index → the parent issue
-body, each `<plan>-G<n>.md` → a per-gap sub-issue (see Body Size and Sub-Issues below), and the
-`<plan>-DISCOVERY.md` → a clearly-marked review-only section or companion issue.
+body, each `G<n>.md` → a per-gap sub-issue (see Body Size and Sub-Issues below), and the
+`DISCOVERY.md` → a clearly-marked review-only section or companion issue.
 
 ## Argument Parsing
 
@@ -17,8 +17,9 @@ body, each `<plan>-G<n>.md` → a per-gap sub-issue (see Body Size and Sub-Issue
 | `owner/repo#N` | Existing issue | Read and continue refining |
 | `https://github.com/owner/repo/issues/N` | Existing issue | Extract owner/repo/N, read and continue |
 | `owner/repo` (no `#N`) | New issue on repo | Ask user for title, create issue |
-| `path/to/file.md` | Local markdown file | Existing behavior |
-| `path/to/directory/` | New local file | Existing behavior |
+| `path/to/<plan>/` (has `README.md`) | Local plan folder | Read `README.md` + siblings, continue refining |
+| `path/to/<plan>/` (no `README.md`) | New local plan folder | Create `README.md` + `DISCOVERY.md` skeletons inside |
+| `path/to/<plan>/README.md` | Local plan index | Parent dir is the plan folder; read/create siblings |
 
 ## Issue ↔ Document Mapping
 
