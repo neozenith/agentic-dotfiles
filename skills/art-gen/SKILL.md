@@ -20,12 +20,17 @@ a fresh generation every time you only need a transparent background or a wordma
 
 Two backends:
 
-| Backend | Models (`--model`) | Best for |
-|---------|--------------------|----------|
-| `gemini` (default) | `flash`, `pro` | Iteration, prompt+reference-image conditioning, 4K |
-| `imagen` | `standard`, `ultra`, `fast` | High-fidelity standalone batches (`--count`), 1K/2K |
+| Backend | `--model` alias → API id | Best for |
+|---------|--------------------------|----------|
+| `gemini` (default) | `pro` → `gemini-3-pro-image` (Nano Banana Pro) | 4K, best text rendering, complex layouts |
+| | `flash` → `gemini-3.1-flash-image` (Nano Banana 2) | Cheap high-volume iteration; 0.5K–4K |
+| | `flash-2.5` → `gemini-2.5-flash-image` (Nano Banana) | The original; fast/cheap |
+| `imagen` | `standard`/`ultra`/`fast` → `imagen-4.0-*-generate-001` | Photoreal standalone batches (`--count`), 1K/2K |
 
-A raw model id can be passed to `--model` and is forwarded verbatim.
+A raw model id can be passed to `--model` and is forwarded verbatim. Model ids are pinned
+to GA releases (captured 2026-06-01); they churn, so re-verify against
+`ai.google.dev/gemini-api/docs/models` when updating. Aspect ratios include wide/panoramic
+options (`21:9`, `4:1`, `8:1`, `1:4`, `1:8`) for gemini; imagen supports only `1:1/3:4/4:3/9:16/16:9`.
 
 # Requirements
 
@@ -92,19 +97,23 @@ Each image is written as `art_<YYYYMMDD_HHMMSS>_<index>.png` with a matching
 ```json
 {
   "prompt": "…the exact text sent…",
-  "model": "gemini-3-pro-image-preview",
+  "model": "gemini-3-pro-image",
   "backend": "gemini",
   "timestamp": "20260601_120000",
   "index": 0,
   "dimensions": "1024x1024",
   "aspect": "1:1",
   "requested_size": null,
+  "estimated_cost_usd": 0.134,
   "prompt_file": "prompt.md"
 }
 ```
 
-Because filenames are timestamped, `ls` reads chronologically and the sidecars preserve
-the full provenance of the sweep.
+`estimated_cost_usd` is a budgeting estimate derived from the model id and the actual
+output resolution (gemini is resolution-tiered, imagen is flat per image); it is `null`
+for an unrecognised model. The `history` subcommand sums these into a running total with a
+per-model breakdown. Because filenames are timestamped, `ls` reads chronologically and the
+sidecars preserve the full provenance — and cost — of the sweep.
 
 # The Iteration Loop (how to actually use this)
 

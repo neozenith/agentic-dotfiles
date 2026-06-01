@@ -24,12 +24,16 @@ export GOOGLE_API_KEY='…'
 
 ## Backends
 
-| Backend | `--model` aliases | Best for |
-|---------|-------------------|----------|
-| `gemini` (default) | `flash`, `pro` | Iteration, prompt **+ reference image** conditioning, 4K |
-| `imagen` | `standard`, `ultra`, `fast` | High-fidelity standalone batches (`--count`), 1K/2K |
+| Backend | `--model` alias → API id | Best for |
+|---------|--------------------------|----------|
+| `gemini` (default) | `pro` → `gemini-3-pro-image` (Nano Banana Pro) | 4K, best text rendering, complex layouts |
+| | `flash` → `gemini-3.1-flash-image` (Nano Banana 2) | Cheap high-volume iteration; supports 0.5K–4K |
+| | `flash-2.5` → `gemini-2.5-flash-image` (Nano Banana) | The original; fast/cheap |
+| `imagen` | `standard`/`ultra`/`fast` → `imagen-4.0-*-generate-001` | Photoreal standalone batches (`--count`); 1K/2K |
 
-A raw model id passed to `--model` is forwarded verbatim.
+A raw model id passed to `--model` is forwarded verbatim. Ids are pinned to GA releases
+(captured 2026-06-01) and do drift — re-verify against
+[Google's model list](https://ai.google.dev/gemini-api/docs/models) when they change.
 
 ## Quickstart
 
@@ -70,9 +74,9 @@ Copy `reference/prompt_template.md` to start.
 | `--prompt TEXT` | — | Inline prompt (wins over `--prompt-file`) |
 | `--prompt-file FILE` | — | Prompt markdown file; **repeatable** to fan out variants in one run |
 | `--backend {gemini,imagen}` | `gemini` | Generation backend |
-| `--model ALIAS` | backend default | `flash`/`pro` or `standard`/`ultra`/`fast`, or a raw model id |
-| `--aspect RATIO` | `1:1` | One of `1:1 2:3 3:2 3:4 4:3 4:5 5:4 9:16 16:9` |
-| `--size {1K,2K,4K}` | model default | 4K is gemini-only; imagen clamps to 1K/2K |
+| `--model ALIAS` | backend default | `pro`/`flash`/`flash-2.5` (gemini) or `standard`/`ultra`/`fast` (imagen), or a raw model id |
+| `--aspect RATIO` | `1:1` | gemini: `1:1 2:3 3:2 3:4 4:3 4:5 5:4 9:16 16:9 21:9 4:1 8:1 1:4 1:8`; imagen: only the first five |
+| `--size {512,1K,2K,4K}` | model default | `512` is Nano-Banana-2 only; `4K` is gemini-only; imagen clamps to 1K/2K |
 | `--count N` | `1` | Variants per prompt (imagen only) |
 | `--ref IMG` | — | Reference image (repeatable; gemini only) |
 | `--out-dir DIR` | `art/gen` | Output directory |
@@ -113,19 +117,43 @@ Each image is `art_<YYYYMMDD_HHMMSS>_<index>.png` with a matching `.json`:
 ```json
 {
   "prompt": "…the exact text sent…",
-  "model": "gemini-3-pro-image-preview",
+  "model": "gemini-3-pro-image",
   "backend": "gemini",
   "timestamp": "20260601_120000",
   "index": 0,
   "dimensions": "1024x1024",
   "aspect": "1:1",
   "requested_size": null,
+  "estimated_cost_usd": 0.134,
   "prompt_file": "prompt.md"
 }
 ```
 
 Timestamped filenames sort chronologically, and the sidecars preserve the full
 provenance of a sweep.
+
+### Estimated cost
+
+Each sidecar records `estimated_cost_usd` — a budgeting estimate from the model id and the
+**actual** output resolution. Gemini models are resolution-tiered (per output token);
+Imagen is a flat per-image rate. It's `null` for an unrecognised model. `history` rolls
+these up into a running total with a per-model breakdown:
+
+```text
+[0] art_20260601_134322_0.png  ($0.067, gemini-3.1-flash-image, 1:1)
+    A flat-vector compass rose icon, charcoal on white, no text.
+[1] art_20260601_134336_0.png  ($0.134, gemini-3-pro-image, 16:9)
+    A flat-vector mountain range banner, charcoal on white, no text.
+
+── Estimated cost summary ──
+  gemini-3-pro-image         × 1   $0.134
+  gemini-3.1-flash-image     × 1   $0.067
+  Total (2 images): $0.201
+```
+
+Prices are a dated estimate captured 2026-06-01 from
+[Google's pricing page](https://ai.google.dev/gemini-api/docs/pricing) — treat them as a
+planning aid, not a billing record.
 
 ## The iteration loop
 

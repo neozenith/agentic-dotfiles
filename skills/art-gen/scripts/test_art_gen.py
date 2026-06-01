@@ -140,6 +140,37 @@ def test_resolve_model(backend: str, alias: str | None, expected: str) -> None:
     assert art_gen.resolve_model(backend, alias) == expected
 
 
+def test_model_catalogue_pins_ga_ids() -> None:
+    # Guards against silently regressing to "-preview" ids (CLAUDE.md ADR-009).
+    assert art_gen.GEMINI_MODELS["pro"] == "gemini-3-pro-image"
+    assert art_gen.GEMINI_MODELS["flash"] == "gemini-3.1-flash-image"
+    assert art_gen.GEMINI_MODELS["flash-2.5"] == "gemini-2.5-flash-image"
+    assert art_gen.IMAGEN_MODELS["fast"] == "imagen-4.0-fast-generate-001"
+
+
+# ── cost estimation ────────────────────────────────────────────────────────
+@pytest.mark.parametrize(
+    "dims,tier",
+    [("400x400", "0.5K"), ("1024x1024", "1K"), ("2048x1024", "2K"), ("4096x4096", "4K"), ("not-a-size", "1K")],
+)
+def test_resolution_tier(dims: str, tier: str) -> None:
+    assert art_gen.resolution_tier(dims) == tier
+
+
+@pytest.mark.parametrize(
+    "model,dims,expected",
+    [
+        ("gemini-3-pro-image", "1024x1024", 0.134),
+        ("gemini-3-pro-image", "4096x4096", 0.24),
+        ("gemini-3.1-flash-image", "2048x2048", 0.101),
+        ("imagen-4.0-fast-generate-001", "2048x2048", 0.02),  # flat regardless of size
+        ("some-unknown-model", "1024x1024", None),
+    ],
+)
+def test_estimate_image_cost(model: str, dims: str, expected: float | None) -> None:
+    assert art_gen.estimate_image_cost(model, dims) == expected
+
+
 # ── metadata / save_image ──────────────────────────────────────────────────
 def test_build_metadata_includes_optionals(tmp_path: Path) -> None:
     meta = art_gen.build_metadata(
@@ -159,6 +190,20 @@ def test_build_metadata_includes_optionals(tmp_path: Path) -> None:
     assert meta["dimensions"] == "4x4"
 
 
+def test_build_metadata_estimates_cost() -> None:
+    meta = art_gen.build_metadata(
+        prompt="p", model="gemini-3-pro-image", backend="gemini", timestamp="T", index=0, dimensions="1024x1024"
+    )
+    assert meta["estimated_cost_usd"] == 0.134
+
+
+def test_build_metadata_unknown_model_has_no_cost() -> None:
+    meta = art_gen.build_metadata(
+        prompt="p", model="mystery", backend="gemini", timestamp="T", index=0, dimensions="1024x1024"
+    )
+    assert meta["estimated_cost_usd"] is None
+
+
 def test_save_image_writes_png_and_sidecar(tmp_path: Path) -> None:
     img = Image.new("RGB", (8, 6), (1, 2, 3))
     path = art_gen.save_image(
@@ -174,19 +219,31 @@ def test_save_image_writes_png_and_sidecar(tmp_path: Path) -> None:
 # ── history ────────────────────────────────────────────────────────────────
 def test_read_and_format_history(tmp_path: Path) -> None:
     (tmp_path / "art_20260601_000001_0.json").write_text(
-        json.dumps({"prompt": "first", "model": "m", "aspect": "1:1"}), encoding="utf-8"
+        json.dumps({"prompt": "first", "model": "gemini-3-pro-image", "aspect": "1:1", "estimated_cost_usd": 0.134}),
+        encoding="utf-8",
     )
     (tmp_path / "art_20260601_000002_0.json").write_text(
-        json.dumps({"prompt": "second " * 60, "model": "m", "aspect": "1:1"}), encoding="utf-8"
+        json.dumps(
+            {"prompt": "second " * 60, "model": "gemini-3-pro-image", "aspect": "1:1", "estimated_cost_usd": 0.134}
+        ),
+        encoding="utf-8",
+    )
+    # A generation with no price estimate (unknown model → cost null).
+    (tmp_path / "art_20260601_000003_0.json").write_text(
+        json.dumps({"prompt": "third", "model": "mystery", "aspect": "1:1", "estimated_cost_usd": None}),
+        encoding="utf-8",
     )
     (tmp_path / "broken.json").write_text("{not json", encoding="utf-8")
     (tmp_path / "scalar.json").write_text("42", encoding="utf-8")
     # An art-edit sidecar (no "prompt") sharing the directory must be ignored.
     (tmp_path / "edit.json").write_text(json.dumps({"command": "remove-bg", "params": {}}), encoding="utf-8")
     items = art_gen.read_history(tmp_path)
-    assert [it["prompt"][:5] for it in items] == ["first", "secon"]  # ordered; broken/scalar/edit skipped
+    assert [it["prompt"][:5] for it in items] == ["first", "secon", "third"]  # ordered; broken/scalar/edit skipped
     digest = art_gen.format_history(items)
-    assert "[0]" in digest and "..." in digest  # second prompt got truncated
+    assert "..." in digest  # second prompt got truncated
+    assert "Total (3 images): $0.268" in digest  # 0.134 + 0.134, third unpriced
+    assert "1 without a price estimate" in digest
+    assert "gemini-3-pro-image" in digest and "× 2" in digest  # itemised per model
 
 
 def test_format_history_empty() -> None:

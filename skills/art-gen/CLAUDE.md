@@ -34,7 +34,8 @@ the contract is `ci`. See `.claude/rules/claude_skills.md` for the canonical con
 The module is deliberately split so the gate is reachable offline:
 
 - **Pure, fully-tested:** `require_api_key`, `load_prompt_file`, `resolve_model`,
-  `build_metadata`, `save_image`, `read_history`, `format_history`, `resolve_prompts`.
+  `resolution_tier`, `estimate_image_cost`, `build_metadata`, `save_image`, `read_history`,
+  `format_history`, `resolve_prompts`.
 - **Generation loops** (`gemini_generate`, `imagen_generate`, `main`): take the GenAI
   **client** and a **config factory** as parameters. Tests pass real fakes; production
   passes the live client. This is the seam that makes response-handling testable without
@@ -147,12 +148,29 @@ through pytest; test deps stay lean.
 If a future change reintroduces a credentialed pytest test, it must (a) add the SDK to the
 test deps **and** (b) prove the key cannot appear in a traceback — otherwise reject it.
 
+### ADR-009 — Model catalogue + pricing are a dated, sourced snapshot
+**Status:** Accepted (2026-06-01).
+**Context:** Model ids drift fast (the table once pointed `pro` at `gemini-3-pro-image-preview`;
+GA is `gemini-3-pro-image`, and Nano Banana 2 / `gemini-3.1-flash-image` appeared later).
+Users also want a cost estimate per image and a running total.
+**Decision:** Keep `GEMINI_MODELS`/`IMAGEN_MODELS`/`IMAGE_PRICING_USD`/`ASPECT_RATIOS`/
+`IMAGE_SIZES` as a single catalogue, **pinned to GA ids**, each carrying a capture-date +
+source-URL comment. `build_metadata` stamps `estimated_cost_usd` (tier-priced for gemini,
+flat for imagen, `null` if unpriced); `format_history` aggregates a running + per-model total.
+Costs are labelled **estimates**, never billing.
+**Consequences:** The catalogue is one obvious place to refresh; cost is visible per image
+and per sweep without hitting a billing API.
+**Lens:** When refreshing models, re-research **both** ids and prices together, bump the
+capture date in the comments, prefer GA over `-preview`, and update `test_model_catalogue_pins_ga_ids`.
+Never present `estimated_cost_usd` as authoritative — it tracks a moving price list.
+
 ## Extension checklist
 
 Before you finish a change here:
 
 - [ ] New external call → injected seam + real fake test (ADR-003); heavy import deferred (ADR-004).
 - [ ] New generation knob → threaded into `build_metadata` (ADR-005).
+- [ ] Model/price change → catalogue + capture-date comment refreshed, GA ids pinned, pin-test updated (ADR-009).
 - [ ] No brand specifics introduced (ADR-007).
 - [ ] `make … fix` run, then `make … ci` green (≥90% cov, mypy --strict).
 - [ ] `SKILL.md` (agent), `README.md` (human), and this ADR log updated if behaviour changed.
