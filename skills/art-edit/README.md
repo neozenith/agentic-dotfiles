@@ -8,6 +8,138 @@ written with a JSON sidecar recording the exact settings, so any edit is reprodu
 keeper image (AI-generated or otherwise), `art-edit` does the deterministic work — no API
 key, no network, no per-image cost.
 
+---
+
+<details>
+<summary><b>Table of Contents</b></summary>
+<!--TOC-->
+
+- [art-edit](#art-edit)
+  - [Quickstart](#quickstart)
+  - [Architecture](#architecture)
+  - [Requirements](#requirements)
+  - [Commands](#commands)
+  - [Command reference](#command-reference)
+  - [The matte pipeline (what `segment` / `steps` compute)](#the-matte-pipeline-what-segment--steps-compute)
+  - [Sidecars (reproducible edits)](#sidecars-reproducible-edits)
+  - [Wordmark & configuration](#wordmark--configuration)
+  - [Typical workflow](#typical-workflow)
+  - [Troubleshooting](#troubleshooting)
+  - [For maintainers](#for-maintainers)
+
+<!--TOC-->
+</details>
+
+---
+
+## Quickstart
+
+Install the skill into your project:
+
+```bash
+npx skills@latest add neozenith/agentic-dotfiles --skill art-edit
+```
+
+Then invoke it in Claude Code with a natural-language brief:
+
+```text
+/art-edit cut out the background of art/gen/logo.png and add a "SUMMIT" wordmark
+```
+
+Or drive the script directly:
+
+```bash
+# Transparent PNG via the U2-Net model, auto-cropped to content
+uv run .claude/skills/art-edit/scripts/art_edit.py remove-bg in.png -o logo.png
+
+# Fast, model-free removal (good for clean white backgrounds)
+uv run .claude/skills/art-edit/scripts/art_edit.py remove-bg in.png --mode global -o out.png
+```
+
+## Architecture
+
+An input image fans into the deterministic commands; background removal and matting share
+one pure pipeline, and every command emits a settings sidecar for reproducibility.
+
+```mermaid
+flowchart LR
+    IMG["Input image"]:::src
+    RB["remove-bg / segment / steps<br/>U2-Net + colour + edges"]:::proc
+    OUT["Transparent PNG<br/>+ intermediate masks"]:::data
+    WM["wordmark / composite"]:::proc
+    LOCK["Branded lockup"]:::data
+    SIDE["JSON sidecar<br/>reproducible settings"]:::infra
+    IMG --> RB --> OUT --> WM --> LOCK
+    RB -.-> SIDE
+    WM -.-> SIDE
+    classDef src fill:#2563eb,stroke:#fff,color:#fff,stroke-width:2px
+    classDef proc fill:#7c3aed,stroke:#fff,color:#fff,stroke-width:2px
+    classDef data fill:#0f766e,stroke:#fff,color:#fff,stroke-width:2px
+    classDef infra fill:#475569,stroke:#fff,color:#fff,stroke-width:2px
+```
+
+*Cut out → matte → brand, with a sidecar at each step.* | VCS: 6.0 ✅
+
+<details>
+<summary>Complete diagram (18 nodes) — pure primitives, segmenter seam, commands</summary>
+
+```mermaid
+flowchart TD
+    IMG["Input image (PNG)"]:::src
+    subgraph seam["Segmenter seam (injected)"]
+        U2["U2-Net via rembg<br/>no-cover"]:::infra
+    end
+    subgraph pure["Pure machine-vision - tested"]
+        CD["color_distance"]:::proc
+        SC["scharr_edges"]:::proc
+        DE["dilate_edge_mask"]:::proc
+        EA["element_alpha"]:::proc
+        CM["combined_matte"]:::proc
+        SS["sigmoid_sharpen"]:::proc
+        AC["auto_crop"]:::proc
+        RT["render_text +<br/>resolve_position"]:::proc
+        WS["write_sidecar"]:::proc
+    end
+    subgraph cmds["Commands"]
+        RBG["remove-bg"]:::src
+        SEG["segment"]:::src
+        STP["steps"]:::src
+        WMK["wordmark"]:::src
+    end
+    OUTP["Transparent PNG"]:::data
+    LOCK["Wordmark lockup"]:::data
+    JSON["JSON sidecar"]:::data
+    IMG --> RBG & SEG & STP & WMK
+    U2 --> CM
+    CD --> CM
+    SC --> DE --> EA --> CM --> SS --> AC --> OUTP
+    SEG --> CM
+    STP --> CM
+    RBG --> AC
+    WMK --> RT --> LOCK
+    RBG --> WS
+    SEG --> WS
+    STP --> WS
+    WMK --> WS
+    WS --> JSON
+    classDef src fill:#2563eb,stroke:#fff,color:#fff,stroke-width:2px
+    classDef proc fill:#7c3aed,stroke:#fff,color:#fff,stroke-width:2px
+    classDef infra fill:#475569,stroke:#fff,color:#fff,stroke-width:2px
+    classDef data fill:#0f766e,stroke:#fff,color:#fff,stroke-width:2px
+    class seam sgSlate
+    class pure sgViolet
+    class cmds sgBlue
+    classDef sgBlue fill:#dbeafe,stroke:#3b82f6,color:#1e293b
+    classDef sgViolet fill:#ede9fe,stroke:#8b5cf6,color:#1e293b
+    classDef sgSlate fill:#f1f5f9,stroke:#64748b,color:#334155
+```
+
+The **segmenter seam** (U2-Net via rembg) is the only model-backed, network-touching part;
+the **pure machine-vision** primitives are tested offline on tiny synthetic arrays. See
+[`CLAUDE.md`](./CLAUDE.md) for the rationale (ADR-002/003/010).
+
+</details>
+
 ## Requirements
 
 | Need | Why |
@@ -27,15 +159,7 @@ No API key. No network for the deterministic paths.
 | `wordmark` | Compose the icon with a two-tone text wordmark using normalised positioning + anchors. |
 | `composite` | Convenience chain: `remove-bg` (model) → `wordmark`. |
 
-## Quickstart
 
-```bash
-# Transparent PNG via the U2-Net model, auto-cropped to content
-uv run .claude/skills/art-edit/scripts/art_edit.py remove-bg in.png -o logo.png
-
-# Fast, model-free removal (good for clean white backgrounds)
-uv run .claude/skills/art-edit/scripts/art_edit.py remove-bg in.png --mode global -o out.png
-```
 
 ## Command reference
 

@@ -10,6 +10,133 @@ reproducible and the next prompt can be curated from the prompts that worked.
 so you don't pay for a fresh generation every time you only need a transparent
 background or a text overlay.
 
+---
+
+<details>
+<summary><b>Table of Contents</b></summary>
+<!--TOC-->
+
+- [art-gen](#art-gen)
+  - [Quickstart](#quickstart)
+  - [Architecture](#architecture)
+  - [Requirements](#requirements)
+  - [Backends](#backends)
+  - [The prompt file (maximise every token)](#the-prompt-file-maximise-every-token)
+  - [Command reference](#command-reference)
+    - [`generate`](#generate)
+    - [`history`](#history)
+  - [Examples](#examples)
+  - [Output & sidecars](#output--sidecars)
+    - [Estimated cost](#estimated-cost)
+  - [The iteration loop](#the-iteration-loop)
+  - [Troubleshooting](#troubleshooting)
+  - [For maintainers](#for-maintainers)
+
+<!--TOC-->
+</details>
+
+---
+
+## Quickstart
+
+Install the skill into your project:
+
+```bash
+npx skills@latest add neozenith/agentic-dotfiles --skill art-gen
+```
+
+Then invoke it in Claude Code with a natural-language brief:
+
+```text
+/art-gen a minimalist flat-vector compass rose icon, charcoal on white, no text — give me 3 variants
+```
+
+Or drive the script directly:
+
+```bash
+# 1. Write a prompt file (see reference/prompt_template.md for a starting point)
+# 2. Generate
+uv run .claude/skills/art-gen/scripts/art_gen.py generate --prompt-file prompt.md
+
+# Review the output
+ls art/gen/
+#   art_20260601_120000_0.png   art_20260601_120000_0.json
+```
+
+## Architecture
+
+A prompt file flows through generation to a timestamped PNG and a metadata sidecar; the
+`history` view feeds the strongest prior prompts back into the next one.
+
+```mermaid
+flowchart LR
+    PF["Prompt file (.md)<br/>comments stripped"]:::src
+    GEN["art_gen generate<br/>gemini / imagen"]:::proc
+    API["Google GenAI API"]:::infra
+    OUT["PNG + JSON sidecar<br/>prompt, model, cost"]:::data
+    HIST["art_gen history<br/>running + itemised cost"]:::proc
+    PF --> GEN --> API --> OUT --> HIST
+    HIST -. "curate next prompt" .-> PF
+    classDef src fill:#2563eb,stroke:#fff,color:#fff,stroke-width:2px
+    classDef proc fill:#7c3aed,stroke:#fff,color:#fff,stroke-width:2px
+    classDef infra fill:#475569,stroke:#fff,color:#fff,stroke-width:2px
+    classDef data fill:#0f766e,stroke:#fff,color:#fff,stroke-width:2px
+```
+
+*Generate → review → curate loop.* | VCS: 5.5 ✅
+
+<details>
+<summary>Complete diagram (15 nodes) — pure core, boundary seams, cost</summary>
+
+```mermaid
+flowchart TD
+    subgraph in["Inputs"]
+        PF["Prompt files (.md)"]:::src
+        KEY["GOOGLE_API_KEY"]:::src
+    end
+    subgraph pure["Pure core - tested offline"]
+        LP["load_prompt_file"]:::proc
+        RP["resolve_prompts<br/>fan-out"]:::proc
+        RM["resolve_model<br/>alias to GA id"]:::proc
+        RK["require_api_key"]:::proc
+        GG["gemini_generate /<br/>imagen_generate"]:::proc
+        BM["build_metadata<br/>+ estimate_image_cost"]:::proc
+        SI["save_image"]:::proc
+        RH["read_history"]:::proc
+        FH["format_history<br/>cost summary"]:::proc
+    end
+    subgraph bnd["Boundary - no-cover"]
+        MC["make_client"]:::infra
+        CF["config factories"]:::infra
+    end
+    API["Google GenAI<br/>gemini / imagen"]:::infra
+    OUT["PNG + JSON sidecar"]:::data
+    PF --> LP --> RP --> GG
+    KEY --> RK --> MC --> GG
+    RM --> GG
+    CF --> GG
+    GG --> API --> GG
+    GG --> BM --> SI --> OUT
+    OUT --> RH --> FH
+    FH -. curate .-> PF
+    classDef src fill:#2563eb,stroke:#fff,color:#fff,stroke-width:2px
+    classDef proc fill:#7c3aed,stroke:#fff,color:#fff,stroke-width:2px
+    classDef infra fill:#475569,stroke:#fff,color:#fff,stroke-width:2px
+    classDef data fill:#0f766e,stroke:#fff,color:#fff,stroke-width:2px
+    class in sgBlue
+    class pure sgViolet
+    class bnd sgSlate
+    classDef sgBlue fill:#dbeafe,stroke:#3b82f6,color:#1e293b
+    classDef sgViolet fill:#ede9fe,stroke:#8b5cf6,color:#1e293b
+    classDef sgSlate fill:#f1f5f9,stroke:#64748b,color:#334155
+```
+
+The injected **boundary** (`make_client`, config factories) is the only part that imports
+`google-genai`; everything in the **pure core** is tested offline with fakes. See
+[`CLAUDE.md`](./CLAUDE.md) for the rationale (ADR-003/004/008).
+
+</details>
+
 ## Requirements
 
 | Need | Why |
@@ -35,17 +162,6 @@ A raw model id passed to `--model` is forwarded verbatim. Ids are pinned to GA r
 (captured 2026-06-01) and do drift — re-verify against
 [Google's model list](https://ai.google.dev/gemini-api/docs/models) when they change.
 
-## Quickstart
-
-```bash
-# 1. Write a prompt file (see reference/prompt_template.md for a starting point)
-# 2. Generate
-uv run .claude/skills/art-gen/scripts/art_gen.py generate --prompt-file prompt.md
-
-# Review the output
-ls art/gen/
-#   art_20260601_120000_0.png   art_20260601_120000_0.json
-```
 
 ## The prompt file (maximise every token)
 
