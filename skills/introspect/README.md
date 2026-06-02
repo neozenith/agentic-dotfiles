@@ -8,7 +8,77 @@ generated, and how much of the context window each response consumed.
 
 > This README is the **human-facing explainer** — the *why* and the *shape* of the
 > data. For the operating manual (commands, flags, query recipes) the agent uses,
-> see [SKILL.md](SKILL.md) and [resources/](resources/).
+> see [SKILL.md](SKILL.md); the design rationale (ADRs + decision lenses) lives in
+> [CLAUDE.md](CLAUDE.md).
+
+---
+
+<details>
+<summary><b>Table of Contents</b></summary>
+<!--TOC-->
+
+- [Introspect — Claude Code session analytics](#introspect--claude-code-session-analytics)
+  - [Quickstart](#quickstart)
+  - [What it's for](#what-its-for)
+  - [How it works](#how-it-works)
+    - [The fallback cascade](#the-fallback-cascade)
+    - [Schema migrations](#schema-migrations)
+  - [Data model](#data-model)
+    - [The `is_response_head` invariant (read this before summing)](#the-is_response_head-invariant-read-this-before-summing)
+  - [Analytics fields (tokenometrics)](#analytics-fields-tokenometrics)
+    - [Subagent labeling](#subagent-labeling)
+  - [Cost model](#cost-model)
+  - [Knowledge graph](#knowledge-graph)
+  - [Relationship to the dashboard](#relationship-to-the-dashboard)
+  - [Pointers](#pointers)
+  - [For maintainers](#for-maintainers)
+
+<!--TOC-->
+</details>
+
+---
+
+## Quickstart
+
+Invoke it in Claude Code with a natural-language brief:
+
+```text
+/introspect summarise what I worked on in this session and what it cost
+```
+
+Or drive the script directly (the bash wrapper boots `uv` for you):
+
+```bash
+SH=.claude/skills/introspect/scripts/introspect_sessions.sh
+
+# Most recently-updated session for the current project (inferred from CWD)
+$SH sessions -n 1
+
+# Every event in a session, flat + chronological
+$SH traverse <SESSION_ID> --all -n 20
+
+# Per-agent cost / token / event rollup (includes subagents)
+$SH traverse <SESSION_ID> --summary
+
+# Cross-session full-text search
+$SH search "rate limit" -n 20
+```
+
+**Cache stale, mid-migration, or `uv` unavailable?** Use the dependency-free DuckDB
+fallback — it reads the raw JSONL directly (no cache, no Python), so you keep a subset of
+introspection even while the cache is being rebuilt:
+
+```bash
+DB=.claude/skills/introspect/scripts/introspect_duckdb.sh
+
+$DB sessions -n 10              # recent sessions for the CWD project
+$DB prompts <SESSION_ID>        # genuine human prompts (post-compaction recovery)
+$DB search "duckdb" --human     # search only what YOU typed
+$DB cost                        # requestId-deduped cost by model family
+```
+
+See [SKILL.md › DuckDB Fallback Mode](SKILL.md#duckdb-fallback-mode---duckdb) and
+[resources/duckdb-fallback.md](resources/duckdb-fallback.md).
 
 ## What it's for
 
@@ -21,22 +91,64 @@ generated, and how much of the context window each response consumed.
 
 ## How it works
 
-```
-~/.claude/projects/**/*.jsonl        the source of truth (append-only logs)
-        │  incremental ingest (mtime/size check, only changed files)
-        ▼
-~/.claude/cache/introspect_sessions.db   SQLite cache (this skill owns it)
-        │  CLI queries  /  direct sqlite3  /  the FastAPI dashboard
-        ▼
-   traverse · sessions · search · cache · /api/*
+Append-only JSONL transcripts are incrementally ingested into a SQLite cache; the CLI, a
+direct `sqlite3` shell, and the FastAPI dashboard all read that one cache.
+
+```mermaid
+flowchart LR
+    JSONL["~/.claude/projects<br/>**/*.jsonl<br/>append-only truth"]:::dataPrimary
+    INGEST["incremental ingest<br/>mtime/size check<br/>cost · msg_kind · tokenometrics"]:::computePrimary
+    CACHE[("introspect_sessions.db<br/>SQLite cache · derived")]:::dataPrimary
+    CLI["CLI<br/>traverse · sessions · search"]:::ingressPrimary
+    SQL["direct sqlite3 / FTS5"]:::ingressSecondary
+    DASH["FastAPI + React<br/>dashboard /api/*"]:::ingressPrimary
+
+    JSONL -->|"only changed files"| INGEST --> CACHE
+    CACHE --> CLI
+    CACHE --> SQL
+    CACHE --> DASH
+
+    classDef dataPrimary      fill:#0f766e,stroke:#fff,color:#fff,stroke-width:2px
+    classDef computePrimary   fill:#7c3aed,stroke:#fff,color:#fff,stroke-width:2px
+    classDef ingressPrimary   fill:#2563eb,stroke:#fff,color:#fff,stroke-width:2px
+    classDef ingressSecondary fill:#dbeafe,stroke:#3b82f6,color:#1e293b,stroke-width:1px
 ```
 
-The cache is **derived state** — it can be deleted and rebuilt from the JSONL at
-any time. Every query checks file mtimes and incrementally re-ingests only what
-changed, so reads are normally instant. Two ingesters share one on-disk schema
-(`SCHEMA_VERSION`): the dashboard backend (`src/claude_code_sessions/database/sqlite/`)
+*Ingest → cache → many readers.* The cache is **derived state** — it can be deleted and
+rebuilt from the JSONL at any time. Every query checks file mtimes and incrementally
+re-ingests only what changed, so reads are normally instant. Two ingesters share one on-disk
+schema (`SCHEMA_VERSION`): the dashboard backend (`src/claude_code_sessions/database/sqlite/`)
 and this skill's standalone script — kept in lockstep and guarded by
 `tests/test_introspect_parity.py`.
+
+### The fallback cascade
+
+When the primary path breaks, escalate through three rungs — **each rung drops a dependency
+of the one above it**, so the deepest rung survives every failure of the others. The motivating
+case: a schema-changing feature forces a long full reingest, and you still want a subset of
+introspection *while the cache is mid-rebuild*.
+
+```mermaid
+flowchart TD
+    Q["introspection query"]:::computePrimary
+    R1["① CLI + SQLite cache<br/>introspect_sessions.sh<br/>full features"]:::ingressPrimary
+    R2["② direct sqlite3<br/>cache intact, CLI broken<br/>drops Python/uv"]:::dataPrimary
+    R3["③ --duckdb on raw JSONL<br/>cache stale/missing OR no uv<br/>drops cache AND Python"]:::infraPrimary
+
+    Q --> R1
+    R1 -. "CLI errors,<br/>cache OK" .-> R2
+    R1 -. "cache stale / rebuilding,<br/>or uv broken" .-> R3
+    R2 -. "cache corrupt" .-> R3
+
+    classDef computePrimary fill:#7c3aed,stroke:#fff,color:#fff,stroke-width:2px
+    classDef ingressPrimary fill:#2563eb,stroke:#fff,color:#fff,stroke-width:2px
+    classDef dataPrimary    fill:#0f766e,stroke:#fff,color:#fff,stroke-width:2px
+    classDef infraPrimary   fill:#475569,stroke:#fff,color:#fff,stroke-width:2px
+```
+
+Rung ③ is pure `bash` + `duckdb` *by design* — a Python helper would share the broken
+toolchain it is meant to rescue. It is read-only and reproduces `msg_kind` / genuine-human
+filtering in SQL (parity-checked against the cache). See [CLAUDE.md ADR-009](CLAUDE.md).
 
 ### Schema migrations
 
@@ -288,13 +400,25 @@ The cache also hosts a resolved-entity knowledge graph (the eight `entities`…
 `community_labels` tables in the diagram above). The pipeline runs incrementally
 during a cache update:
 
-```
-events → event_message_chunks → entities/relations (NER/RE)
-       → entity_clusters (synonym resolution) → nodes/edges (canonical)
-       → leiden_communities → *_labels (LLM)
+```mermaid
+flowchart LR
+    EV["events"]:::dataPrimary
+    CH["event_message<br/>_chunks"]:::dataPrimary
+    ER["entities / relations<br/>NER · RE"]:::computePrimary
+    CL["entity_clusters<br/>synonym resolution"]:::computePrimary
+    NE["nodes / edges<br/>canonical"]:::dataPrimary
+    CO["leiden_communities"]:::computePrimary
+    LB["*_labels<br/>binary LLM classify"]:::computeSecondary
+
+    EV --> CH --> ER --> CL --> NE --> CO --> LB
+
+    classDef dataPrimary      fill:#0f766e,stroke:#fff,color:#fff,stroke-width:2px
+    classDef computePrimary   fill:#7c3aed,stroke:#fff,color:#fff,stroke-width:2px
+    classDef computeSecondary fill:#ede9fe,stroke:#8b5cf6,color:#1e293b,stroke-width:1px
 ```
 
-It's an independent SQL surface — any introspection query can read it directly.
+Labels use **binary/pairwise** LLM classification, never a numeric rating scale (see
+[CLAUDE.md ADR-010](CLAUDE.md)). It's an independent SQL surface — any introspection query can read it directly.
 Tables, query recipes, and the update command are in
 [resources/kg.md](resources/kg.md).
 
@@ -309,7 +433,14 @@ ingesters produce byte-identical event rows at the same `SCHEMA_VERSION`.
 
 - [SKILL.md](SKILL.md) — agent operating manual (commands, message kinds, output formats)
 - [resources/cache.md](resources/cache.md) — cache flags, management commands, SQL fallback recipes
+- [resources/duckdb-fallback.md](resources/duckdb-fallback.md) — DuckDB-on-JSONL fallback recipes
 - [resources/kg.md](resources/kg.md) — knowledge-graph tables, query recipes, update commands
 - [resources/commands.md](resources/commands.md) — full command reference
 - [resources/use-cases.md](resources/use-cases.md) — workflows, post-compaction recovery
 - [resources/reflect.md](resources/reflect.md) — reflection workflow
+
+## For maintainers
+
+The development contract (`make … fix` / `ci`) and the design rationale — the ADR log with a
+**decision Lens** for each call — live in [CLAUDE.md](CLAUDE.md). Read it before changing ingest,
+schema, pricing, or the fallback.

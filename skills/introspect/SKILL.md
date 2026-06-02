@@ -89,7 +89,23 @@ Every query auto-updates stale files before executing. Control with global flags
 --cache-rebuild   # Wipe and re-ingest all files before query
 ```
 
-**If the CLI fails**, fall back to direct SQLite queries:
+→ See [resources/cache.md](resources/cache.md) for full schema and management commands.
+
+### Fallback Cascade
+
+When something is broken, escalate through these rungs in order — each one drops a dependency
+of the rung above it:
+
+1. **Primary** — `introspect_sessions.sh …` (Python CLI + SQLite cache). Use this normally.
+2. **If the CLI errors but the cache DB is intact** — query the cache directly with `sqlite3`.
+   Drops the Python/`uv` layer; keeps the cache.
+3. **If the cache is stale, won't rebuild, or is missing/corrupt — *or* `uv`/Python itself is
+   unavailable** — query the raw `*.jsonl` files directly with the **DuckDB CLI** (the
+   `--duckdb` mode below). Drops both the Python layer and the cache. This is the deepest rung:
+   its only dependencies are `bash` and the `duckdb` binary, so it survives every failure of
+   the rungs above it.
+
+**Rung 2 — direct SQLite** (cache DB intact, CLI broken):
 
 ```bash
 sqlite3 ~/.claude/cache/introspect_sessions.db
@@ -109,7 +125,60 @@ sqlite3 ~/.claude/cache/introspect_sessions.db \
    LIMIT 20;"
 ```
 
-→ See [resources/cache.md](resources/cache.md) for full schema and management commands.
+**Rung 3 — DuckDB on raw JSONL:** use the `--duckdb` mode documented in the next section.
+
+→ See [resources/duckdb-fallback.md](resources/duckdb-fallback.md) for verified DuckDB recipes
+(sessions, events, prompts, search, **requestId-deduped** cost) and the field mapping.
+
+## DuckDB Fallback Mode (`--duckdb`)
+
+Invoke the skill as **`/introspect --duckdb <subcommand> [args]`** to skip the cache and the
+Python script entirely and answer from the raw JSONL via the DuckDB CLI. Strip the `--duckdb`
+token and route the rest to the pure-bash helper:
+
+```bash
+# Routing contract: /introspect --duckdb <rest>  →
+.claude/skills/introspect/scripts/introspect_duckdb.sh <rest>
+```
+
+Subcommands mirror the primary tool (project inferred from CWD; `-p ID` / `--all` to override,
+`--subagents` to include nested files, `-f json` for JSON):
+
+```bash
+SH=.claude/skills/introspect/scripts/introspect_duckdb.sh
+$SH sessions -n 10                 # sessions, most-recent first
+$SH events  SESSION_ID -t tool_use    # chronological events; -t filters by msg_kind
+$SH prompts SESSION_ID             # GENUINE human prompts only (see msg_kind note below)
+$SH prompts SESSION_ID --raw       # …or every string-content user event (slash cmds, caveats)
+$SH search "some text" --human     # search ONLY what you typed (drops tool/wrapper noise)
+$SH kinds                          # msg_kind distribution + genuine-human count (sanity check)
+$SH cost    [SESSION_ID]           # requestId-deduped cost rollup by model family
+$SH sql "SELECT msg_kind, COUNT(*) FROM events GROUP BY 1"   # raw SQL over the `events` view
+$SH --help
+```
+
+**`msg_kind` classification is reproduced in SQL.** The `events` view adds three computed
+columns that mirror `introspect_sessions.py`:
+
+- `msg_kind` — the full 9-kind classification, `subagent-` prefixed for sidechain / nested
+  subagent events. Validated against the cache: **every message-bearing kind matches exactly**
+  (only the `other` system-noise bucket may diverge).
+- `text` — the unwrapped scalar string for string-content events (NULL for block arrays).
+- `is_human_prompt` — **TRUE only for genuine user typing.** This is stricter than
+  `msg_kind = 'human'`, which still includes slash-command expansions (`<command-name>`,
+  `<command-message>`), `<task-notification>`, `<local-command-caveat>`, bash-mode tags, etc.
+  Use `--human` on `events`/`search`, or `prompts` (which implies it), to get only what a human
+  actually typed. `-t/--kind KIND` filters by any `msg_kind` (matches the `subagent-` variant too).
+
+**Why bash, not Python:** this is the rung that must work when `uv`/Python is broken, so the
+helper depends only on `bash` + `duckdb` — never on the toolchain it is rescuing. Every
+subcommand defines a DuckDB view named `events` over the JSONL glob, so `sql` passthroughs can
+`SELECT … FROM events` (including `msg_kind` / `text` / `is_human_prompt`) too.
+
+**Caveats vs. the primary tool:** no cross-agent `event_edges` traversal and no knowledge
+graph (cache-only features). You **must** dedup by `requestId` before summing tokens/cost (the
+`cost` subcommand already does); see
+[resources/duckdb-fallback.md](resources/duckdb-fallback.md).
 
 ## Knowledge Graph
 
@@ -130,6 +199,7 @@ The cache hosts a resolved-entity knowledge graph (`nodes`, `edges`,
 | `search "pattern"` | FTS5 cross-session search |
 | `project-id SESSION` | Resolve project ID from session ID |
 | `cache {init,status,update,rebuild,clear}` | Manual cache management |
+| `--duckdb {sessions,events,prompts,search,kinds,cost,sql}` | **Fallback** — query raw JSONL via DuckDB (no cache, no Python); derives `msg_kind` + `--human` filter. See [DuckDB Fallback Mode](#duckdb-fallback-mode---duckdb) |
 
 → See [resources/commands.md](resources/commands.md) for full options and examples.
 
@@ -170,6 +240,7 @@ sqlite3 ~/.claude/cache/introspect_sessions.db \
 
 - [README.md](README.md) — human-facing explainer: overview, data model (ERD), analytics fields, cost model
 - [resources/cache.md](resources/cache.md) — cache flags, management commands, column quick-reference, SQL fallback recipes
+- [resources/duckdb-fallback.md](resources/duckdb-fallback.md) — **fallback** when the cache is stale/broken or the script won't run: query raw JSONL directly with the DuckDB CLI
 - [resources/kg.md](resources/kg.md) — knowledge-graph tables, query recipes, update commands
 - [resources/commands.md](resources/commands.md) — Full command reference with all options
 - [resources/use-cases.md](resources/use-cases.md) — Workflows, post-compaction recovery, architecture, JSONL schema
