@@ -13,7 +13,15 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { auditContent, auditFile, main, scoreDirectives } from "./mermaid_contrast.ts";
+import {
+  auditContent,
+  auditFile,
+  detectProfile,
+  main,
+  scoreDirectives,
+  scoreDirectivesMkdocs,
+  scoreForProfile,
+} from "./mermaid_contrast.ts";
 import type { StyleDirective } from "./color_contrast.ts";
 
 // ─── Scoring logic (hand-crafted directives, no parser involved) ─────────────
@@ -184,6 +192,113 @@ describe("scoreDirectives — unparseable colors route to skipped with reasons",
   });
 });
 
+// ─── mkdocs-material profile (host forces text; composite over both themes) ──
+
+describe("scoreDirectivesMkdocs", () => {
+  test("translucent fill yields passing text pairs in BOTH themes; color: ignored", () => {
+    const dirs: StyleDirective[] = [
+      {
+        kind: "classDef",
+        selector: "entity",
+        properties: { fill: "#1d4ed836", stroke: "#3b82f6", color: "#fff" },
+        line: 1,
+      },
+    ];
+    const { pairs, skipped } = scoreDirectivesMkdocs(dirs);
+    const text = pairs.filter((p) => p.kind === "text");
+    expect(text.map((p) => p.theme).sort()).toEqual(["dark", "light"]);
+    expect(text.every((p) => p.passes)).toBe(true); // AAA both themes
+    expect(skipped.some((s) => /color: ignored/.test(s.reason))).toBe(true);
+  });
+
+  test("border pairs are advisory (reported, not gating)", () => {
+    const { pairs } = scoreDirectivesMkdocs([
+      { kind: "classDef", selector: "meas", properties: { fill: "#0478572e", stroke: "#10b981" }, line: 1 },
+    ]);
+    const borders = pairs.filter((p) => p.kind === "border");
+    expect(borders).toHaveLength(2);
+    expect(borders.every((p) => p.advisory === true)).toBe(true);
+  });
+
+  test("an OPAQUE fill fails the forced light text in DARK mode (the bug, now caught)", () => {
+    const { pairs } = scoreDirectivesMkdocs([
+      { kind: "classDef", selector: "q", properties: { fill: "#cbd5e1", stroke: "#64748b" }, line: 1 },
+    ]);
+    const darkText = pairs.find((p) => p.kind === "text" && p.theme === "dark");
+    expect(darkText?.passes).toBe(false);
+    const lightText = pairs.find((p) => p.kind === "text" && p.theme === "light");
+    expect(lightText?.passes).toBe(true); // opaque pale fill is fine in light
+  });
+
+  test("missing fill is skipped (nothing to anchor)", () => {
+    const { pairs, skipped } = scoreDirectivesMkdocs([
+      { kind: "classDef", selector: "x", properties: { color: "#fff" }, line: 1 },
+    ]);
+    expect(pairs).toHaveLength(0);
+    expect(skipped[0]?.reason).toMatch(/nothing to anchor/);
+  });
+
+  test("unparseable fill is skipped with reason", () => {
+    const { pairs, skipped } = scoreDirectivesMkdocs([
+      { kind: "classDef", selector: "x", properties: { fill: "not-a-color" }, line: 1 },
+    ]);
+    expect(pairs).toHaveLength(0);
+    expect(skipped.some((s) => /fill unparseable/.test(s.reason))).toBe(true);
+  });
+
+  test("unparseable stroke routes the border pair to skipped", () => {
+    const { skipped } = scoreDirectivesMkdocs([
+      { kind: "classDef", selector: "x", properties: { fill: "#1d4ed836", stroke: "not-a-color" }, line: 1 },
+    ]);
+    expect(skipped.some((s) => /border pair unparseable/.test(s.reason))).toBe(true);
+  });
+
+  test("non-classDef/style directives are ignored", () => {
+    const { pairs, skipped } = scoreDirectivesMkdocs([
+      { kind: "linkStyle", selector: "0", properties: { stroke: "#777" }, line: 1 },
+    ]);
+    expect(pairs).toHaveLength(0);
+    expect(skipped).toHaveLength(0);
+  });
+});
+
+describe("scoreForProfile + auditContent profile", () => {
+  test("dispatches to github vs mkdocs-material", () => {
+    const dirs: StyleDirective[] = [
+      { kind: "classDef", selector: "e", properties: { fill: "#1d4ed836", stroke: "#3b82f6" }, line: 1 },
+    ];
+    const gh = scoreForProfile(dirs, "github");
+    const md = scoreForProfile(dirs, "mkdocs-material");
+    // github: one border pair (fill+stroke), no per-theme split.
+    expect(gh.pairs.every((p) => p.theme === undefined)).toBe(true);
+    // mkdocs: per-theme pairs present.
+    expect(md.pairs.some((p) => p.theme === "dark")).toBe(true);
+  });
+
+  test("auditContent carries the profile and gates on text only under mkdocs", () => {
+    const src = `flowchart LR\n  classDef entity fill:#1d4ed836,stroke:#3b82f6,stroke-width:2px\n`;
+    const r = auditContent(src, "<inline>", "mkdocs-material");
+    expect(r.profile).toBe("mkdocs-material");
+    expect(r.fail_count).toBe(0); // text AAA both themes; border advisory excluded
+  });
+});
+
+describe("detectProfile", () => {
+  const base = mkdtempSync(join(tmpdir(), "mermaid-detect-"));
+
+  test("an ancestor mkdocs.yml ⇒ mkdocs-material", () => {
+    const proj = join(base, "site");
+    mkdirSync(join(proj, "docs"), { recursive: true });
+    writeFileSync(join(proj, "mkdocs.yml"), "site_name: x\n");
+    expect(detectProfile(join(proj, "docs", "page.md"))).toBe("mkdocs-material");
+  });
+
+  test("no ancestor mkdocs.yml ⇒ github", () => {
+    // os tmpdir has no mkdocs.yml ancestor → github.
+    expect(detectProfile(join(base, "lonely.md"))).toBe("github");
+  });
+});
+
 // ─── CLI entry ───────────────────────────────────────────────────────────────
 
 describe("main() CLI", () => {
@@ -288,6 +403,34 @@ describe("main() CLI", () => {
     writeFileSync(path, `flowchart LR\n    classDef orphan color:#ffffff\n`);
     // No fill → skipped, no pairs → fail_count=0 → returns 0.
     expect(await main([path])).toBe(0);
+  });
+
+  test("--profile mkdocs-material on a translucent diagram passes (advisory border formatter)", async () => {
+    // Default output exercises the theme tag + advisory ⚠ branches in formatReport.
+    const path = join(tmp, "mkdocs-ok.md");
+    writeFileSync(
+      path,
+      `# D\n\n\`\`\`mermaid\nflowchart LR\n    A:::entity\n    classDef entity fill:#1d4ed836,stroke:#3b82f6,stroke-width:2px\n\`\`\`\n`,
+    );
+    expect(await main([path, "--profile", "mkdocs-material"])).toBe(0);
+  });
+
+  test("--profile mkdocs-material on an OPAQUE diagram fails (text invisible in dark)", async () => {
+    const path = join(tmp, "mkdocs-bad.mmd");
+    writeFileSync(path, `flowchart LR\n    classDef q fill:#cbd5e1,stroke:#64748b\n`);
+    expect(await main([path, "--profile", "mkdocs-material"])).toBe(1);
+  });
+
+  test("explicit --profile github scores fill×color as before", async () => {
+    const path = join(tmp, "gh.mmd");
+    writeFileSync(path, `flowchart LR\n    classDef good fill:#2563eb,color:#ffffff\n`);
+    expect(await main([path, "--profile", "github"])).toBe(0);
+  });
+
+  test("invalid --profile returns 2 (usage error)", async () => {
+    const path = join(tmp, "p.mmd");
+    writeFileSync(path, `flowchart LR\n    classDef good fill:#2563eb,color:#fff\n`);
+    expect(await main([path, "--profile", "nonsense"])).toBe(2);
   });
 });
 

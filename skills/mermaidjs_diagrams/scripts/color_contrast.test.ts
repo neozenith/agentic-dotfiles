@@ -9,7 +9,15 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { apcaLc, extractStyleDirectives, main, wcagAssess, wcagRating, wcagRatio } from "./color_contrast.ts";
+import {
+  apcaLc,
+  compositeOver,
+  extractStyleDirectives,
+  main,
+  wcagAssess,
+  wcagRating,
+  wcagRatio,
+} from "./color_contrast.ts";
 
 // ─── Canonical ratio values ──────────────────────────────────────────────────
 
@@ -109,6 +117,55 @@ describe("apcaLc — sign matters (polarity)", () => {
 
   test("light text on dark bg has POSITIVE Lc", () => {
     expect(apcaLc("#ffffff", "#000000")).toBeGreaterThan(0);
+  });
+});
+
+// ─── compositeOver — alpha compositing in sRGB ───────────────────────────────
+
+describe("compositeOver", () => {
+  test("opaque foreground passes through unchanged", () => {
+    expect(compositeOver("#ff0000", "#ffffff")).toBe("#ff0000");
+  });
+
+  test("fully transparent foreground yields the background", () => {
+    expect(compositeOver("rgb(255 255 255 / 0)", "#2563eb")).toBe("#2563eb");
+  });
+
+  test("50% black over white is a mid grey (~#808080, ratio ~3.95 on white)", () => {
+    const grey = compositeOver("rgb(0 0 0 / 0.5)", "#ffffff");
+    expect(wcagRatio(grey, "#ffffff")).toBeCloseTo(3.95, 1);
+  });
+
+  test("translucent over translucent yields an alpha-resolved 8-digit hex", () => {
+    // outA = 0.5 + 0.5*(1-0.5) = 0.75 → not fully opaque → 8-digit hex.
+    const r = compositeOver("rgb(255 0 0 / 0.5)", "rgb(0 0 255 / 0.5)");
+    expect(r).toHaveLength(9);
+  });
+
+  test("both fully transparent → outA 0 branch returns transparent black", () => {
+    expect(compositeOver("rgb(0 0 0 / 0)", "rgb(0 0 0 / 0)")).toBe("#00000000");
+  });
+
+  test("a translucent mermaid fill over a page bg becomes the visible box", () => {
+    // #1d4ed8 at ~21% over white → a pale blue with AAA dark text on it.
+    const box = compositeOver("#1d4ed836", "#ffffff");
+    expect(wcagRatio("#36464e", box)).toBeGreaterThan(7);
+  });
+});
+
+// ─── --over CLI flag (two-layer compositing) ─────────────────────────────────
+
+describe("main() --over", () => {
+  test("translucent fill under dark text on a light page passes (AAA)", async () => {
+    expect(await main(["#36464e", "#1d4ed836", "--over", "#ffffff", "--json"])).toBe(0);
+  });
+
+  test("same translucent fill on the dark page with light forced text also passes", async () => {
+    expect(await main(["hsl(225 18% 86% / 0.82)", "#1d4ed836", "--over", "#1e2129", "--json"])).toBe(0);
+  });
+
+  test("--over default (non-json) output path renders", async () => {
+    expect(await main(["#36464e", "#1d4ed836", "--over", "#ffffff"])).toBe(0);
   });
 });
 

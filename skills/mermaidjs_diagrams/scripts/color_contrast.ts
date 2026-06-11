@@ -65,6 +65,37 @@ export function apcaLc(fg: string, bg: string): number {
   return new Color(fg).contrast(new Color(bg), "APCA");
 }
 
+/**
+ * Composite a (possibly translucent) foreground color over a background using
+ * "simple alpha over" in gamma-encoded sRGB — the exact model browsers use for
+ * `opacity` / rgba fills. Returns an opaque (or alpha-resolved) hex.
+ *
+ * This is what lets contrast be assessed for translucent Mermaid fills: a fill
+ * like `#1d4ed836` has no contrast of its own until you know what page background
+ * bleeds through it (`compositeOver("#1d4ed836", "#ffffff")` → the visible box).
+ */
+export function compositeOver(fg: string, bg: string): string {
+  const f = new Color(fg).to("srgb");
+  const b = new Color(bg).to("srgb");
+  const fa = f.alpha ?? 1;
+  const ba = b.alpha ?? 1;
+  const outA = fa + ba * (1 - fa);
+  const ch = (i: number): number => {
+    if (outA === 0) return 0;
+    const fc = f.coords[i] ?? 0;
+    const bc = b.coords[i] ?? 0;
+    return (fa * fc + ba * (1 - fa) * bc) / outA;
+  };
+  // Format canonically as #rrggbb (or #rrggbbaa) — colorjs's hex formatter emits
+  // short forms (#f00), which callers and tests don't expect.
+  const hx = (v: number): string =>
+    Math.round(Math.max(0, Math.min(1, v)) * 255)
+      .toString(16)
+      .padStart(2, "0");
+  const base = `#${hx(ch(0))}${hx(ch(1))}${hx(ch(2))}`;
+  return outA < 1 ? `${base}${hx(outA)}` : base;
+}
+
 /** Classify a WCAG ratio into the rating tier most commonly cited. */
 export function wcagRating(ratio: number): WcagRating {
   if (ratio >= 7) return "AAA";
@@ -187,12 +218,14 @@ function printHelp(): void {
 color_contrast.ts — WCAG contrast calculator (accepts any CSS color syntax)
 
 Usage:
-  bun run color_contrast.ts <foreground> <background> [--json]
+  bun run color_contrast.ts <foreground> <background> [--over <backdrop>] [--json]
   bun run color_contrast.ts --stdin [--json]
 
 Examples:
   bun run color_contrast.ts "#ffffff" "#2563eb"
   bun run color_contrast.ts "rgb(55 65 81)" "oklch(0.98 0 0)" --json
+  # Translucent fill: composite over the page bg first (light + dark)
+  bun run color_contrast.ts "#36464e" "#1d4ed836" --over "#ffffff"
   echo '[["#fff","#777"],["red","blue"]]' | bun run color_contrast.ts --stdin --json
 
 Output:
@@ -238,6 +271,7 @@ export async function main(argv: string[] = Bun.argv.slice(2)): Promise<number> 
       options: {
         json: { type: "boolean", default: false },
         stdin: { type: "boolean", default: false },
+        over: { type: "string" },
         help: { type: "boolean", short: "h", default: false },
       },
       allowPositionals: true,
@@ -311,7 +345,17 @@ export async function main(argv: string[] = Bun.argv.slice(2)): Promise<number> 
 
   let assessment: ContrastAssessment;
   try {
-    assessment = wcagAssess(positionals[0] ?? "", positionals[1] ?? "");
+    let fg = positionals[0] ?? "";
+    let bg = positionals[1] ?? "";
+    // --over <backdrop>: resolve translucency via the two-layer stack —
+    // bg composites over the backdrop, then fg composites over that. Lets you
+    // score a translucent fill (bg) under a translucent label (fg) on a page.
+    const over = typeof values.over === "string" ? values.over : undefined;
+    if (over) {
+      bg = compositeOver(bg, over);
+      fg = compositeOver(fg, bg);
+    }
+    assessment = wcagAssess(fg, bg);
   } catch (err) {
     console.error(`error: could not parse colors: ${(err as Error).message}`);
     return 2;

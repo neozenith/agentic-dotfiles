@@ -49,6 +49,22 @@ text) and every `fill × stroke` pair passes AA (≥ 3:1 for borders). Any
 non-zero exit is a **blocker** — fix the palette or drop the custom
 styling.
 
+**The gate is context-aware** (`--profile auto|github|mkdocs-material`, default
+`auto` = detect by an ancestor `mkdocs.yml`):
+
+- **github** (plain markdown / `mmdc`): you control the text — the `fill × color`
+  rule above applies. Pair every `fill:` with a `color:` (see `color_theming.md` §3).
+- **mkdocs-material**: the host theme **forces** the label text and ignores your
+  `color:`. Here the correct pattern is the **opposite** — *no* `color:`, a
+  **translucent** fill, and the diagram must read in both light and dark. The gate
+  composites each fill over both theme backgrounds and scores the forced text in
+  each; borders are advisory (a saturated stroke can't clear 3:1 on a faint fill in
+  both themes). See `resources/color_host_themed_renderers.md` and use:
+
+  ```bash
+  bun run .../scripts/mermaid_contrast.ts docs/ --profile mkdocs-material
+  ```
+
 For ad-hoc color-pair checks (picking from a screenshot, validating a
 theme token pair before committing):
 
@@ -71,7 +87,9 @@ visual clarity the way complexity checks gate the **structural** axis.
 Wire both into any `make ci` / pre-commit pipeline that touches docs.
 
 > Deep-dive references:
-> - `resources/color_theming.md` — palette catalog, HSL encoding, dark/light mode safety
+> - `resources/color_theming.md` — conceptual core: HSL encoding, dark/light mode safety, hierarchy, subgraph coloring
+> - `resources/color_palette_recipes.md` — the four palette recipes, a worked example, and the Tailwind hex lookup
+> - `resources/color_host_themed_renderers.md` — translucent dual-theme fills for host-themed renderers (MkDocs Material)
 > - `scripts/mermaid_contrast.ts` — diagram-aware WCAG audit (scans `classDef`/`style` directives in `.md` / `.mmd`)
 > - `scripts/color_contrast.ts` — generic WCAG + APCA calculator for ad-hoc pairs
 
@@ -212,14 +230,21 @@ Two complementary tools:
 | `scripts/color_contrast.ts` | Generic WCAG + APCA calculator for any two CSS colors (hex, rgb, oklch, named, etc.) | Ad-hoc pair checks — e.g. sampling colors from a screenshot or comparing theme tokens |
 
 ```bash
-# Audit every diagram in a directory tree
+# Audit every diagram in a directory tree (auto-detects mkdocs vs github)
 bun run .claude/skills/mermaidjs_diagrams/scripts/mermaid_contrast.ts docs/
 bun run .claude/skills/mermaidjs_diagrams/scripts/mermaid_contrast.ts docs/ --summary
 bun run .claude/skills/mermaidjs_diagrams/scripts/mermaid_contrast.ts docs/ --json
 
+# Force a render context (see "Required for every diagram")
+bun run .claude/skills/mermaidjs_diagrams/scripts/mermaid_contrast.ts docs/ --profile mkdocs-material
+bun run .claude/skills/mermaidjs_diagrams/scripts/mermaid_contrast.ts docs/ --profile github
+
 # Ad-hoc pair
 bun run .claude/skills/mermaidjs_diagrams/scripts/color_contrast.ts "#ffffff" "#2563eb"
 bun run .claude/skills/mermaidjs_diagrams/scripts/color_contrast.ts "rgb(55 65 81)" "oklch(0.98 0 0)" --json
+
+# Translucent fill: --over composites it onto the page bg first (resolve the box)
+bun run .claude/skills/mermaidjs_diagrams/scripts/color_contrast.ts "#36464e" "#1d4ed836" --over "#ffffff"
 
 # Batch pairs via stdin
 echo '[["#fff","#777"],["red","blue"]]' | bun run .claude/skills/mermaidjs_diagrams/scripts/color_contrast.ts --stdin --json
@@ -445,7 +470,9 @@ when they display in browser previews. Stick to **ASCII-only text** in node labe
 
 | File | Content |
 |------|---------|
-| `resources/color_theming.md` | Color palettes, HSL encoding, dark/light mode safety, subgraph coloring |
+| `resources/color_theming.md` | Conceptual core: HSL encoding, dark/light mode safety, hierarchy, subgraph coloring |
+| `resources/color_palette_recipes.md` | Four palette recipes, a worked example, and the Tailwind v3 hex lookup |
+| `resources/color_host_themed_renderers.md` | Translucent dual-theme fills for host-themed renderers (MkDocs Material) |
 | `resources/diagram_organization.md` | Lens naming, dual-density approach, README sync |
 | `resources/layout_algorithms.md` | `layout` + `look` config for dagre / elk / tidy-tree / cose-bilkent, ELK tuning keys, per-diagram-type support |
 | `resources/pattern_render_markdown.md` | Full render-from-markdown documentation |

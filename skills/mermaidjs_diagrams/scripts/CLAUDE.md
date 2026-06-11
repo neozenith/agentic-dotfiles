@@ -342,6 +342,38 @@ Run from project root with `make -C`. Never `cd` into the scripts directory
 | Formatter / Linter | `ruff format` + `ruff check` | `biome format` + `biome lint` via `bunx --bun` |
 | Per-dir config siblings | `conftest.py` | `tsconfig.json`, `biome.json`, `package.json`, `bun.lock` |
 
+## Design Decisions (ADR)
+
+### ADR-001 — The contrast gate is context-aware (github vs mkdocs-material)
+
+**Status:** accepted.
+
+**Context.** The original gate scored `fill × color` (text ≥4.5) and `fill × stroke`
+(border ≥3), assuming the author controls the label text. That holds on GitHub/`mmdc`.
+It is **false** under Material for MkDocs: the host theme forces the label text from a CSS
+variable (dark in light mode, light in dark) and ignores `classDef color:`. A palette that
+"passes" the old gate (opaque fill + `color:#fff`) goes unreadable when the reader flips to
+the other theme — the exact bug the gate exists to prevent, sailing straight through it.
+
+**Decision.** `mermaid_contrast.ts` gained `--profile auto|github|mkdocs-material`. The
+`mkdocs-material` profile ignores `color:`, composites each (usually translucent) fill over
+**both** theme backgrounds, and scores the host-forced text against the resulting box in
+light **and** dark. `auto` detects the context by walking up for an ancestor `mkdocs.yml`.
+`compositeOver()` (in `color_contrast.ts`, exposed on the CLI as `--over`) does the sRGB
+"simple alpha over" math. Borders are **advisory** under mkdocs (a saturated stroke cannot
+clear 3:1 against a faint fill in both themes; the category is also carried by the AAA label
++ tint, so the stroke is reinforcement, not a gating signal).
+
+**Consequences.** The gate now matches the renderer. `DiagramContrastReport` carries a
+`profile`; `ContrastPair` carries optional `theme` + `advisory`. `fail_count` (and the exit
+code) exclude advisory pairs. The Material anchor colours are baked-in constants — if a
+project re-themes its palette, those drift (read them off `--md-*` and update, or add a flag).
+
+**Lens.** *When a host environment overrides a styling property your tool assumes the author
+controls, don't keep auditing the authored value — detect the context and audit what the host
+actually renders, in every state the host can render (here: both themes). A gate that checks
+the wrong layer is worse than no gate: it grants false confidence.*
+
 ## Related
 
 - `../SKILL.md` — public-facing skill surface (what this skill does).
