@@ -2,7 +2,7 @@
 
 Reloads the module under test *after* pytest-cov's tracer starts, so module-level
 statements are counted toward coverage. See
-``.claude/rules/claude_skills.md`` → "conftest.py for Coverage Reload".
+``.claude/rules/claude_skills/scripts.md`` → "conftest.py for Coverage Reload".
 """
 
 from __future__ import annotations

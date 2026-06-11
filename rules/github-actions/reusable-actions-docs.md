@@ -7,7 +7,7 @@ paths:
 
 Every local composite/JS action under `.github/actions/<name>/` carries **two** documents
 plus its `action.yml`. This is the action-flavoured sibling of the skill docs contract in
-[`../claude_skills_docs.md`](../claude_skills_docs.md): same two audiences, **but there is no
+[`../claude_skills/docs.md`](../claude_skills/docs.md): same two audiences, **but there is no
 `SKILL.md`** — an action has no runtime agent-skill surface; its machine interface is
 `action.yml` (typed `inputs`/`outputs`). A new action is not "done" until both docs exist and
 the README's diagrams pass the gates below.

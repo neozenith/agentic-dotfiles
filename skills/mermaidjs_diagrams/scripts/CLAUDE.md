@@ -378,6 +378,6 @@ the wrong layer is worse than no gate: it grants false confidence.*
 
 - `../SKILL.md` — public-facing skill surface (what this skill does).
 - `../README.md` — ultra-short feature pitch for drive-by readers.
-- `.claude/rules/claude_skills.md` — the canonical convention doc this file
+- `.claude/rules/claude_skills/index.md` — the canonical convention doc this file
   was derived from. If it changes, consider updating this file to match (or
   prune it if you'd rather link-only).

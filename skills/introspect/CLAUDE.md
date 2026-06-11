@@ -15,8 +15,8 @@ make -C .claude/skills/introspect/scripts ci    # the gate: format, lint, mypy -
 ```
 
 `ci` must be 0-exit before handing work off. Use sub-targets (`lint`, `typecheck`, `test-cov`,
-`smoke`) only to narrow a failure; the contract is `ci`. See `.claude/rules/claude_skills.md`
-for the canonical convention and `.claude/rules/claude_skills_docs.md` for the docs contract.
+`smoke`) only to narrow a failure; the contract is `ci`. See `.claude/rules/claude_skills/index.md`
+for the canonical convention and `.claude/rules/claude_skills/docs.md` for the docs contract.
 
 ## File map
 

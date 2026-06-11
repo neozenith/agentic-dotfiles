@@ -14,7 +14,7 @@ make -C .claude/skills/art-edit/scripts ci    # the gate: format-check, lint, my
 ```
 
 `ci` must be 0-exit before handing work off. Use sub-targets (`lint-py`, `typecheck-py`,
-`test-cov-py`, …) only to narrow a failure. See `.claude/rules/claude_skills.md`.
+`test-cov-py`, …) only to narrow a failure. See `.claude/rules/claude_skills/index.md`.
 
 ## File map
 

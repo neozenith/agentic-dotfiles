@@ -15,7 +15,7 @@ make -C .claude/skills/art-gen/scripts ci    # the gate: format-check, lint, myp
 
 `ci` must be 0-exit before handing work off. Use per-language sub-targets
 (`format-check-py`, `lint-py`, `typecheck-py`, `test-cov-py`) only to narrow a failure;
-the contract is `ci`. See `.claude/rules/claude_skills.md` for the canonical convention.
+the contract is `ci`. See `.claude/rules/claude_skills/index.md` for the canonical convention.
 
 ## File map
 

@@ -12,9 +12,9 @@ invariant that applies to *every* file under `.claude/skills/**` and
 
 | Sibling | Owns |
 |---------|------|
-| [`claude_skills_docs.md`](claude_skills_docs.md) | The **documentation** contract — the `SKILL.md` / `README.md` / `CLAUDE.md` trio, diagram gates, the docs done-when checklist. |
-| [`claude_skills_scripts.md`](claude_skills_scripts.md) | The **code** contract — the Makefile `fix`/`ci` loop, tests, coverage, per-language tooling. |
-| [`agnostic_examples.md`](agnostic_examples.md) | The cross-cutting **brand-agnostic** rule that all three must honour. |
+| [`docs.md`](docs.md) | The **documentation** contract — the `SKILL.md` / `README.md` / `CLAUDE.md` trio, diagram gates, the docs done-when checklist. |
+| [`scripts.md`](scripts.md) | The **code** contract — the Makefile `fix`/`ci` loop, tests, coverage, per-language tooling. |
+| [`../agnostic_examples.md`](../agnostic_examples.md) | The cross-cutting **brand-agnostic** rule that all three must honour. |
 
 Start here, then descend to the sibling that matches your change. Each sibling
 links back up to this root, so the family is navigable from any entry point.
@@ -37,7 +37,7 @@ ceiling forces the split *before* the file becomes unnavigable.
 > human/agent-readable surface. Three things are **out of scope** because the
 > ceiling can't apply meaningfully to them:
 > - **Code source files** (`*.py`, `*.ts`) — governed by their own quality gates
->   in [`claude_skills_scripts.md`](claude_skills_scripts.md) (coverage, lint, type).
+>   in [`scripts.md`](scripts.md) (coverage, lint, type).
 > - **Test fixtures** — files that exist to be *fed to a script* (e.g. a lint
 >   fixture with expected output baked in, wired into the Makefile). Splitting one
 >   changes the script's input and breaks the test it backs.
@@ -57,11 +57,11 @@ parent index plus cohesive children, the same way a B-tree splits a full node.
 Treat the family as a tree of nodes (files), each held under 500 lines:
 
 ```
-claude_skills.md                 ← root: the size invariant + family map
-├── claude_skills_docs.md        ← child: documentation contract
+claude_skills/index.md           ← root: the size invariant + family map
+├── claude_skills/docs.md        ← child: documentation contract
 │   └── (future) resources split if it overflows
-├── claude_skills_scripts.md     ← child: code contract
-└── agnostic_examples.md         ← child: cross-cutting constraint
+├── claude_skills/scripts.md     ← child: code contract
+└── agnostic_examples.md         ← sibling rule: cross-cutting constraint (one level up)
 ```
 
 ### How to split a node
