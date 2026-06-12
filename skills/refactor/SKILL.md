@@ -34,11 +34,17 @@ Evidence behind every rule: [resources/evidence.md](resources/evidence.md).
 
 Rank candidates by, in order:
 
-1. **Hotspots** — high churn × high complexity (the only signals with strong
-   empirical backing; low-quality code in hot paths carries 15x defect rates).
-2. **Dependency cycles** — the empirically expensive architectural debt
-   (first by practitioner-ranked refactoring cost; cyclically coupled files
-   dominate defect- and vulnerability-prone sets).
+1. **Hotspots** — high churn × high complexity. Honest scope: hotspots are a
+   *where-to-look* heuristic, not a promise (deployed file-ranking at Google
+   changed nothing because rankings alone aren't actionable; metric-fault
+   correlations largely vanish when size is controlled). Every hotspot
+   candidate must therefore carry a concrete, human-actionable reason —
+   "splitting along this co-change seam shrinks the blast radius of X" — or
+   it doesn't rank.
+2. **Dependency cycles that cross intended module boundaries or block a
+   concrete goal** (testability, extraction, build parallelism). Cycles are
+   ubiquitous in healthy software and the cycle-defect link is correlational;
+   "cycle exists" alone never triggers work.
 3. **Hub/god modules** at coupling centers (antipattern participation predicts
    fault-proneness beyond size).
 4. **ADR drift** — code that contradicts a documented decision. Restoring
@@ -61,28 +67,44 @@ Classify each chosen candidate:
 |---------|---------|--------|
 | **Conforming** | restores an ADR / documented decision | proceed; top priority |
 | **Neutral** | no recorded decision speaks | proceed; if the change embodies a new decision, draft an ADR with it |
-| **Conflicting** | contradicts an Accepted ADR | **STOP.** Surface the conflict, propose a superseding ADR, ask the user. Never silently refactor against a recorded decision. |
+| **Conflicting** | contradicts an Accepted ADR | **STOP and surface.** Never silently refactor against a recorded decision — but present the ADR's age and last-touched date alongside the conflict (most ADR sets are abandoned fossils; ~50% of ADR-using repos hold ≤5 records). Offer two paths: a lightweight amendment note (default for stale, never-reaffirmed ADRs) or full supersession (for decisions with recent reaffirmation). The user decides; the agent never does. |
 
 ## Phase 3 — Safety net (before any edit)
 
-- Verify test coverage at the affected seams. Where absent, write
-  **characterization tests** at the module boundary capturing *current*
-  behavior — including oddities. They are immutable during the refactor:
-  a changed assertion = behavior change = stop and report.
+- Verify test coverage at the affected seams — and don't trust green alone:
+  the empirical norm is that only ~22% of refactoring edits are adequately
+  covered by existing tests. Where coverage is thin, write **characterization
+  tests** at the module boundary capturing *current* behavior; for high-risk
+  moves, spot-check the net with a quick mutation probe (introduce a deliberate
+  break, confirm a test fails, revert).
+- Characterization tests are not literally immutable — they pin noise as well
+  as behavior. A change to one requires explicit classification, logged in the
+  plan: **pinned-bug** (keep pinning, note the bug), **pinned-noise**
+  (timestamp/ordering artifacts — fix the assertion, say so), or **genuine
+  behavior change** (= not a refactoring: stop and report).
 - Risk-tier the plan: renames/extracts → standard suite suffices.
   Moves across module boundaries and inheritance-hierarchy surgery → mandatory
-  characterization tests + exported-surface re-check (these operations induce
-  bugs in up to ~40% of cases even for humans).
+  characterization tests + exported-surface re-check (hierarchy surgery induces
+  bugs in up to ~40% of cases even for humans; spend the safety budget there,
+  not uniformly).
 
 ## Phase 4 — Execution (small reversible steps)
 
-- **Two hats**: structure-only. No behavior change, no drive-by fixes, no
-  "while I'm here" edits — log those as follow-ups instead.
-- **One named transformation per commit**; full test suite green between every
-  step; audit each diff against the stated plan before moving on.
-- For boundary replacement use branch-by-abstraction / strangler-fig style:
-  introduce the abstraction, move consumers incrementally, keep the old path
-  as fallback until the last consumer moves, then delete. No big-bang.
+- **Two hats is a commit-staging discipline, not a workflow ban.** In the
+  wild, 91% of refactoring happens interleaved with other work ("floss
+  refactoring") and that practice is effective — what must never mix is a
+  single *commit*: stage structure and behavior separately (`git add -p`),
+  one named transformation per structure commit. During a planned macro
+  refactor under this skill, drive-by behavior fixes are logged as follow-ups,
+  not snuck into structure commits.
+- Full test suite green between every step; audit each diff against the
+  stated plan before moving on.
+- For boundary replacement use branch-by-abstraction / strangler-fig style —
+  with **kill criteria declared up front**: every facade/adapter gets a
+  decommission condition and target date, because the documented strangler
+  failure mode is permanent dual-system limbo. (Rewrites do sometimes win —
+  stable domain, mature team knowledge — but recommending one is a scope
+  change to raise, not a refactoring.)
 - Prefer deterministic tooling for mechanical transforms (IDE/LSP rename,
   codemod, `git mv`) over hand-editing many files.
 
@@ -90,12 +112,18 @@ Classify each chosen candidate:
 
 1. Full `make ci` (or suite + typecheck + lint). Green tests are necessary,
    not sufficient.
-2. **Re-measure the macro claim**: cycle removed? fan-in reduced? interface
-   smaller? If the metric didn't move, the refactoring failed regardless of
-   green tests — say so.
+2. **Re-measure the macro claim in operational terms**: the named outcome
+   from Phase 1 ("module X extractable", "test time halved", "cycle across
+   the api/storage boundary gone"). Static quality scores (LCOM, smell
+   counts) are NOT success metrics — refactoring routinely worsens them while
+   achieving its real goal. If the named outcome didn't materialize, the
+   refactoring failed regardless of green tests — say so.
 3. **Encode the restored invariant as a fitness function** where tooling
    allows (dependency-cruiser / import-linter rule, cycle check in CI) so the
-   boundary can't silently erode again.
+   boundary can't silently erode again. Each fitness function carries an
+   owner and a review-by date, and enters CI in warn-mode for a grace period
+   before hard-fail — a stale architecture test doesn't just mislead, it
+   breaks builds until someone with the least context deletes it.
 4. Update or add ADRs if a decision was made or superseded.
 
 ## When NOT to refactor

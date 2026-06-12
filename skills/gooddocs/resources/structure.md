@@ -34,11 +34,16 @@ citation — justify whitespace by chunking and scanning, never by that number.
    immediately by another heading) **and no lonely subheading** (exactly one
    H3 under an H2 — a split with one part is not a split).
 
-### Frontloading (BLUF at every level)
+### Frontloading (BLUF — scoped by rung)
 
 7. **Doc opens with a 1-3 sentence summary; every section's first sentence
    states its point; every paragraph's first sentence is its topic sentence.**
-   Scanners read first sentences and bail.
+   Scanners read first sentences and bail. **Scope:** full force on lookup
+   pages (how-to, reference, reports); on tutorials the BLUF is a
+   *destination preview* ("here's what you'll build"), never each step's
+   resolution; explanations may open with a motivated question. Scanning
+   research comes from lookup tasks — learning pages legitimately favor
+   connected, coherent prose (see lenses.md counter-evidence).
 8. **Paragraphs: one idea, 3-5 sentences.** A run of one-sentence paragraphs
    is faulty organization — merge them or convert to a list.
 
@@ -60,7 +65,9 @@ citation — justify whitespace by chunking and scanning, never by that number.
 
 12. **Blank line between every block; no prose wall longer than ~4 paragraphs
     without a visual interrupt** (heading, list, table, or code fence — they
-    act as fixation anchors). (Lintable: MD012/MD022/MD031/MD032.)
+    act as fixation anchors). (Lintable: MD012/MD022/MD031/MD032.) On
+    learning-rung pages (tutorial narration, explanation) coherent prose may
+    run longer when the connected reasoning is doing the work.
 13. **Pick a source-line discipline and state it:** ~80-100-col wrap, or
     semantic line breaks (one sentence/clause per line — diff-friendly for
     specs under review; [sembr.org](https://sembr.org/)). Never reflow-wrap:

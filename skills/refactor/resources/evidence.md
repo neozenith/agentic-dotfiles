@@ -2,6 +2,49 @@
 
 Why each rule in [../SKILL.md](../SKILL.md) exists.
 
+## Counter-evidence (red-team round, incorporated 2026-06)
+
+A dedicated disconfirmation pass found these; each drove an amendment:
+
+- **Floss refactoring is the observed norm and it works**: 91% of
+  refactorings occur interleaved with other work; 65% of refactoring commits
+  are mixed; pure "root-canal" sessions are rare and disliked (Murphy-Hill,
+  Parnin & Black, ICSE 2009,
+  [ACM](https://dl.acm.org/doi/10.1109/icse.2009.5070529)). → Two hats
+  demoted from workflow ban to commit-staging discipline.
+- **Deployed hotspot/defect rankings changed nothing at Google** — accurate
+  and ignored, because file rankings aren't actionable (Lewis et al., ICSE
+  2013, [ACM](https://dl.acm.org/doi/10.5555/2486788.2486838)); and
+  metric-fault correlations largely vanish controlling for size (El Emam et
+  al., TSE 2001). → Hotspots are where-to-look only; every candidate needs an
+  actionable reason.
+- **Cycle-defect evidence is correlational; cycles are ubiquitous in healthy
+  systems; no study shows cycle-breaking reduced defects.** → Only
+  boundary-crossing or goal-blocking cycles rank.
+- **ADRs are empirically abandoned artifacts** (~50% of ADR-using repos hold
+  ≤5 records; Buchgeher et al., IEEE Access 2023,
+  [IEEE](https://ieeexplore.ieee.org/document/10155430/)) — a hard
+  supersession gate gives the least-maintained artifact veto power. →
+  Conflict still stops, but with ADR age surfaced and a lightweight-amendment
+  default for fossils.
+- **Existing tests cover only ~22% of refactoring edits adequately**
+  (Rachatasumrit & Kim, ICSM 2012,
+  [PDF](https://web.cs.ucla.edu/~miryung/Publications/icsm2012-RefRT.pdf)),
+  and characterization tests pin noise as behavior. → Mutation spot-checks;
+  "immutable" replaced with classified, logged changes.
+- **Static quality metrics move the wrong way under real refactoring**
+  (Stroggylos & Spinellis 2007; Cedrim et al. FSE 2017: most refactorings
+  don't remove the smells they touch). → Success is the named operational
+  outcome, never a metric score.
+- **Strangler migrations stall in permanent dual-system limbo** (practitioner
+  consensus; no completion-rate data exists either way), and successful
+  big-bang rewrites exist (Basecamp 2/3, Trello). → Kill criteria +
+  decommission dates mandatory; rewrite acknowledged as a raisable option.
+- **Kim et al. cuts both ways and is cited both ways**: dedicated refactoring
+  reduced Windows 7 inter-module dependencies and defects, AND practitioners
+  report real cost/risk and don't use the strict behavior-preserving
+  definition. Both halves are true; this file cites both.
+
 ## Hotspots beat smell checklists
 
 - **Individual code smells do NOT predict maintenance effort** once file size

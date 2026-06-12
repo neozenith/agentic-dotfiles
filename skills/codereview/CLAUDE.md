@@ -85,6 +85,26 @@ All files ≤ 500 lines (`.claude/rules/claude_skills/index.md`).
 - **Lens:** Don't churn file layout for symmetry alone; move EVIDENCE.md only
   when a real change touches it anyway.
 
+### ADR-5: round-2 red-team amendments — evidence gates, no silent drops, class-conditional bars
+
+- **Status:** Accepted (2026-06; amends ADR-1's mechanics, keeps its goal)
+- **Context:** A dedicated disconfirmation research pass (see EVIDENCE.md
+  "Counter-evidence") showed: LLM self-rated confidence is uncalibrated;
+  silent drops are unauditable; the nit cap was capping review's main
+  measured product (evolvability); the security denylist matched human
+  reviewers' worst blind spots; "senior engineer test" referents disagree 10×.
+- **Decision:** Reporting gates on evidence artifacts (citation + stated
+  trigger + surviving disproof), class-conditional bars (≥50 for
+  correctness/security/data-loss/concurrency, ≥75 for style), a collapsed
+  below-threshold appendix instead of silent drops, an uncapped Evolvability
+  section, data-flow-gated security scope, error-path/regression-test
+  carve-outs, and convergence scoped to untouched lines.
+- **Consequences:** Slightly noisier reviews on security-touching diffs — by
+  design; the precision-first stance now bends where the FN cost is unbounded.
+- **Lens:** Precision rules are class-conditional: tune strictness by the
+  cost of a missed finding in that class, never globally. And any filter must
+  leave an audit trail of what it removed.
+
 ## Extension checklist
 
 - [ ] New finding categories come with a denylist review — does the category

@@ -64,11 +64,40 @@ Why each rule in [../SKILL.md](../SKILL.md) exists.
   GitHub itself collapses generated files
   ([docs](https://docs.github.com/en/repositories/working-with-files/managing-files/customizing-how-changed-files-appear-on-github)).
 
-## Why a Socratic comprehension loop
+## Counter-evidence (red-team round, incorporated 2026-06)
 
-- Socratic guided self-explanation outperforms free self-explanation for
-  source-code comprehension specifically
-  ([comparative study](https://www.researchgate.net/publication/349845034_A_Comparative_Study_of_Free_Self-Explanations_and_Socratic_Tutoring_Explanations_for_Source_Code_Comprehension);
-  see also [arXiv:2310.03210](https://arxiv.org/pdf/2310.03210)). The loop
-  contract (one question per turn, distractors as named misconceptions,
-  learner controls pace) is shared with the local `coach` skill.
+These findings drove the round-2 amendments; they bound what the skill may claim.
+
+- **The decomposition null result:** di Biase et al. (PeerJ CS 2019, n=28) —
+  decomposition improved neither rationale-understanding nor defects found
+  nor time; only fewer false-positive comments. No replication either way.
+  Hence the honest value claim: fewer false conclusions, nothing more.
+  ([PeerJ](https://peerj.com/articles/cs-193/))
+- **Token-set verification is order-blind:** clone-detection literature shows
+  identifier normalization is a precision killer; bag comparison passes
+  argument swaps. Hence ordered-sequence + bijection mapping, and the
+  `shape-checked` label with stated scope.
+  ([SourcererCC](https://arxiv.org/pdf/1512.06448))
+- **Automation labels cause omission errors:** overtrust in automated aids →
+  complacency and unmonitored misses (Parasuraman & Riley 1997; Parasuraman
+  & Manzey 2010). Hence "shape-checked" states what it cannot catch, every
+  time. ([P&M 2010](https://journals.sagepub.com/doi/10.1177/0018720810376055))
+- **Fluent narration inflates trust regardless of accuracy:** placebic
+  explanations produce trust similar to real ones (Eiband et al., CHI 2019);
+  the sense of understanding is an overconfidence artifact (Trout 2002);
+  simple-story framings distort memory toward the story (Lombrozo 2007).
+  Hence austere, file:line-cited narration and prominent uncertainty.
+  ([CHI 2019](https://dl.acm.org/doi/fullHtml/10.1145/3290607.3312787))
+- **Stated intent is unreliable:** ~44% of commit messages lack what/why
+  (Tian et al., ICSE 2022); ~60% of refactoring commit messages are
+  inconsistent with the actual change. Hence intent as a claim diffed
+  against code, never the frame.
+  ([arXiv:2202.02974](https://arxiv.org/abs/2202.02974))
+- **Presentation order causally redirects detection:** defects in
+  later-positioned files are found less (Fregnan et al., EMSE 2022,
+  n=106 experiment + 219k PRs). The tour reallocates a fixed attention
+  budget — hence the mandatory "Not shown" disclosure and waved-through LOC
+  totals. ([arXiv:2208.04259](https://arxiv.org/abs/2208.04259))
+- **Folded content is missed:** NN/g accordion guidance (qualitative) —
+  hence deviants and security-sensitive paths are expansion-exempt.
+  ([NN/g](https://www.nngroup.com/articles/accordions-on-desktop/))

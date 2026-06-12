@@ -50,19 +50,24 @@ All files ≤ 500 lines (`.claude/rules/claude_skills/index.md`).
   universal git primitive, take the git primitive and compensate with a
   verification pass — the skill must work on *anyone's* PR.
 
-### ADR-2: deviant detection is exhaustive, never sampled
+### ADR-2: deviant detection is exhaustive, never sampled — and ordered
 
-- **Status:** Accepted
+- **Status:** Accepted (amended by red-team round, 2026-06)
 - **Context:** The whole value claim is "412 files = 1 pattern". A hidden
   hand-edit inside the sweep (the needle in the codemod) is both the main
   correctness risk and a known malicious-change vector.
-- **Decision:** Every cluster member gets a token-set/hunk-count check; output
-  labels each cluster `machine-verified` or `sampled`.
-- **Consequences:** Slower on huge PRs (fan out to subagents); the label keeps
-  the human's trust calibrated.
+- **Decision:** Every cluster member gets an *ordered* token-sequence check
+  with bijective identifier mapping (red-team finding: token-set comparison
+  is order-blind and passes argument swaps). The label is `shape-checked` —
+  never "verified" — and always states its scope (token-level only; no
+  semantics, no cross-hunk/cross-file checks), because automation-trust
+  labels cause omission errors (Parasuraman & Manzey).
+- **Consequences:** Slower on huge PRs (fan out to subagents); a residual
+  false-merge class remains (consistent semantic renames) and is documented
+  in clustering.md rather than hidden.
 - **Lens:** Any statement of the form "these N files all got the same change"
-  is a security claim — never make it from a sample, and always disclose the
-  verification level.
+  is a security claim — never make it from a sample, never from an unordered
+  comparison, and always disclose exactly what the check did NOT prove.
 
 ### ADR-3: narrative is pyramid-ordered, map-first
 
@@ -76,18 +81,37 @@ All files ≤ 500 lines (`.claude/rules/claude_skills/index.md`).
 - **Lens:** When adding a new output section, it must earn a line on the map —
   if it can't be summarized in one map line, it belongs behind the menu.
 
-### ADR-4: comprehension loop reuses the coach contract
+### ADR-4: Socratic quiz removed; guided cascade retained
 
-- **Status:** Accepted
-- **Context:** A second bespoke quiz protocol would drift from `coach` and
-  double maintenance.
-- **Decision:** Same per-turn rules (one diagnostic question, type choice,
-  misconception-encoding distractors, learner stops anytime), anchored only on
-  novel changes and deviants.
-- **Consequences:** Familiar UX across skills; no quiz state file (PR
-  understanding is session-scoped, unlike topic mastery).
-- **Lens:** Interactive teaching loops in this repo follow the coach contract;
-  diverge only with a recorded reason here.
+- **Status:** Accepted (supersedes the original quiz-loop ADR, 2026-06)
+- **Context:** The quiz protocol's evidence base was the thinnest in the
+  skill (novice-focused, small studies), and red-team findings showed
+  comprehension-feel is an overconfidence artifact (Trout 2002) — a quiz
+  answered from the narration measures recall of the story, not the code.
+  The maintainer asked for the capability that matters: an interactive guide
+  revealing cascading detail until the reviewer is satisfied.
+- **Decision:** Phase 3 is a menu-driven cascade — one section per turn,
+  progress markers, a live "Not shown" line, reviewer ends anytime, close
+  names what was never opened.
+- **Consequences:** Simpler protocol; the attention-preservation property is
+  kept; no question-type machinery to maintain.
+- **Lens:** Interactivity in this skill exists to protect the reviewer's
+  attention budget and keep their coverage gap visible — any new interactive
+  feature must serve one of those two, not pedagogy.
+
+### ADR-5: stated intent is a claim, never the frame
+
+- **Status:** Accepted (red-team round, 2026-06)
+- **Context:** ~44% of commit messages lack what/why; ~60% of refactoring
+  messages are inconsistent with the change. Narrating from stated intent
+  launders divergent implementations, and fluent narration earns trust
+  whether or not it's right.
+- **Decision:** The map leads with a code-grounded summary; stated intent is
+  diffed against it and discrepancies lead. Every behavioral claim carries
+  file:line; uncertainty is narrated with the same prominence as the story.
+- **Consequences:** Slightly less "smooth" walkthroughs; calibrated ones.
+- **Lens:** The code is the ground truth; prose artifacts (PR descriptions,
+  commit messages, this skill's own narration) are claims to check against it.
 
 ## Extension checklist
 

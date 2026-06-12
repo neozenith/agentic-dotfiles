@@ -1,13 +1,65 @@
 # Documentation Lenses & Style Principles
 
-Distilled from the Diátaxis framework, docs-as-code practice, and a survey of
-23 widely-respected open-source documentation sets. Sources at the end.
+Distilled from the Diátaxis framework, the audience-progression ladder used by
+major OSS docs sites, docs-as-code practice, and a survey of 23 respected
+documentation sets. Sources at the end.
 
-## The four lenses (Diátaxis)
+Two orthogonal axes organize everything here:
+
+1. **The audience ladder** (top-level IA): Quickstart → User Guides →
+   Reference, mapping to Beginner → Intermediate → Expert depth.
+2. **The four Diátaxis types** (within-rung discipline): tutorial, how-to,
+   reference, explanation.
+
+## The audience ladder (the top-level axis)
+
+| Rung | Audience | Reader's question | Optimizes for | Diátaxis types within |
+|------|----------|-------------------|---------------|----------------------|
+| **1. Quickstart** | Beginner, evaluating | "Does this work, and is it for me?" | Time-to-first-success (minutes, not hours) | compressed tutorial |
+| **2. User guides** | Intermediate, building | "How do I do X in my real project?" | Task completion + mental-model formation | how-to + explanation |
+| **3. Reference** | Expert, shipping/debugging | "What exactly does Y accept/return/guarantee?" | Lookup speed, completeness, precision | reference |
+
+In the wild: FastAPI's Tutorial → Advanced User Guide → generated reference;
+Stripe's quickstarts → guides → three-column API reference; React's *Learn* vs
+*Reference*; Rust's Book → by-Example → Reference/std → Rustonomicon (a
+five-rung ladder). The ladder supplies what Diátaxis lacks — gradation by
+accumulated competence; the same person needs rung 1 on day one and rung 3 in
+year one.
+
+**Rung-specific style rules:**
+
+- **Quickstart:** end-state shown first; ≤3 numbered copy-paste steps; ZERO
+  decisions (one stack, one happy path — alternatives via tabs, never
+  branching prose); an explicit success checkpoint ("you should see…"); no
+  explanation beyond one orienting sentence; no mid-step links (each is
+  measured drop-off); ends with a "Next steps" section of 2-4 curated guide
+  links — the only sanctioned exit.
+- **User guides:** goal-framed titles ("Handle webhooks", not "Webhooks");
+  prerequisites declared; trade-offs now introduced ("A when…, B when…");
+  real-project context. This is the rung where **connected prose is most
+  defensible** — readers still building a mental model need high-coherence
+  text (McNamara: low-knowledge readers comprehend more from coherent
+  connected text than fragmented chunks).
+- **Reference:** uniform schema per entry (signature → params → returns →
+  errors → example); tables over prose; dense and dry is correct here; no
+  entry assumes any other page was read; every entry links *up-ladder* to the
+  guide showing it in use.
+- **Cross-linking:** down-ladder links (guide → reference entry) everywhere;
+  up-ladder links (reference → guide) on every entry; stable anchors so deep
+  links don't rot.
+
+## The four lenses (Diátaxis — the within-rung discipline)
 
 Two axes — practical vs theoretical, acquiring vs applying skill — yield four
-document types. **One lens per page**; the contamination column is the failure
-mode that ruins each type.
+document types. The contamination column is the failure mode that ruins each
+type. Default to one lens per page — but as *per-claim clarity of purpose*,
+not dogma: Diátaxis's own author warns the four-way split is "a typical
+outcome of the good practice, not its end" and that an empty four-section
+skeleton is "horrible". Deliberate fusion with one consistent voice (Laravel)
+is a valid style; small projects (< ~10 pages) are better served by one good
+sectioned README than four near-empty buckets. Sanctioned escape categories
+that don't fit the four types: overview/landing pages, example galleries,
+FAQs, release notes, ADRs.
 
 | Lens | Serves | Mindset | Style rules | Contaminated by |
 |------|--------|---------|-------------|-----------------|
@@ -88,6 +140,26 @@ mode that ruins each type.
   references ([arXiv:2212.01479](https://arxiv.org/abs/2212.01479)).
 - Industry tooling (Swimm auto-sync) diffs PRs against doc-referenced code and
   auto-patches small drift — the audit-subagent fan-out is the local analog.
+
+## Counter-evidence and limits (red-team round, 2026-06)
+
+- **Diátaxis is a heuristic, not a law**: unfalsifiable, never validated in a
+  controlled study; its author disclaims purity
+  ([complex hierarchies](https://diataxis.fr/complex-hierarchies/)); whole
+  genres (overviews, example galleries) don't fit the four types
+  ([Hillel Wayne](https://www.hillelwayne.com/post/problems-with-the-4doc-model/)).
+  Hence the softened purity rule and escape categories above.
+- **Scannability research is about lookup, not learning**: NN/g's 79%-scan
+  finding comes from web tasks; for deep technical learning, low-knowledge
+  readers need high-coherence connected prose
+  ([McNamara et al.](https://www.tandfonline.com/doi/abs/10.1207/s1532690xci1401_1)).
+  Hence: scannability rules at full force on how-to/reference rungs, relaxed
+  on tutorial/explanation. BLUF on tutorials = destination preview, never the
+  resolution of each step (productive-failure evidence: withholding the
+  answer can improve retention).
+- **Narrative long-form keeps winning in the wild** (Laravel, SQLite essays,
+  Amazon's six-pagers): the skill optimizes lookup efficiency by default and
+  must know when it's on a learning page where coherence wins.
 
 ## Sources
 

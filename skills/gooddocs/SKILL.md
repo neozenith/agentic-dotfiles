@@ -7,11 +7,14 @@ user-invocable: true
 
 # Good Docs
 
-Two jobs: keep docs **true** (audit mode) and make docs **great** (write mode).
-Incorrect documentation is worse than missing documentation — drift detection
-comes first, style second. Every page gets exactly one lens (tutorial, how-to,
-reference, explanation); mixing lenses on one page is the root failure mode of
-bad docs.
+Three jobs: keep docs **true** (audit), make docs **great** (write), make
+docs **navigable** (restructure). Drift detection comes first, style second.
+Every page is classified on two axes: its **ladder rung** (Quickstart / User
+guide / Reference — i.e., Beginner / Intermediate / Expert depth) and its
+**lens** (tutorial, how-to, reference, explanation). The ladder is the
+top-level structure; lenses are the within-rung discipline. Default to one
+lens per page, but deliberate fusion with one consistent voice is valid —
+purity is a heuristic, not a law (its own author says so).
 
 Resources (read on first use):
 - [resources/lenses.md](resources/lenses.md) — lens taxonomy + 15 distilled
@@ -38,14 +41,17 @@ Resources (read on first use):
 ### 1. Inventory & classify
 
 Glob `**/*.md` (skip vendored/generated/node_modules). For each substantial
-doc, record: path, apparent lens, age vs the code it describes
+doc, record: path, apparent rung + lens, age vs the code it describes
 (`git log -1 --format=%cs -- <doc>` vs the same for the code dirs it references).
 
 ### 2. Fan out verification subagents (parallel)
 
 Launch parallel `Explore`/`general-purpose` subagents, one per doc (or per doc
-cluster). Each agent receives the doc text and must verify every **checkable
-claim**, reading the actual code — never trusting the doc:
+cluster). **Frame each agent adversarially**: its brief is "find evidence this
+claim is FALSE" — never "verify this claim" (LLMs sycophantically confirm
+plausible claims; a real `file:line` citation can still fail to entail the
+claim). Prefer executable checks (run, grep, glob) over reading; claims only
+an LLM's judgment can assess get an explicit lower evidence tier:
 
 | Claim type | Check |
 |------------|-------|
@@ -57,7 +63,8 @@ claim**, reading the actual code — never trusting the doc:
 | Links | Internal links resolve? (External: spot-check only.) |
 | Behavioral claims | A `file:line` in current source supports the claim? |
 
-Each agent returns: claim → verdict (`confirmed` / `drifted` / `unverifiable`)
+Each agent returns: claim → verdict (`confirmed-by-execution` /
+`confirmed-by-reading` (LLM judgment, not proof) / `drifted` / `unverifiable`)
 → evidence (`file:line` or command output) → suggested fix.
 
 ### 3. Drift report
@@ -70,15 +77,26 @@ Each agent returns: claim → verdict (`confirmed` / `drifted` / `unverifiable`)
 | README.md:42 | `make dev` boots both servers | target renamed to `make up` | 🔴 broken quickstart | update command |
 ```
 
-Severity: 🔴 a reader following the doc fails (wrong command/path/signature) ·
-🟡 misleading but survivable · 🟣 unverifiable claim (flag for the author).
+Severity is **claim-type × rung-traffic**, not a fixed ordering: a wrong
+command in a Quickstart (high traffic, blind trust) outranks the same error in
+a deep reference page; a stale screenshot ranks below a missing prerequisite.
+🔴 a reader following the doc fails · 🟡 misleading but survivable ·
+🟣 unverifiable claim (flag for the author).
 Order by severity. Offer: (a) apply fixes · (b) fix 🔴 only · (c) report only.
-When applying fixes, fix the *doc* unless the doc is the contract and the code
-drifted — if ambiguous, ask which is authoritative.
+The default remediation is **fix or flag — never delete**: deleting drifted
+content converts low-severity drift into guaranteed knowledge loss (the docs
+equivalent of graceful degradation). When applying fixes, fix the *doc* unless
+the doc is the contract and the code drifted — if ambiguous, ask which is
+authoritative.
 
 ## Write mode — lens-guided authoring
 
-1. **Pick the lens first** (one per page) and say which:
+1. **Pick the rung, then the lens, and say both.** The rung sets register:
+   Quickstart = zero decisions and minutes-to-success; User guide = coherent
+   prose legal, trade-offs introduced; Reference = uniform schema, dense and
+   dry. Scannability/BLUF rules apply at full force on lookup pages (how-to,
+   reference) and relaxed on learning pages (tutorial narration, explanation)
+   where connected causal prose wins. The lenses:
    - *Tutorial* — a lesson; learner mindset; guaranteed-success path; no
      options, no explanation (link out instead).
    - *How-to* — a goal; competent-user mindset; action and only action, as a
@@ -143,8 +161,11 @@ For improving the structural readability of an existing doc, spec, or plan
 ## Cross-cutting rules
 
 - Never write a claim you didn't verify; if unverifiable, mark it or cut it.
-- One lens per page. A reference page that starts teaching, or a tutorial that
-  starts enumerating options, gets split, not blended.
+- One lens per page by default. A reference page that starts teaching, or a
+  tutorial that starts enumerating options, gets split — unless the doc set
+  deliberately fuses lenses with one consistent voice, in which case enforce
+  the fusion's consistency instead. Small projects (< ~10 pages) get one good
+  sectioned README, not four near-empty buckets.
 - Keep doc sources near the code they describe; hub-and-spoke (thin root
   README routing to detailed docs next to their code).
 - Diagram work is always delegated: launch a subagent that invokes the

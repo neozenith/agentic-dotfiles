@@ -1,11 +1,11 @@
 # prwalkthrough
 
 Turns a pull request of any size — including 100s-1000s of changed files — into
-its deeper structure: a handful of verified mechanical change patterns plus the
-few genuinely novel changes, narrated intent-first with an optional
-comprehension-quiz loop. It exists because a huge diff is unreviewable
-file-by-file by construction, but is usually only 2-3 distinct changes in
-disguise.
+its deeper structure: a handful of shape-checked mechanical change patterns
+plus the few genuinely novel changes, then guides the reviewer through an
+interactive cascade of detail they can end whenever satisfied. It exists
+because a huge diff is unreviewable file-by-file by construction, but is
+usually only 2-3 distinct changes in disguise.
 
 ## Table of Contents
 
@@ -59,11 +59,11 @@ flowchart TD
     T --> F[Fingerprint hunks]
     F --> MC[Mechanical clusters]
     F --> NV[Novel changes]
-    MC --> V[Verify every member]
+    MC --> V[Shape-check every member]
     V -- deviants ejected --> NV
-    V --> N[Narrative: intent first]
+    V --> N[Map: code-grounded summary]
     NV --> N
-    N --> L[Interactive loop]
+    N --> L[Guided cascade]
 
     classDef primary fill:#1d4ed8,stroke:#fff,color:#fff
     classDef secondary fill:#f1f5f9,stroke:#64748b,color:#1e293b
@@ -73,25 +73,25 @@ flowchart TD
     class N,L accent
 ```
 
-The diff is fingerprinted into clusters; every cluster member is mechanically
-verified (deviants get promoted to the novel set) before the intent-first
-narrative and optional quiz loop.
+The diff is fingerprinted into clusters; every cluster member is shape-checked
+with an ordered token comparison (deviants get promoted to the novel set)
+before the code-grounded map and the interactive reveal the reviewer paces.
 
 <details><summary>Detailed flow</summary>
 
 ```mermaid
 flowchart TD
-    A[Resolve diff scope] --> B[Mine intent from PR/commits]
+    A[Resolve diff scope] --> B[Stated intent as claim]
     B --> C[linguist-generated + path triage]
     C --> D[numstat distribution]
     D --> E[patch-id strict tier]
     E --> G[token-normalized loose tier]
-    G --> H[Per-member token-set check]
+    G --> H[Ordered token-sequence check]
     H --> I[Hunk-count + churn outliers]
     I --> J[Re-apply-and-diff oracle]
-    J --> K[Map: patterns + novel + noise]
-    K --> M[Guided tour of novel core]
-    M --> Q[Socratic comprehension loop]
+    J --> K[Map + Not-shown disclosure]
+    K --> M[Reveal one section per turn]
+    M --> Q[Close: name what was unopened]
 
     classDef primary fill:#1d4ed8,stroke:#fff,color:#fff
     classDef secondary fill:#f1f5f9,stroke:#64748b,color:#1e293b
@@ -120,7 +120,8 @@ Requirements: `git` (and `gh` for PR-number invocations). No other tooling.
 |---------|-------------|
 | Clusters look wrong — unrelated edits merged | Loose-tier normalization over-merged; check strict `patch-id` sub-clusters and present them separately. |
 | Renamed files show as huge churn | Diff ran without `-M -C`; re-run with rename detection. |
-| A "mechanical" cluster hid a real change | Phase 5 verification was sampled, not exhaustive — it must run on every member; check the `machine-verified` label. |
+| A "mechanical" cluster hid a real change | Phase 5 check was sampled or compared token *sets* — it must be exhaustive and ordered (bijection-mapped); check the `shape-checked` label and its stated scope. |
+| Walkthrough feels confident but wrong | Stated intent was used as the frame; the map must lead with the code-grounded summary and flag intent discrepancies. |
 | `gh pr diff` fails | Not authenticated or no remote PR; fall back to a local ref range. |
 | Walkthrough floods the screen | The map comes first; sections expand only on request — re-anchor on the Phase 2 menu. |
 

@@ -129,6 +129,41 @@ All files ≤ 500 lines (`.claude/rules/claude_skills/index.md`).
   TOCs via mdtoc), it orchestrates that skill — it never reimplements it.
   New techniques enter as *placement rules* here, *rendering rules* there.
 
+### ADR-7: the audience ladder is the top-level axis; Diátaxis is within-rung; purity softened
+
+- **Status:** Accepted (2026-06; amends ADR-4's content and the original
+  "non-negotiable" purity stance)
+- **Context:** The maintainer clarified that "lenses" meant the three-stage
+  learning ladder (Quickstart → User Guides → API Reference = Beginner →
+  Intermediate → Expert). Red-team research confirmed: major docs sites put
+  the ladder at top-level nav with Diátaxis types inside rungs; Diátaxis's
+  own author disclaims per-page purity; whole genres don't fit the four
+  types; scannability evidence is about lookup tasks, not learning.
+- **Decision:** Two-axis classification (rung × lens). Scannability/BLUF at
+  full force on lookup rungs, relaxed on learning rungs. Purity is a default
+  with sanctioned escapes (deliberate fusion, small-project single README,
+  overview/FAQ/gallery categories).
+- **Consequences:** Audit severity became claim-type × rung-traffic; write
+  mode picks rung before lens.
+- **Lens:** When classifying a doc, ask "who is the reader and how much do
+  they already know" (rung) before "what are they trying to do" (lens) —
+  and never enforce a framework harder than its own author does.
+
+### ADR-8: audits are adversarial and execution-first
+
+- **Status:** Accepted (2026-06; hardens ADR-3)
+- **Context:** Sycophancy research: LLMs confirm plausible claims at high
+  rates and judges are swayed by detailed-but-wrong reasoning; a real
+  file:line citation can fail to entail the claim it decorates.
+- **Decision:** Subagent briefs say "find evidence this claim is FALSE";
+  executable checks outrank reading; verdicts split `confirmed-by-execution`
+  vs `confirmed-by-reading (LLM judgment, not proof)`; remediation is
+  fix-or-flag, never delete.
+- **Consequences:** Audits report honest confidence tiers; a "clean" audit is
+  never presented as ground truth.
+- **Lens:** A claim is only as confirmed as the strongest *non-LLM* mechanism
+  that checked it; design every new check to maximize the executable share.
+
 ## Extension checklist
 
 - [ ] New claim types added to the SKILL.md check table define their evidence

@@ -1,5 +1,42 @@
 # Evidence Base for the codereview Skill
 
+## Counter-evidence (red-team round, incorporated 2026-06)
+
+A dedicated disconfirmation pass found these; each drove an amendment:
+
+- **LLM verbalized confidence is near-meaningless**: overconfident,
+  top-clustered, AUROC ~0.52-0.61 for separating right from wrong
+  ([Xiong et al., ICLR 2024](https://arxiv.org/abs/2306.13063)). → The gate
+  is evidence artifacts (citation + stated trigger + surviving disproof);
+  the score is a forcing function, not a probability.
+- **Silent dropping is unauditable and the FN cost asymmetry inverts for
+  security** (industry SAST practitioners: "the false negative will kill
+  you", [arXiv:2307.16325](https://arxiv.org/html/2307.16325v3)). → Collapsed
+  below-threshold appendix; class-conditional reporting bar (≥50 for
+  correctness/security/data-loss/concurrency).
+- **The maintainability class IS review's measured product** — ~75% of
+  findings, twice replicated ([Mäntylä & Lassenius TSE 2009](https://dl.acm.org/doi/10.1109/TSE.2008.71);
+  [Beller et al. MSR 2014](http://sback.it/publications/msr2014.pdf)). →
+  Uncapped Evolvability section; nit cap applies to style/trivia only.
+- **"What a senior would flag" is unfalsifiable**: 10× reviewer variability
+  ([Hatton](https://www.leshatton.org/Documents/checklists_in_inspections.pdf));
+  in Chromium, reviewer experience correlated with HIGHER security-miss rates
+  ([arXiv:2102.06909](https://ar5iv.labs.arxiv.org/html/2102.06909)). →
+  Replaced with "statable failure mode or maintenance cost".
+- **The denylisted security categories are where humans miss most**: ~88%
+  of improper-input-validation and access-control defects escaped review in
+  the same Chromium study. → Denylist narrowed to "no identified data flow".
+- **Untested error handling causes most catastrophic failures**: 92% of
+  catastrophic failures from bad non-fatal-error handling; 58% trivially
+  exposable by simple tests ([Yuan et al., OSDI 2014](https://www.usenix.org/system/files/conference/osdi14/osdi14-paper-yuan.pdf)).
+  → Error-path-test and regression-test carve-outs.
+- **Disclaimers don't cure automation bias** ([Parasuraman & Manzey 2010](https://journals.sagepub.com/doi/10.1177/0018720810376055):
+  not preventable "by training or instructions"). → Not-checked kept for
+  auditability, made diff-specific; the bias-counter claim retired.
+- **Re-review suppression has no supporting evidence**, and revision N+1
+  contains new code by construction. → Convergence scoped to untouched
+  lines, style nits only.
+
 Why each rule in [SKILL.md](SKILL.md) exists. Two source streams: empirical software
 engineering research (human code review, 2006-2018) and deployed LLM-reviewer
 studies (2022-2026).

@@ -66,36 +66,68 @@ For each candidate finding, attempt to **disprove** it before it may be reported
 4. If two independent passes flagged the same issue, that agreement raises confidence;
    a single-pass finding needs stronger direct evidence.
 
-Then score confidence on this anchored rubric and **silently drop everything below 80**:
+Then gate on **evidence, not self-rated confidence** (LLM verbalized confidence
+is miscalibrated and top-clustered — the number is a forcing function, not a
+probability). A finding is reportable when it has ALL of:
 
-| Score | Meaning |
-|-------|---------|
-| 0 | False positive, pre-existing, or style preference |
-| 25 | Plausible but unverified; depends on context you didn't confirm |
-| 50 | Real but a nitpick a senior engineer wouldn't block on |
-| 75 | Verified real; will be hit in practice |
-| 100 | Evidence directly confirms the defect (traced the failing path) |
+1. A `file:line` citation to the introduced code.
+2. A stated trigger: the concrete input, state, or sequence under which it
+   fires (a hypothesized race with a concrete interleaving counts; vague
+   "could be a problem" does not).
+3. Survival of the disproof attempt above.
 
-If you are not certain an issue is real, do not flag it. False positives erode trust
-and waste more time than they save.
+The rubric below maps evidence to a score for severity calibration; the
+**reporting bar is class-conditional**:
+
+| Score | Evidence state |
+|-------|---------------|
+| 0 | Disproven, pre-existing, or style preference |
+| 25 | Plausible; trigger not confirmed |
+| 50 | Real but a nitpick (no blocking failure mode or maintenance cost) |
+| 75 | Trigger confirmed; will be hit in practice |
+| 100 | Failing path fully traced |
+
+- Maintainability/style classes: report at ≥75 (false positives here cost
+  trust cheaply spent).
+- **Correctness, security, data-loss, concurrency classes: report at ≥50** —
+  the cost asymmetry inverts; a missed defect here is unbounded, a weak
+  finding costs seconds. Label sub-75 findings "possible — trigger
+  unconfirmed".
+- **Never silently drop.** Findings that miss the bar go in a one-line-each
+  collapsed appendix ("Below threshold — unverified") so the filter's misses
+  stay observable and auditable.
 
 ## What NOT to Flag (denylist)
 
 Never report:
-- **Pre-existing issues** as if this change introduced them (genuinely severe ones go
-  in the separate Pre-existing section, max 2).
+- **Pre-existing issues** as if this change introduced them. Genuinely severe
+  ones within the diff's blast radius (code the change calls, is called by, or
+  shares state with) go in the separate Pre-existing section — relevance-gated,
+  not quota-capped.
 - **Anything a linter, formatter, or typechecker will catch.** Don't run them to
   verify; don't compete with deterministic tooling.
-- **Pedantic nitpicks a senior engineer would not flag** — the senior-engineer test.
-- **Speculative problems** with no realistic trigger path ("could be slow if...",
-  generic "add input validation", hypothetical DoS/rate-limiting concerns).
+- **Findings with no statable failure mode or maintenance cost.** (This replaces
+  the "senior engineer test" — senior reviewers disagree up to 10× on what to
+  flag, so the test is the finding's content, not an imagined reviewer: if you
+  can't state what goes wrong or what it costs the next maintainer, drop it.)
+- **Findings without a stated triggering condition.** A named trigger ("if two
+  requests hit this before the lock…") is a hypothesis and in scope; trigger-free
+  hand-waving ("could be slow", "add validation") is not. Note: race conditions
+  and error-path failures are *inherently* hypothesis-shaped — judge the
+  concreteness of the trigger, not the category.
 - **Symbols "missing" outside the hunk** — code defined elsewhere in the codebase, or
   apparent incompleteness at diff-hunk boundaries.
 - **Code that looks wrong but is correct** — verify before flagging, not after.
 - **Issues explicitly silenced** in code (suppression comments) or already adjudicated
   in prior review threads.
-- **Generic test-coverage or security commentary** not tied to a specific defect in
-  the changed code.
+- **Security commentary with no identified data flow.** But security findings
+  WITH a traced flow are always in scope — even "generic"-sounding classes like
+  input validation and access control, because those are precisely where human
+  review misses most (~88% escape rates in case-control studies).
+- **Generic "add more tests" commentary.** Two specific carve-outs are in
+  scope, line-anchored: (a) a changed/added error-handling path with no test —
+  the class behind most catastrophic production failures; (b) a bug-fix PR
+  with no regression test for the fixed bug.
 
 ## Output
 
@@ -108,24 +140,33 @@ never blocking — the human decides.
 ### 🔴 Important — fix before merge
 - `path/file.ts:42` — <claim>. <trigger scenario>. <concrete suggested fix>.
 
-### 🟡 Nit (non-blocking)        ← max 5; fold the rest into "plus N similar"
+### 🔧 Evolvability — uncapped; ~75% of review's measured value lives here
+- `path/file.ts:60` — misleading name / structure resisting change / missing rationale.
+
+### 🟡 Nit (style/trivia only)   ← max 5; fold the rest into "plus N similar"
 - `path/file.ts:88` — Nit: <claim>.
 
-### 🟣 Pre-existing (not this change's fault)   ← max 2, only if genuinely severe
+### 🟣 Pre-existing (in this change's blast radius — relevance-gated, no quota)
 
 ### Not checked
-<one line listing what this review did NOT cover — e.g. runtime behavior,
-cross-service contracts, performance under load — so silence isn't read as clearance.>
+<specific to THIS diff: name the single highest-risk dimension not analyzed
+("concurrency behavior of the new cache") plus standing exclusions. Vary it
+per review — fixed boilerplate trains readers to skip it.>
+
+<details><summary>Below threshold — unverified (N)</summary>
+one line each; kept so the filter's misses stay auditable</details>
 ```
 
 Formatting rules:
 - Every finding: `file:line`, the claim, the fix. For convention violations, quote the
   exact rule text.
-- Label maintainability findings as such — expect ~75% of legitimate findings to be
-  maintainability, not functional defects; don't inflate them to Important to seem
-  thorough.
-- The **Not checked** section is mandatory. Readers anchor on what the review flags
-  and stop looking elsewhere; state your blind spots explicitly.
+- Label each finding per-finding, blind to any expected distribution. (Across
+  many reviews ~75% of legitimate findings being evolvability is a *post-hoc
+  sanity check* — never a per-review quota; quotas pressure misclassification
+  exactly on the security-heavy diffs where the mix legitimately differs.)
+- The **Not checked** section is mandatory for auditability — but don't expect
+  a disclaimer to cure reader over-reliance (instructions don't fix automation
+  bias); making it diff-specific and actionable is what gives it value.
 - If nothing survives validation, say "No issues found above the confidence threshold"
   and still include Not checked. A clean short review is a successful review.
 
@@ -133,5 +174,9 @@ Formatting rules:
 
 On a second pass over the same change (after fixes):
 - Verify previously reported Important findings are resolved; say which are.
-- Report only **new Important** findings. No new nits after round one — reviews must
-  converge, not discover fresh style opinions on every push.
+- **Lines changed since the last round are fresh code**: findings there are
+  admissible at any severity — revision N+1 contains code that didn't exist at
+  revision N, and review-applied patches themselves induce defects.
+- On **untouched** lines: new Important/correctness findings are always
+  admissible; new nits are suppressed. Convergence is a social contract about
+  style opinions, not a license to stop finding bugs.

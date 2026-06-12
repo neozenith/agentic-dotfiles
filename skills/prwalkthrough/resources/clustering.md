@@ -90,9 +90,15 @@ that share a token shape.
 
 For EVERY member of every cluster — never a sample:
 
-1. **Token-set check:** `git diff -U0 --word-diff=porcelain $MERGE_BASE..HEAD -- "$f"`
-   — its changed-token set must equal the cluster template's token set
-   (modulo the normalized slots). Any residue ⇒ eject to novel set.
+1. **Ordered token-sequence check:** `git diff -U0 --word-diff=porcelain $MERGE_BASE..HEAD -- "$f"`
+   — its changed-token *sequence* must match the cluster template position by
+   position, with one consistent identifier mapping across the whole hunk
+   (a bijection: template slot `ID1` always maps to the same concrete name).
+   Never compare token *sets/bags* — a bag check is order-blind and passes
+   argument swaps (`f(x, y)` → `f(y, x)`) and operand flips (`a - b` →
+   `b - a`). Operators, punctuation, and keywords are compared verbatim
+   (they are never normalized in Phase 3 either). Any mismatch or mapping
+   violation ⇒ eject to novel set.
 2. **Hunk-count check:** a file with 3 hunks in a 1-hunk-per-file cluster is
    suspect (codemod ran, plus someone hand-edited).
 3. **Churn-outlier check** within the cluster.
@@ -105,7 +111,16 @@ For EVERY member of every cluster — never a sample:
 
 ## Phase 6 — Output contract
 
-Return: (a) k mechanical clusters — template, file count, one exemplar hunk,
-the most dissimilar member, deviant list, and a `machine-verified` /
-`sampled` label; (b) the novel set (residuals + ejected deviants) ranked by
-churn × centrality; (c) the noise set with counts.
+Return: (a) k mechanical clusters — template, file count, total LOC waved
+through, one exemplar hunk, the most dissimilar member, deviant list, and a
+`shape-checked` / `sampled` label (shape-checked = ordered token-level
+equivalence only; semantics, cross-hunk ordering, and cross-file interactions
+are NOT verified — state this scope wherever the label appears); (b) the
+novel set (residuals + ejected deviants) ranked by risk (security-sensitive
+paths first), then churn × centrality; (c) the noise set with counts.
+
+Known residual false-merge class even with the ordered check: a *consistent*
+rename that changes semantics across the whole hunk (e.g. every `timeout_ms`
+slot systematically swapped with every `retries` slot) maps bijectively and
+passes. Cross-hunk and cross-file interactions are out of scope by
+construction. This is why the label is `shape-checked`, not `verified`.

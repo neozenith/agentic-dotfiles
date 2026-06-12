@@ -87,6 +87,28 @@ All files ≤ 500 lines (`.claude/rules/claude_skills/index.md`).
 - **Lens:** Prefer an executable constraint over a prose convention whenever
   one exists; prose is the fallback, not the default.
 
+### ADR-5: round-2 red-team amendments — floss-aware, fossil-aware, operationally measured
+
+- **Status:** Accepted (2026-06; amends ADR-1/-2/-3 mechanics, keeps their goals)
+- **Context:** Disconfirmation research (see resources/evidence.md
+  "Counter-evidence"): 91% of real refactoring is interleaved (floss);
+  deployed hotspot rankings changed nothing without actionable reasons; ADRs
+  are mostly abandoned fossils (~50% of repos: ≤5 records); only ~22% of
+  refactoring edits are test-covered; static quality metrics move the wrong
+  way under successful refactoring.
+- **Decision:** Two hats became commit-staging discipline (mix work, never
+  commits); hotspot/cycle candidates require an actionable reason or concrete
+  blocked goal; ADR conflicts surface with age + lightweight-amendment
+  default while still always stopping; characterization-test changes are
+  classified (pinned-bug / pinned-noise / behavior change) rather than
+  forbidden; success re-measured in operational outcomes only; fitness
+  functions get owner + review-by + warn-first.
+- **Consequences:** The skill fights observed practice less and demands more
+  specificity from its own recommendations.
+- **Lens:** When a rule contradicts dominant successful practice, ask what
+  the rule actually protects (here: reviewable commits, not separated work
+  sessions) and enforce that narrower thing.
+
 ## Extension checklist
 
 - [ ] New ranking signals come with a cited empirical basis in
