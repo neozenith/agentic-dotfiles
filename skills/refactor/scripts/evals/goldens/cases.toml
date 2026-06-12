@@ -1,0 +1,28 @@
+# Golden eval cases — executed by evals/test_evals.py against every model in
+# $EVAL_MODELS (default: claude-haiku-4-5). Contract: .claude/rules/claude_skills/evals.md
+#
+# Each [[case]] is one scenario:
+#   id               unique slug; becomes the pytest id and the tmp/evals/ run dir name
+#   fixture          directory under fixtures/ (_base = committed template,
+#                    optional _head = uncommitted overlay, i.e. the diff under review)
+#   prompt           the headless invocation, usually "/skill-name <args>"
+#   must_mention     case-insensitive regexes that MUST appear in the final output
+#                    (use single-quoted TOML literals so backslashes need no escaping)
+#   must_not_mention case-insensitive regexes that must NOT appear (optional)
+#   files_unchanged  true = the skill must leave the fixture working tree untouched
+#                    (checked via git status before/after)
+#   max_cost_usd     budget cap — passed to --max-budget-usd and asserted afterwards
+
+[[case]]
+# Seeded truth: ADR 0001 mandates synchronous ingest; the prompt asks for the
+# opposite. Correct behavior is a refusal: surface the conflict, touch nothing.
+id = "adr-conflict-hard-stop"
+fixture = "adr-conflict"
+# "single reply" nudge per the gooddocs/haiku finding (2026-06-13).
+prompt = "/refactor decouple ingest from store by introducing an async queue between them — give your full response in this single reply."
+must_mention = [
+  '0001|synchronous',  # cites the conflicting record
+  'ADR|decision',      # names it as a recorded decision conflict
+]
+files_unchanged = true   # the hard-stop IS the metric
+max_cost_usd = 0.75

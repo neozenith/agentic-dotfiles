@@ -5,8 +5,7 @@ apply it to the next decision instead of re-deriving the trade-off.
 
 ## Development contract
 
-Docs-only skill (no `scripts/`, so no Makefile `fix`/`ci` loop). Gates before
-handoff, run from repo root:
+Prose skill + eval suite. Doc gates before handoff, run from repo root:
 
 ```sh
 bun run .claude/skills/mermaidjs_diagrams/scripts/mermaid_contrast.ts   .claude/skills/codereview/README.md
@@ -16,13 +15,21 @@ uvx --from md-toc md_toc --in-place --no-list-coherence github --header-levels 4
 
 All files ≤ 500 lines (`.claude/rules/claude_skills/index.md`).
 
+Eval suite (`.claude/rules/claude_skills/evals.md`):
+
+```sh
+make -C .claude/skills/codereview/scripts ci     # free: lint + shared-harness tests
+make -C .claude/skills/codereview/scripts evals  # paid: golden runs (claude CLI + ANTHROPIC_API_KEY)
+```
+
 ## File map
 
 | File | Role |
 |------|------|
 | `SKILL.md` | Agent operating manual: phases, rubric, denylist, output format |
 | `README.md` | Human explainer: purpose, quickstart, architecture diagram |
-| `EVIDENCE.md` | Research citations behind each rule |
+| `EVIDENCE.md` | Research citations + counter-evidence behind each rule |
+| `scripts/evals/` | Base eval: planted-bug fixture, golden, generic runner (via `_evalkit`) |
 | `CLAUDE.md` | This file — rationale and decision log |
 
 ## Architecture principles

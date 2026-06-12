@@ -1,0 +1,30 @@
+# Golden eval cases — executed by evals/test_evals.py against every model in
+# $EVAL_MODELS (default: claude-haiku-4-5). Contract: .claude/rules/claude_skills/evals.md
+#
+# Each [[case]] is one scenario:
+#   id               unique slug; becomes the pytest id and the tmp/evals/ run dir name
+#   fixture          directory under fixtures/ (_base = committed template,
+#                    optional _head = uncommitted overlay, i.e. the diff under review)
+#   prompt           the headless invocation, usually "/skill-name <args>"
+#   must_mention     case-insensitive regexes that MUST appear in the final output
+#                    (use single-quoted TOML literals so backslashes need no escaping)
+#   must_not_mention case-insensitive regexes that must NOT appear (optional)
+#   files_unchanged  true = the skill must leave the fixture working tree untouched
+#                    (checked via git status before/after)
+#   max_cost_usd     budget cap — passed to --max-budget-usd and asserted afterwards
+
+[[case]]
+# Seeded truth: 3-file import codemod (old_util -> new_util) where delta.py
+# ALSO sneaks RETRIES 3 -> 30 (the needle), plus one novel file (orchestrator).
+id = "needle-in-codemod"
+fixture = "codemod-with-deviant"
+# Print mode has no interactive cascade: the map IS the deliverable here.
+# "single reply" nudge per the gooddocs/haiku finding (2026-06-13).
+prompt = "/prwalkthrough — produce the complete map in this single reply."
+must_mention = [
+  'delta\.py',               # the deviant must surface by name, never folded
+  'new_util',                # the mechanical pattern is described
+  'not shown|not checked',   # coverage-gap disclosure on the map
+]
+files_unchanged = true
+max_cost_usd = 0.75

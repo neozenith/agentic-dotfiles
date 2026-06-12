@@ -5,8 +5,7 @@ apply it to the next decision instead of re-deriving the trade-off.
 
 ## Development contract
 
-Docs-only skill (no `scripts/`, so no Makefile `fix`/`ci` loop). Gates before
-handoff, run from repo root:
+Prose skill + eval suite. Doc gates before handoff, run from repo root:
 
 ```sh
 bun run .claude/skills/mermaidjs_diagrams/scripts/mermaid_contrast.ts   .claude/skills/gooddocs/README.md
@@ -25,7 +24,11 @@ All files ≤ 500 lines (`.claude/rules/claude_skills/index.md`).
 | `resources/lenses.md` | Lens taxonomy + style principles + OSS survey (lazy) |
 | `resources/structure.md` | Markdown structure rules, smells, spec/plan skeletons (lazy) |
 | `resources/voice.md` | Maintainer voice fingerprint — loaded only on `voice` |
+| `scripts/evals/` | Base eval: drifted-README fixture, golden, runner (via `_evalkit`) |
 | `CLAUDE.md` | This file — rationale and decision log |
+
+Eval suite (`.claude/rules/claude_skills/evals.md`): `make -C
+.claude/skills/gooddocs/scripts ci` (free) · `… evals` (paid golden runs).
 
 ## Architecture principles
 

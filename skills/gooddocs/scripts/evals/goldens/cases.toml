@@ -1,0 +1,29 @@
+# Golden eval cases — executed by evals/test_evals.py against every model in
+# $EVAL_MODELS (default: claude-haiku-4-5). Contract: .claude/rules/claude_skills/evals.md
+#
+# Each [[case]] is one scenario:
+#   id               unique slug; becomes the pytest id and the tmp/evals/ run dir name
+#   fixture          directory under fixtures/ (_base = committed template,
+#                    optional _head = uncommitted overlay, i.e. the diff under review)
+#   prompt           the headless invocation, usually "/skill-name <args>"
+#   must_mention     case-insensitive regexes that MUST appear in the final output
+#                    (use single-quoted TOML literals so backslashes need no escaping)
+#   must_not_mention case-insensitive regexes that must NOT appear (optional)
+#   files_unchanged  true = the skill must leave the fixture working tree untouched
+#                    (checked via git status before/after)
+#   max_cost_usd     budget cap — passed to --max-budget-usd and asserted afterwards
+
+[[case]]
+# Seeded truth: README claims 'make build' (Makefile has only test:) and
+# src/utils.py (absent; src/main.py exists). 'make test' is the true control.
+id = "seeded-drift-audit"
+fixture = "drifted-readme"
+# "in this single reply" matters: in -p print mode, weaker models have ended
+# the turn with "running the audit now..." and no report (haiku, 2026-06-13).
+prompt = "/gooddocs audit — report only, do not modify any files. Produce the complete drift report in this single reply."
+must_mention = [
+  'make build',   # drifted command flagged
+  'utils\.py',    # drifted path flagged
+]
+files_unchanged = true   # audit is read-only by contract
+max_cost_usd = 1.0
