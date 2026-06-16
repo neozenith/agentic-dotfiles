@@ -8,3 +8,4 @@ cache/
 .coverage
 node_modules/
 scheduled_tasks.lock
+worktrees/
