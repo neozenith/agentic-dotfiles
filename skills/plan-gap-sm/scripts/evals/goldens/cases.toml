@@ -1,0 +1,45 @@
+# Golden cases for plan-gap-sm single-turn evals.
+#
+# Each case drives ONE state-machine turn headlessly: the harness builds the
+# fixture (git-committed _base), runs `pgsm init`, force-sets the case's state,
+# composes the prompt with pgsm (the prompt is self-contained — no skill
+# resolution is needed inside the fixture), runs `claude -p`, then scores
+# deterministically. Long-horizon multi-turn evals live in rollout.py with a
+# real repo + gold branch, not here.
+#
+# Schema per [[case]]:
+#   name           — unique id (also the tmp/evals/<run-id>/<name> dir)
+#   fixture        — directory under evals/fixtures/
+#   plan_dir       — plan directory relative to the fixture root
+#   brief          — initiative brief passed to pgsm init
+#   state          — machine state to compose/run (bootstrap | execution | ...)
+#   max_budget_usd — hard cap passed to claude (--max-budget-usd)
+#   max_cost_usd   — ceiling asserted from the run result
+#   must_exist     — files that must exist after the turn (relative to fixture)
+#   must_contain   — [path, needle] pairs asserted on file content
+#   glob_min       — [pattern-relative-to-plan_dir, min] pairs
+
+[[case]]
+name = "bootstrap-turn"
+fixture = "bootstrap-turn"
+plan_dir = "docs/plans/widget-cache"
+brief = "Add an in-memory LRU cache to the widget lookup path so repeated lookups avoid recomputation"
+state = "bootstrap"
+max_budget_usd = 0.60
+max_cost_usd = 0.60
+must_exist = [
+  "docs/plans/widget-cache/README.md",
+  "docs/plans/widget-cache/DISCOVERY.md",
+]
+glob_min = [["G*.md", 1]]
+
+[[case]]
+name = "execution-ticket-turn"
+fixture = "execution-ticket-turn"
+plan_dir = "docs/plans/widget-cache"
+brief = "Add an in-memory LRU cache to the widget lookup path"
+state = "execution"
+max_budget_usd = 0.60
+max_cost_usd = 0.60
+must_exist = ["tests/test_cache.py"]
+must_contain = [["docs/plans/widget-cache/G1-T1.1.md", "- [x] **Done**"]]

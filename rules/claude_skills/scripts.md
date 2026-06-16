@@ -42,6 +42,10 @@ If you only remember two things:
 
 Anything that can't be enforced by `make ci` doesn't exist.
 
+> **Evals are a separate, paid gate** — `make evals` (pytest + deepeval driving
+> real agent CLIs against seeded fixtures) is specified in
+> [`evals.md`](evals.md). It is never a dependency of `ci`.
+
 ## When a Skill Is Mixed-Language
 
 Some skills start pure-Python or pure-TypeScript and then grow a port in the

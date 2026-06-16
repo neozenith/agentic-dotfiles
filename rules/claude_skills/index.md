@@ -14,7 +14,10 @@ invariant that applies to *every* file under `.claude/skills/**` and
 |---------|------|
 | [`docs.md`](docs.md) | The **documentation** contract — the `SKILL.md` / `README.md` / `CLAUDE.md` trio, diagram gates, the docs done-when checklist. |
 | [`scripts.md`](scripts.md) | The **code** contract — the Makefile `fix`/`ci` loop, tests, coverage, per-language tooling. |
-| [`../agnostic_examples.md`](../agnostic_examples.md) | The cross-cutting **brand-agnostic** rule that all three must honour. |
+| [`evals.md`](evals.md) | The **evals** contract — `make evals` via pytest+deepeval, real CLI runs (claude/codex) with a model matrix, session-jsonl forensics, seeded fixtures. |
+| [`environments.md`](environments.md) | The **runtime spectrum** — capability matrix across Claude/Codex surfaces, Tier A/B/C script design, environment sensing, the fallback ladder. |
+| [`statefulness.md`](statefulness.md) | The **state pathways** — implicit state via PR/codebase/CLAUDE.md updates, the self-curated `resources/learned/` feedback space, evidence freshness. |
+| [`../agnostic_examples.md`](../agnostic_examples.md) | The cross-cutting **brand-agnostic** rule that all siblings must honour. |
 
 Start here, then descend to the sibling that matches your change. Each sibling
 links back up to this root, so the family is navigable from any entry point.
@@ -60,7 +63,10 @@ Treat the family as a tree of nodes (files), each held under 500 lines:
 claude_skills/index.md           ← root: the size invariant + family map
 ├── claude_skills/docs.md        ← child: documentation contract
 │   └── (future) resources split if it overflows
-├── claude_skills/scripts.md     ← child: code contract
+├── claude_skills/scripts.md     ← child: code contract (fix/ci)
+│   └── claude_skills/evals.md   ← grandchild: evals extend the code contract
+├── claude_skills/environments.md ← child: runtime spectrum + script tiers
+├── claude_skills/statefulness.md ← child: state pathways + learned/ space
 └── agnostic_examples.md         ← sibling rule: cross-cutting constraint (one level up)
 ```
 

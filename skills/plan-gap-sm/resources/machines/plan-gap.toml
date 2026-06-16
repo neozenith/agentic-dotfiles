@@ -1,0 +1,133 @@
+# plan-gap state machine — consumed by scripts/pgsm.py.
+#
+# The engine is generic: states, transitions, and evidence gates are all data.
+# Transitions are evaluated IN ORDER; the first one whose gates ALL pass fires.
+# Gate kinds (deterministic, evaluated against the plan directory):
+#   file_exists       {path}                          — file present in plan dir
+#   glob_min          {pattern, min}                  — >= min files match pattern
+#   marker_absent     {marker, glob, exclude_sections?} — literal marker absent from matching files
+#   marker_present    {marker, glob}                  — literal marker present in >=1 matching file
+#   all_files_contain {glob, needle}                  — every matching file contains needle
+#   mermaid_min       {path, min}                     — >= min ```mermaid fences in file
+#   tickets_per_gap   {}                              — every G<n>.md has >=1 G<n>-T*.md sibling
+#   dag_acyclic       {glob}                          — ticket Depends-on graph has no cycles,
+#                                                       and every referenced ticket file exists
+#   command           {argv, timeout_s?}              — argv exits 0 (cwd = plan dir)
+
+[machine]
+name = "plan-gap"
+initial = "bootstrap"
+terminal = ["complete"]
+
+# ── Phase 1: stand up the spec file set from research ──────────────────────
+[states.bootstrap]
+resource = "states/bootstrap.md"
+description = "Stand up the spec file set (index, discovery, gap stubs) from dual deep research."
+compose = ["index"]
+
+[[states.bootstrap.transitions]]
+to = "refinement"
+gates = [
+  { kind = "file_exists", path = "README.md" },
+  { kind = "file_exists", path = "DISCOVERY.md" },
+  { kind = "glob_min", pattern = "G*.md", min = 1 },
+  # Everything outside the Execution Plan (which stays TODO until decomposition) is drafted.
+  { kind = "marker_absent", marker = "<!-- TODO", glob = "README.md", exclude_sections = ["## Execution Plan"] },
+  { kind = "mermaid_min", path = "README.md", min = 2 },    # Gap Map + Dependencies
+  { kind = "mermaid_min", path = "DISCOVERY.md", min = 4 }, # >=2 Current + >=2 Desired lenses
+]
+
+# ── Phase 2: settle open decisions, one question at a time ─────────────────
+[states.refinement]
+resource = "states/refinement.md"
+description = "Resolve every UNRESOLVED ADR via one maximally-leveraged question at a time."
+compose = ["index", "gaps_with_markers"]
+
+[[states.refinement.transitions]]
+to = "validation"
+gates = [
+  { kind = "marker_absent", marker = "<!-- UNRESOLVED -->", glob = "G*.md" },
+  { kind = "marker_absent", marker = "<!-- CHANGE-REQUEST -->", glob = "G*.md" },
+  { kind = "marker_absent", marker = "<!-- ASSUMPTION", glob = "*.md" },
+]
+
+# ── Phase 3: gate the converged spec ────────────────────────────────────────
+[states.validation]
+resource = "states/validation.md"
+description = "Diagram, requirement-integrity, and cross-consistency gates on the converged spec."
+compose = ["index", "discovery", "all_gaps"]
+
+# Markers reappearing during validation send control back to refinement.
+[[states.validation.transitions]]
+to = "refinement"
+gates = [
+  { kind = "marker_present", marker = "<!-- UNRESOLVED -->", glob = "G*.md" },
+]
+
+[[states.validation.transitions]]
+to = "decomposition"
+gates = [
+  { kind = "marker_absent", marker = "<!-- UNRESOLVED -->", glob = "G*.md" },
+  { kind = "marker_absent", marker = "<!-- CHANGE-REQUEST -->", glob = "G*.md" },
+  { kind = "marker_absent", marker = "<!-- LINK_NOT_VERIFIED", glob = "*.md" },
+  { kind = "mermaid_min", path = "README.md", min = 2 },
+  { kind = "mermaid_min", path = "DISCOVERY.md", min = 4 },
+  # The agent records its render/contrast pass as a receipt file; absence blocks the gate.
+  { kind = "file_exists", path = ".pgsm/receipts/validation.json" },
+]
+
+# ── Phase 4: TDD vertical-slice ticket decomposition ────────────────────────
+[states.decomposition]
+resource = "states/decomposition.md"
+description = "Decompose every gap into TDD vertical-slice tickets with an acyclic dependency DAG."
+compose = ["index", "all_gaps"]
+
+[[states.decomposition.transitions]]
+to = "execution"
+gates = [
+  { kind = "glob_min", pattern = "G*-T*.md", min = 1 },
+  { kind = "tickets_per_gap" },
+  { kind = "all_files_contain", glob = "G*-T*.md", needle = "**Done**" },
+  { kind = "dag_acyclic", glob = "G*-T*.md" },
+  # Execution Plan is now populated — no TODO markers remain anywhere in the index.
+  { kind = "marker_absent", marker = "<!-- TODO", glob = "README.md" },
+]
+
+# ── Execution: one ticket per turn, RED→GREEN→(REFACTOR) ───────────────────
+[states.execution]
+resource = "states/execution.md"
+description = "Consume the next eligible ticket via red-green-refactor; one ticket per turn."
+compose = ["ticket_path"]
+
+# Mid-flight ambiguity or plan defect returns control to refinement.
+[[states.execution.transitions]]
+to = "refinement"
+gates = [
+  { kind = "marker_present", marker = "<!-- UNRESOLVED -->", glob = "G*.md" },
+]
+
+[[states.execution.transitions]]
+to = "refinement"
+gates = [
+  { kind = "marker_present", marker = "<!-- CHANGE-REQUEST -->", glob = "G*.md" },
+]
+
+[[states.execution.transitions]]
+to = "complete"
+gates = [
+  { kind = "all_files_contain", glob = "G*-T*.md", needle = "- [x] **Done**" },
+  { kind = "marker_absent", marker = "<!-- UNRESOLVED -->", glob = "G*.md" },
+  { kind = "marker_absent", marker = "<!-- CHANGE-REQUEST -->", glob = "G*.md" },
+]
+
+[states.complete]
+resource = "states/complete.md"
+description = "Terminal: every ticket done, every measure satisfied, no open markers."
+compose = ["index"]
+
+# Re-opening a closed spec is deliberate: a new UNRESOLVED ADR routes back to refinement.
+[[states.complete.transitions]]
+to = "refinement"
+gates = [
+  { kind = "marker_present", marker = "<!-- UNRESOLVED -->", glob = "G*.md" },
+]

@@ -1,0 +1,32 @@
+# Example rollout config — the gold-branch protocol for long-trajectory evals.
+#
+# Protocol:
+#   1. Drive the initiative to completion ONCE on a feature branch of a real
+#      repo (e.g. with the original interactive planning skill). That branch is
+#      the GOLD STANDARD. Wind the repo back to the base branch.
+#   2. Point this config at the repo. Rollouts run in detached git worktrees
+#      off base_ref; the gold branch is never checked out — only its
+#      base...gold changed-file set is used as the hidden milestone check.
+#   3. `uv run rollout.py run --config <this file>` runs one rollout per model.
+#      Early-abandon gates kill a rollout that stops tracking the milestones.
+#   4. `uv run rollout.py status` shows effectiveness over time (results.jsonl).
+
+[rollout]
+repo = "~/path/to/real-project"      # must be a git repository
+base_ref = "main"                     # rollouts start from here (detached worktree)
+gold_ref = "feature/the-initiative"   # the completed hidden gold branch
+plan_dir = "docs/plans/the-initiative"
+brief = "One-sentence initiative brief, identical to what the gold run was given"
+# Stabilise on the strongest model first, then walk down the capability tiers.
+models = ["claude-opus-4-8", "claude-sonnet-4-6", "claude-haiku-4-5"]
+max_turns = 40
+turn_budget_usd = 0.75
+turn_timeout_s = 1200
+runs_root = "tmp/evals/rollouts"
+answer_policy = "self"                # unattended: refinement self-answers its top recommendation
+
+[abandon]
+grace_turns = 6                       # no gate fires during the first N turns
+min_tracking_score = 0.2              # milestone recall floor after the grace window
+max_stalled_turns = 8                 # turns with no transition AND no newly-done ticket
+max_tool_failure_rate = 0.5
