@@ -67,7 +67,7 @@
     "defaultMode": "acceptEdits"
   },
   "hooks": {},
-  "disableWorkflows": true,
+  "disableWorkflows": false,
   "enabledPlugins": {
     "code-review@claude-code-plugins": true,
     "frontend-design@claude-code-plugins": true,
