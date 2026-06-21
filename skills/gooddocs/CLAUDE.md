@@ -24,8 +24,10 @@ All files ≤ 500 lines (`.claude/rules/claude_skills/index.md`).
 | `resources/lenses.md` | Lens taxonomy + style principles + OSS survey (lazy) |
 | `resources/structure.md` | Markdown structure rules, smells, spec/plan skeletons (lazy) |
 | `resources/voice.md` | Maintainer voice fingerprint — loaded only on `voice` |
+| `resources/slop_smells.md` | Curated AI-slop smell catalog + capture-THE-WHY guidance (lazy; maintainer-grown) |
 | `scripts/evals/` | Base eval: drifted-README fixture, golden, runner (via `_evalkit`) |
 | `CLAUDE.md` | This file — rationale and decision log |
+| `../../workflows/gooddocs-audit.js` | Reusable named **dynamic workflow** wrapping AUDIT (+ safe-fix) for loop/schedule use; reads this skill's doctrine at runtime |
 
 Eval suite (`.claude/rules/claude_skills/evals.md`): `make -C
 .claude/skills/gooddocs/scripts ci` (free) · `… evals` (paid golden runs).
@@ -167,12 +169,92 @@ Eval suite (`.claude/rules/claude_skills/evals.md`): `make -C
 - **Lens:** A claim is only as confirmed as the strongest *non-LLM* mechanism
   that checked it; design every new check to maximize the executable share.
 
+### ADR-9: code is authoritative; drift is continuous, so is the audit
+
+- **Status:** Accepted (2026-06)
+- **Context:** The reason gooddocs exists is that **code is the source of truth
+  and docs go stale.** The maintainer wants to keep drift low by running the
+  skill in another process — a `loop` or a schedule — *while working*, not as a
+  rare one-shot sweep.
+- **Decision:** State the premise explicitly: when doc and code disagree the
+  doc is stale by default; the only exception is a doc that is a spec/contract
+  the code violates (flag, don't "fix"). Design for **repeated, scoped** runs
+  against actively-edited files, and wrap the audit fan-out as a reusable named
+  dynamic workflow (`.claude/workflows/gooddocs-audit.js`) for loop/schedule use.
+- **Consequences:** Audit accepts an explicit path set (the loop case) instead
+  of always globbing; "doc is stale" as the default is what makes
+  non-interactive autofix tractable at all.
+- **Lens:** When doc and code disagree, fix the doc unless it is a spec the code
+  violates — and prefer a small scoped run you can repeat over a big one-shot.
+
+### ADR-10: documentation includes in-code docs; the audit ports to a workflow
+
+- **Status:** Accepted (2026-06)
+- **Context:** Docstrings and explanatory comments are documentation and drift
+  identically to `.md`; and the audit fan-out is orchestration-shaped, so it
+  ports to a deterministic dynamic workflow that can run headless on a schedule.
+- **Decision:** Audit scope includes in-code docs (each unit tagged
+  `markdown` or `in-code`). The workflow encodes *orchestration* in JS while
+  *doctrine* (claim table, smell catalog) stays in the skill and the workflow's
+  agents **read it at runtime** — one source of truth. The audit's read-only
+  invariant is enforced by giving verifier agents a read-only agent type, not by
+  trusting a prompt.
+- **Consequences:** Comments/docstrings get the same drift/slop/why scrutiny;
+  the skill stays the doctrine and the workflow the orchestrator, never
+  duplicating rules.
+- **Lens:** When a skill's value is parallel fan-out, port *that* to a workflow
+  and have it read the skill's doctrine — never copy the rules into the
+  orchestrator, or they drift from each other.
+
+### ADR-11: slop is a curated, maintainer-grown catalog; pruning it is the one sanctioned deletion
+
+- **Status:** Accepted (2026-06)
+- **Context:** AI-authored docs accrete recognizable **slop** — self-addressed
+  task notes, deletable filler, hard-coded value lists that duplicate code and
+  make refactors expensive. The maintainer will grow this list over time as new
+  smells surface.
+- **Decision:** `resources/slop_smells.md` is an append-only catalog with a
+  fixed entry template; audit emits `category: slop` findings; **pruning
+  identified slop is allowed**, whereas deleting *drifted* content is not (that
+  stays fix-or-flag).
+- **Consequences:** The skill sharpens as the catalog grows with zero code
+  changes; deletion stays principled.
+- **Lens:** Separate "content that should not exist" (slop → prune) from
+  "content that is stale" (drift → fix-or-flag); only the former may be deleted.
+  Every line must survive the delete test; value lists live in code, not prose.
+
+### ADR-12: THE WHY is captured in-context as a decision lens; why-gaps are flag-only
+
+- **Status:** Accepted (2026-06)
+- **Context:** Code and docs capture *what* and *how* but rarely *why a thing
+  exists*. The maintainer curates ADRs precisely to **accumulate the project's
+  values**, which become the decision lens for future work — and the richest
+  WHY is often the language used while prompting, which should be preserved
+  "like a letter to a future reader."
+- **Decision:** WHY is a first-class authoring obligation (a cross-cutting rule
+  + a write-mode step): a short WHY beside the code in critical places, bigger
+  reasons as ADRs. Audit emits `category: why-gap` for critical places missing
+  it, but why-gaps are **flag-only** and safe-autofix **never fabricates
+  rationale.**
+- **Consequences:** The decision lens travels with the context; the skill can
+  detect a missing WHY but will not invent one.
+- **Lens:** When something is non-obvious, record *why* it is so (not just what)
+  next to it, and treat the maintainer's prompting prose as primary source for
+  that WHY. A machine may flag a missing WHY; only a human may supply it.
+
 ## Extension checklist
 
 - [ ] New claim types added to the SKILL.md check table define their evidence
       form (ADR-3).
 - [ ] Style additions routed per ADR-2 (lenses vs voice).
 - [ ] Audit remains read-only — no new check may execute a mutating command.
+- [ ] New slop smells follow the `slop_smells.md` entry template; pruning slop
+      is the only sanctioned deletion (ADR-11).
+- [ ] In-code docs (comments/docstrings) audited with the same rigor as `.md`
+      (ADR-10); `why-gap` findings stay flag-only — autofix never invents a WHY
+      (ADR-12).
+- [ ] Audit-orchestration changes update `../../workflows/gooddocs-audit.js`;
+      doctrine stays in the skill, not copied into the workflow (ADR-10).
 - [ ] Both mermaid gates + mdtoc re-run if README touched; all files ≤ 500 lines.
 
 ## Known gotchas
@@ -186,3 +268,10 @@ Eval suite (`.claude/rules/claude_skills/evals.md`): `make -C
   split proposal, not a forced single label.
 - The voice file deliberately contains no project nouns (agnostic rule); if an
   excerpt would leak one, genericize it before adding.
+- The workflow's read-only audit guarantee comes from the verifier **agent
+  type** (no Edit/Write tool), not the prompt. Swap the agent type and you can
+  silently break the read-only invariant (ADR-8/ADR-10) — the prompt won't save
+  you.
+- Safe-autofix (`mode=fix`) edits **documentation text only** (markdown prose or
+  comment/docstring text) and requires drift `authority=code` before touching a
+  claim; it must never change executable code. `why-gap` is never auto-applied.

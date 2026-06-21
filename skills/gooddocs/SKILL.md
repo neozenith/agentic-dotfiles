@@ -9,6 +9,15 @@ user-invocable: true
 
 Three jobs: keep docs **true** (audit), make docs **great** (write), make
 docs **navigable** (restructure). Drift detection comes first, style second.
+
+**Premise: code is authoritative; documentation drifts.** Docs are a
+lossy projection of the code, and the projection rots as the code moves — so
+when a doc and the code disagree, the default is the *doc* is stale (the rare
+exception: the doc is a spec/contract the code violates — then flag, don't
+"fix"). **Documentation includes in-code documentation** — docstrings and
+explanatory comments are docs and drift the same way. This skill is built to
+run **repeatedly** (under a loop or a schedule, against the files you are
+actively editing) to keep drift low continuously, not just as a one-shot pass.
 Every page is classified on two axes: its **ladder rung** (Quickstart / User
 guide / Reference — i.e., Beginner / Intermediate / Expert depth) and its
 **lens** (tutorial, how-to, reference, explanation). The ladder is the
@@ -25,6 +34,9 @@ Resources (read on first use):
 - [resources/voice.md](resources/voice.md) — the maintainer's voice
   fingerprint. Load ONLY when the user asked for `voice`; otherwise the
   neutral researched style applies.
+- [resources/slop_smells.md](resources/slop_smells.md) — the curated AI-slop
+  smell catalog (grown by the maintainer over time) + how to capture THE WHY.
+  Load during audit and write/restructure.
 
 ## Mode selection
 
@@ -43,6 +55,10 @@ Resources (read on first use):
 Glob `**/*.md` (skip vendored/generated/node_modules). For each substantial
 doc, record: path, apparent rung + lens, age vs the code it describes
 (`git log -1 --format=%cs -- <doc>` vs the same for the code dirs it references).
+**In-code documentation is in scope too**: module/function docstrings and
+explanatory comments are docs — mark each unit as `markdown` or `in-code`. When
+invoked on an explicit path set (the loop/schedule case), audit exactly those
+files instead of globbing.
 
 ### 2. Fan out verification subagents (parallel)
 
@@ -65,7 +81,18 @@ an LLM's judgment can assess get an explicit lower evidence tier:
 
 Each agent returns: claim → verdict (`confirmed-by-execution` /
 `confirmed-by-reading` (LLM judgment, not proof) / `drifted` / `unverifiable`)
-→ evidence (`file:line` or command output) → suggested fix.
+→ evidence (`file:line` or command output) → suggested fix. For `drifted`, also
+record **authority** (`code` = doc is stale [default] / `doc` = doc is the
+contract the code violates / `ambiguous`) — it gates what is safe to auto-fix.
+
+Beyond drift, each agent also emits two other finding categories:
+- **slop** — an AI-slop smell from [resources/slop_smells.md](resources/slop_smells.md)
+  (e.g. self-addressed tracking notes, deletable filler, hard-coded value lists
+  that duplicate code). Pruning identified slop is the one sanctioned deletion.
+- **why-gap** — a critical place where THE WHY (the reasoning/value behind a
+  decision) is missing and a future reader would need it. **Flag only, never
+  auto-fix**: rationale cannot be invented, only the author knows it. See
+  slop_smells.md §"Capture THE WHY".
 
 ### 3. Drift report
 
@@ -161,6 +188,17 @@ For improving the structural readability of an existing doc, spec, or plan
 ## Cross-cutting rules
 
 - Never write a claim you didn't verify; if unverifiable, mark it or cut it.
+- **Capture THE WHY.** Code and docs record *what* and *how*; the reasoning
+  behind a decision is the most valuable and most perishable layer. In critical
+  places put a short WHY in the comment/docstring next to the code so the
+  decision lens travels with the context; curate project-shaping reasons as
+  ADRs (they accumulate the values that become the lens for future work). The
+  richest WHY is often in the maintainer's prompting language — preserve it with
+  reverence, like a letter to a future reader, rather than letting it evaporate.
+- **Prune slop, don't add it.** Apply [resources/slop_smells.md](resources/slop_smells.md):
+  every line must survive the delete test, and no value/identifier list is
+  copied into prose where it would drift from code. Fewest touch points wins —
+  write so the cost of a future refactor stays lean.
 - One lens per page by default. A reference page that starts teaching, or a
   tutorial that starts enumerating options, gets split — unless the doc set
   deliberately fuses lenses with one consistent voice, in which case enforce
