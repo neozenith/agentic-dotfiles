@@ -53,6 +53,8 @@
       "Bash(python3:*)",
       "Bash(uv run python -c :*)",
       "Bash(uv run python3 -c :*)",
+      "Bash(uv run --no-project python - <<:*)",
+      "Bash(uv run --no-project python3 - <<:*)",
       "Bash(uv run --no-sync python3 -c :*)",
       "Bash(uv run --no-project python3 -c :*)",
       "Bash(uv run --no-sync --no-project python3 -c :*)",
