@@ -30,7 +30,7 @@ All files ≤ 500 lines (`.claude/rules/claude_skills/index.md`).
 | `../../workflows/gooddocs-audit.js` | Reusable named **dynamic workflow** wrapping AUDIT (+ safe-fix) for loop/schedule use; reads this skill's doctrine at runtime |
 
 Eval suite (`.claude/rules/claude_skills/evals.md`): `make -C
-.claude/skills/gooddocs/scripts ci` (free) · `… evals` (paid golden runs).
+.claude/skills/gooddocs/scripts ci` (free), `… evals` (paid golden runs).
 
 ## Architecture principles
 

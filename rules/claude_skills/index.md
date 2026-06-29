@@ -2,6 +2,8 @@
 paths:
   - ".claude/skills/**"
   - ".claude/rules/**"
+  - "plugins/**/skills/**"
+  - "plugins/**/rules/**"
 ---
 
 # Claude Skills & Rules — Structure Contract (root)

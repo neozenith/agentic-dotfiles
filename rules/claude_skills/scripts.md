@@ -3,6 +3,9 @@ paths:
   - ".claude/skills/**/scripts/*.py"
   - ".claude/skills/**/scripts/*.ts"
   - ".claude/skills/**/scripts/Makefile"
+  - "plugins/**/skills/**/scripts/*.py"
+  - "plugins/**/skills/**/scripts/*.ts"
+  - "plugins/**/skills/**/scripts/Makefile"
 ---
 
 # Claude Skills Script Conventions

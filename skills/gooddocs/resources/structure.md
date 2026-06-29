@@ -171,7 +171,7 @@ citation — justify whitespace by chunking and scanning, never by that number.
 ```markdown
 # Plan: <outcome as a result: "Asset explorer ships with audit trail">
 
-**Status:** In progress · **Owner:** @who · **Updated:** YYYY-MM-DD
+**Status:** In progress | **Owner:** @who | **Updated:** YYYY-MM-DD
 **Done means:** <1-2 sentence acceptance statement for the whole plan>
 
 ## Summary
