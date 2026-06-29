@@ -1,6 +1,7 @@
 ---
 paths:
   - ".claude/skills/**"
+  - "plugins/**/skills/**"
 ---
 
 # Claude Skill Documentation Contract
