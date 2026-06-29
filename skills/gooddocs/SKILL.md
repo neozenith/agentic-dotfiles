@@ -97,7 +97,7 @@ Beyond drift, each agent also emits two other finding categories:
 ### 3. Drift report
 
 ```
-## Docs audit: <N> docs · <C> claims checked · <D> drifted · <U> unverifiable
+## Docs audit: <N> docs, <C> claims checked, <D> drifted, <U> unverifiable
 
 | Doc | Claim | Reality | Severity | Fix |
 |-----|-------|---------|----------|-----|
@@ -107,9 +107,9 @@ Beyond drift, each agent also emits two other finding categories:
 Severity is **claim-type × rung-traffic**, not a fixed ordering: a wrong
 command in a Quickstart (high traffic, blind trust) outranks the same error in
 a deep reference page; a stale screenshot ranks below a missing prerequisite.
-🔴 a reader following the doc fails · 🟡 misleading but survivable ·
+🔴 a reader following the doc fails; 🟡 misleading but survivable;
 🟣 unverifiable claim (flag for the author).
-Order by severity. Offer: (a) apply fixes · (b) fix 🔴 only · (c) report only.
+Order by severity. Offer: (a) apply fixes, (b) fix 🔴 only, (c) report only.
 The default remediation is **fix or flag — never delete**: deleting drifted
 content converts low-severity drift into guaranteed knowledge loss (the docs
 equivalent of graceful degradation). When applying fixes, fix the *doc* unless

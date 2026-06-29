@@ -76,6 +76,28 @@ documentation** (comments, docstrings) equally.
 - **Fix:** prune pure filler; convert a duplicated list into a single pointer to
   its code definition.
 
+### S3 — Typographic tells no human types
+
+- **Smell:** glyphs a person almost never types by hand, used as decoration or
+  separators. The hallmark is the **interpunct/middle dot `·`** (U+00B7) strung
+  between items — "fix · ci · test", "skeleton · discovery · assets". Its
+  siblings: the em-dash `—` used as a *separator* (not a parenthetical), fancy
+  “curly” quotes where straight ones suffice, and the non-breaking hyphen `‑`.
+  None sit on a standard keyboard; they appear because a model emitted them.
+- **Why it's slop:** the `·` is a reliable **AI-authorship tell** — like the
+  em-dash habit and the "not just X, but Y" cadence — so its presence quietly
+  signals machine-generated text and erodes a reader's trust in the doc. As a
+  separator it also carries **zero information** over a comma, slash, or a real
+  list: pure stylistic flourish, the kind the delete test (S2) targets.
+- **Good instead:** a plain separator a human would actually type — a comma,
+  ` / `, a `|` in a table cell, or break the run into a real bullet list. Use
+  straight quotes and a normal hyphen. Reserve `·` only for the rare place it is
+  genuinely conventional (e.g. a units expression).
+- **Detect:** `grep -n '·'` (and `—` used mid-clause as a separator rather than a
+  dash pair). Any prose/heading/table where items are joined by `·` is the tell.
+- **Fix:** replace `·` with the appropriate plain separator — keep the
+  separation, drop the glyph; convert a long `·`-joined run into a bullet list.
+
 ## Capture THE WHY (the inverse failure)
 
 Slop is content that should not exist; the opposite failure is the **missing
