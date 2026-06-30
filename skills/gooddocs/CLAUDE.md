@@ -242,10 +242,31 @@ Eval suite (`.claude/rules/claude_skills/evals.md`): `make -C
   next to it, and treat the maintainer's prompting prose as primary source for
   that WHY. A machine may flag a missing WHY; only a human may supply it.
 
+### ADR-13: em-dashes are slop, never a voice signature
+
+- **Status:** Accepted (2026-06; corrects voice.md rule 13)
+- **Context:** The voice fingerprint (rule 13) listed "spaced em-dash
+  appositions" as a maintainer signature move, and a `voice` pass duly seeded a
+  doc with ~25 em-dashes. The maintainer flagged this as "classic AI slop" that
+  "is wrong and slipped in." The em-dash is the most recognisable
+  AI-authorship tell in prose; endorsing it in the voice file actively
+  manufactured the smell the slop catalog exists to prune.
+- **Decision:** Remove the em-dash endorsement from voice.md; ban `—` outright
+  in rule 13 and in "deliberately absent". Promote em-dash to a first-class slop
+  smell (S4) with no parenthetical carve-out, so audit and write modes catch it
+  everywhere. An en-dash in a numeric range stays legitimate.
+- **Consequences:** A `voice` pass now strips em-dashes instead of adding them;
+  S3 (interpunct) defers the em-dash to S4. The two resources agree.
+- **Lens:** A voice signature must never be a known authorship tell. When a
+  voice habit and a slop smell collide, the slop catalog wins, and the fix is to
+  delete the habit from voice.md, not to carve an exception into the smell.
+
 ## Extension checklist
 
 - [ ] New claim types added to the SKILL.md check table define their evidence
       form (ADR-3).
+- [ ] No new em-dash (`—`) in any authored doc or skill prose (ADR-13, slop S4);
+      use comma, colon, parentheses, or two sentences.
 - [ ] Style additions routed per ADR-2 (lenses vs voice).
 - [ ] Audit remains read-only — no new check may execute a mutating command.
 - [ ] New slop smells follow the `slop_smells.md` entry template; pruning slop

@@ -4,13 +4,13 @@ Distilled from ~10k lines of the maintainer's hand-written documentation in a
 complex multi-stack data-platform monorepo (conventions docs, runbooks,
 empirical investigations, design plans, CLI references). Load this file only
 when `voice` was requested; apply it ON TOP of the lens discipline in
-[lenses.md](lenses.md) — voice changes register, never structure.
+[lenses.md](lenses.md): voice changes register, never structure.
 
 One-line distillation: **second-person, evidence-counted, table-dense
 engineering docs that declare their authority in the first sentence, document
 what things do NOT do as rigorously as what they do, show every command with
 its real output, cost every decision against its rejected alternative, and
-reserve humour for self-deprecating battle scars — never for hype.**
+reserve humour for self-deprecating battle scars, never for hype.**
 
 ## The 13 imitable rules
 
@@ -28,7 +28,7 @@ reserve humour for self-deprecating battle scars — never for hype.**
    "Purpose / Example", "Command / What it does".
 5. **Commands in fenced `sh` blocks with inline `#` comments, followed by the
    literal expected output** under an "Output:" label (including the real ✅
-   characters the tool prints). Dry-run is the default; applying is explicit —
+   characters the tool prints). Dry-run is the default; applying is explicit,
    and the doc says so.
 6. **Coin memorable proper-noun names for concepts and reuse them
    religiously** (the pattern: a vivid two-to-four-word title-case coinage for
@@ -38,7 +38,7 @@ reserve humour for self-deprecating battle scars — never for hype.**
    layers or bleed responsibilities across boundaries."
 8. **Quantify everything.** Record counts, byte overheads, line counts, TTLs
    in both seconds and human units ("7,776,000 | 90 days"). Numbers replace
-   adjectives; a claim worth making is a claim worth counting — add a
+   adjectives; a claim worth making is a claim worth counting. Add a
    `### Proof` section when the claim is surprising.
 9. **Short declarative sentences; fragments allowed for emphasis.** "No
    conversion needed. DST-proof by construction." Bold the load-bearing words
@@ -51,26 +51,34 @@ reserve humour for self-deprecating battle scars — never for hype.**
     Stuck State Lock") or strict pattern labels.** Tool READMEs lead with
     "Quickstart" (often a "***tl;dr***" block); specs lead with a metadata
     block (**Status** / **Branch** / **Stack**).
-12. **Decisions carry their trade-off cost inline**: "Trade-off: <what it
-    costs>. But <what it buys>." Rejected alternatives get their own
-    subsection explaining the rejection ("X is mathematically cleaner, but
-    the current approach already works. Switching adds complexity without
-    solving a real problem.").
-13. **Australian English** ("behaviour", "catalogue", "parametrise"), spaced
-    em-dash appositions (" — "), `----` rules between major sections,
-    `> **NOTE:**` blockquotes for warnings, `<details>` blocks (even nested)
-    for opt-in depth with inviting summaries, `<!--TOC-->`-generated TOCs on
-    anything over ~100 lines.
+12. **Decisions state the lens, not a slogan.** Name plainly what this context
+    values more right now and let the rejected option keep its dignity: "For
+    this project we care more about A than B in the current context, so the decision is X." Write it
+    as akin to a handover to a future developer: acknowledge the alternative may be the
+    right call once the context shifts, and invite them to revisit the
+    assumption when it does ("In the future it might be the case B matters more,
+    that is the signal to change X. Here is the plan on how to pivot from X to Y. 
+    Today it does not, so we chose X for now.").
+    Rejected alternatives get their own subsection that respects them rather
+    than dismisses them.
+13. **Australian English** ("behaviour", "catalogue", "parametrise"). **No
+    em-dashes anywhere** (`—` is the classic AI-authorship tell, see slop smell
+    S4); use a comma, a colon, parentheses, or split into two sentences.
+    `----` rules between major sections, `> **NOTE:**` blockquotes for
+    warnings, `<details>` blocks (even nested) for opt-in depth with inviting
+    summaries, `<!--TOC-->`-generated TOCs on anything over ~100 lines.
 
 ## What is deliberately absent
 
-- No marketing fluff or superlatives about his own work — humour substitutes
+- No marketing fluff or superlatives about his own work; humour substitutes
   for hype.
 - No passive-voice process narration.
+- **No em-dashes.** The maintainer reaches for a comma, colon, parentheses, or
+  a full stop, never `—`. An en-dash in a numeric range (`1.6–1.11`) is fine.
 - No walls of prose: longest unbroken run ≈ 4 sentences before a table, code
   block, or diagram interrupts.
 - No unexplained magic values; no "TODO: document this" stubs in shipped docs.
-- (The source docs ship fast and contain light typos — imitate the directness,
+- (The source docs ship fast and contain light typos; imitate the directness,
   not the typos.)
 
 ## Structural habits
