@@ -251,3 +251,25 @@ Standard text colors used in all palettes:
 - White text: `#fff`
 - Dark text: `#1e293b` (slate-800)
 - Muted text: `#475569` (slate-600)
+
+## AA-Border Variant (fill x stroke >= 3:1)
+
+The primary classes above pair a dark fill with a *darker same-family stroke* —
+that pair cannot reach the 3:1 border contrast `mermaid_contrast.ts` enforces.
+When the border gate applies, swap the stroke to the family's LIGHT shade
+(Tailwind 200) and, where white text was marginal, darken the fill one step:
+
+```
+classDef ingressPrimary fill:#2563eb,stroke:#bfdbfe,color:#fff,stroke-width:2px
+classDef computePrimary fill:#7c3aed,stroke:#ddd6fe,color:#fff,stroke-width:2px
+classDef dataPrimary    fill:#0f766e,stroke:#99f6e4,color:#fff,stroke-width:2px
+classDef infraPrimary   fill:#475569,stroke:#cbd5e1,color:#fff,stroke-width:2px
+classDef ingressSecondary fill:#93c5fd,stroke:#1e40af,color:#1e293b,stroke-width:1px
+classDef sgData         fill:#ccfbf1,stroke:#0f766e,color:#1e293b
+classDef sgInfra        fill:#f1f5f9,stroke:#475569,color:#334155
+classDef stateStart     fill:#065f46,stroke:#a7f3d0,color:#fff,stroke-width:2px
+classDef stateEnd       fill:#475569,stroke:#cbd5e1,color:#fff,stroke-width:2px
+classDef stateWaiting   fill:#92400e,stroke:#fde68a,color:#fff,stroke-width:2px
+```
+
+All pairs verified with `color_contrast.ts` (text >= 4.5:1, border >= 3:1).
