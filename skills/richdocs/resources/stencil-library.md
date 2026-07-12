@@ -95,9 +95,9 @@ data → Graph(nodes, edges) → deterministic layout → SVG compositor → (ca
    libcairo crashes loudly at call time (PNG was the requirement — no silent
    SVG-only "success").
 
-Full treatment — drift gates, README marker-upsert, font pitfalls — lives in
-the `cli` skill: `.claude/skills/cli/resources/svg-diagrams.md`. Read it
-before building a committed, CI-gated diagram artifact.
+For a committed, CI-gated diagram artifact, add a `--check` mode that
+re-renders and byte-diffs against the committed SVG (determinism in step 2 is
+what makes this possible) and wire it into the project's `ci` target.
 
 ## Refreshing the pack
 

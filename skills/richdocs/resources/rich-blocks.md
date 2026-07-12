@@ -15,8 +15,10 @@ with `cache: no-store` + `?v=<BUILD_ID>`.
 ### ` ```mermaid `
 
 Rendered by mermaid 11.x. Theme follows the document theme (`default` /
-`dark`), re-initialised and re-rendered on every theme flip. Complexity and
-contrast rules from the `mermaidjs_diagrams` skill still apply to the source.
+`dark`), re-initialised and re-rendered on every theme flip. The source must
+pass the vendored gates (`vendor/mermaidjs_diagrams/scripts/
+mermaid_complexity.ts` + `mermaid_contrast.ts`) — see the "Mermaid gate"
+section in `SKILL.md`.
 
 ### ` ```cytoscape `
 
@@ -38,8 +40,9 @@ contrast rules from the `mermaidjs_diagrams` skill still apply to the source.
   per-node colours unless they encode *data* (status, category), in which
   case put them in `data.colour` and they survive theme flips unchanged.
 - Node tap → detail is intentionally not in the packaged viewer; when a doc
-  needs routing/detail panels, graduate to the full SPA pattern
-  (`.claude/skills/cli/resources/static-spa-viewer.md`).
+  needs routing/detail panels, it has outgrown the companion — build it as a
+  standalone SPA sub-project (rung 4 of the fidelity ladder in
+  `discovery-docs.md`).
 
 ### ` ```plotly `
 

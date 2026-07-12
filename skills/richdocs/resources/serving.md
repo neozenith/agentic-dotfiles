@@ -80,7 +80,7 @@ distinct ports, or point one server at a parent dir and browse subpaths.
 
 ## Deeper patterns
 
-For building this into your *own* CLI (generate/serve/--inline/--archive
-command surface, client-side routing, collapsible sidebar), see the `cli`
-skill: `.claude/skills/cli/resources/static-spa-viewer.md`. This skill ships
-the packaged version; that resource teaches the pattern.
+`serve.py` is deliberately minimal: static files + no-store, nothing else.
+A document that needs routing, sidebars, or an `--archive` bundle has
+outgrown the companion — build it as a standalone SPA sub-project (rung 4 of
+the fidelity ladder in `discovery-docs.md`), not by extending this server.

@@ -21,8 +21,8 @@ locally, and regenerated at will.
 2. For the **one** load-bearing diagram, add a cytoscape twin as a fenced
    block *below* the mermaid original (don't replace it — the mermaid stays
    readable on GitHub). Compound nodes map to mermaid subgraphs; keep the
-   node count within the same complexity budget the `mermaidjs_diagrams`
-   skill enforces.
+   node count within the complexity budget the vendored gate enforces
+   (`vendor/mermaidjs_diagrams/scripts/mermaid_complexity.ts`).
 3. Where the doc names concrete services, drop tinted stencils into prose or
    tables: `stencil.py extract "mxgraph.aws4/lambda" --color '#ED7100'`,
    reference the SVG with a normal markdown image. Icons render on GitHub
@@ -61,8 +61,8 @@ verdict document buries the verdicts.
 1. Plain markdown (GitHub renders it) —
 2. → `md2html.py` companion (theme, typography, live mermaid) —
 3. → + fenced cytoscape/plotly blocks (interaction, data-driven) —
-4. → full SPA viewer with routing/sidebar/views (the `cli` skill's
-   `static-spa-viewer.md` pattern — a real sub-project, not a companion).
+4. → full SPA viewer with routing/sidebar/views — a real standalone
+   sub-project with its own build, not a companion; out of richdocs' scope.
 
 Jumping to rung 4 for a document that needed rung 2 is how viewers become
 unmaintained apps. The companion's job is *high-fidelity information

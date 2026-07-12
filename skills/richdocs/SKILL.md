@@ -1,6 +1,6 @@
 ---
 name: richdocs
-description: "Generate and serve rich HTML companions to markdown discovery documents: paired markdown→HTML rendering (marked + mermaid + data-driven cytoscape/plotly fenced blocks), a vendored draw.io stencil library (~AWS/GCP/Azure/K8s SVG icons) for composing custom architecture diagrams, an injectable design-tokens brandpack, and a reliable localhost server for HTML that pulls pinned CDN libraries. Use when turning a review/architecture/cost markdown doc into an interactive HTML view, when a diagram needs real cloud provider icons, when serving local HTML that file:// breaks, or when building a data-driven graph/chart view. Skip for plain mermaid-in-markdown work (use mermaidjs_diagrams) and for Python-rendered architecture diagrams (use mingrammer_diagrams)."
+description: "Generate and serve rich HTML companions to markdown discovery documents: paired markdown→HTML rendering (marked + mermaid + data-driven cytoscape/plotly fenced blocks), a vendored draw.io stencil library (~AWS/GCP/Azure/K8s SVG icons) for composing custom architecture diagrams, an injectable design-tokens brandpack, and a reliable localhost server for HTML that pulls pinned CDN libraries. Use when turning a review/architecture/cost markdown doc into an interactive HTML view, when a diagram needs real cloud provider icons, when serving local HTML that file:// breaks, or when building a data-driven graph/chart view. Skip when the deliverable is plain mermaid-in-markdown authoring with no HTML companion, or a Python-rendered architecture diagram image."
 argument-hint: "[markdown-file | stencil-search-term]"
 user-invocable: true
 ---
@@ -43,6 +43,27 @@ uv run --no-project .claude/skills/richdocs/scripts/stencil.py extract "mxgraph.
 ```
 
 Run everything from the repo root. Never `cd`.
+
+## Mermaid gate (mandatory before rendering)
+
+Any doc containing ` ```mermaid ` fences MUST pass this skill's **vendored**
+parse + contrast gates **on the source markdown, before `md2html.py`**:
+
+```bash
+bun run .claude/skills/richdocs/vendor/mermaidjs_diagrams/scripts/mermaid_complexity.ts SOURCE.md
+bun run .claude/skills/richdocs/vendor/mermaidjs_diagrams/scripts/mermaid_contrast.ts SOURCE.md
+```
+
+First run only: `bun install --cwd
+.claude/skills/richdocs/vendor/mermaidjs_diagrams/scripts --frozen-lockfile`.
+
+Non-zero exit is a blocker — `ParserFailure … yielded 0 nodes` means the
+fence is invalid mermaid and will render as a broken block in the companion.
+`md2html.py` passes fences through verbatim; it cannot catch this for you.
+The vendored `vendor/mermaidjs_diagrams/SKILL.md` documents both tools in
+full (profiles, complexity presets, authoring pitfalls like quoted mindmap
+labels and HTML entities). Prior adjudications on this class of failure live
+in `resources/learned/` — treat them as already-decided, don't re-litigate.
 
 ## Command reference
 
@@ -139,9 +160,9 @@ Beyond standard markdown + ` ```mermaid `, the HTML companion renders:
 | `scripts/md2html.py` | Paired markdown → rich HTML generator |
 | `assets/stencils.json.zip` | Vendored draw.io icon library (see `assets/NOTICE`) |
 | `assets/design-tokens.json` | Default neutral brandpack |
+| `vendor/mermaidjs_diagrams/` | Vendored mermaid toolchain: parse/complexity gate, WCAG contrast gate, color-theming references, render script |
+| `resources/learned/` | Prior adjudications and self-taught facts — read before re-litigating |
 
-Deep prior art (linked, not duplicated): the sibling `cli` skill's
-`resources/static-spa-viewer.md` (full SPA viewer: routing, sidebar,
-`--archive`) and `resources/svg-diagrams.md` (layout + drift-gated committed
-diagrams). `richdocs` packs those patterns as runnable scripts; the `cli`
-skill teaches you to build them into your own CLI.
+richdocs is self-contained: every tool and reference it operates with lives
+inside this skill directory. Never point runtime instructions at another
+skill's files.

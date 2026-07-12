@@ -1,0 +1,21 @@
+---
+config:
+  layout: elk
+  look: classic
+  theme: default
+---
+flowchart LR
+    user([User]) --> edge[CDN / Edge]
+    edge --> lb[Load Balancer]
+    lb --> api1[API Server 1]
+    lb --> api2[API Server 2]
+    api1 --> cache[(Cache)]
+    api2 --> cache
+    api1 --> db[(Primary DB)]
+    api2 --> db
+    api1 --> queue[[Job Queue]]
+    api2 --> queue
+    queue --> worker[Worker]
+    worker --> db
+    worker --> store[(Object Store)]
+    db -. replicate .-> replica[(Read Replica)]
