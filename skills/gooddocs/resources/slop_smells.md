@@ -120,6 +120,33 @@ documentation** (comments, docstrings) equally.
   break. Preserve the meaning, drop the glyph. This is a sanctioned rewrite, not
   a flag.
 
+### S5: Borrowed-gravitas phrases
+
+- **Smell:** stock phrases that *assert* an idea is important instead of showing
+  why: "load-bearing idea", "hard-fought idea/lesson", "hard-won insight",
+  "the key insight here", "crucially", "it's worth noting that", "make no
+  mistake", "at its core", "the beating heart of", "battle-tested",
+  "first-class citizen" (as praise, not as a real API property), "not just X,
+  but Y". A model reaches for these because they *sound* like a maintainer who
+  earned the scar; the scar is missing.
+- **Why it's slop:** the phrase carries no information. Delete "load-bearing"
+  and the sentence says exactly what it said before, minus a claim the reader
+  cannot check. Worse, if an idea really is load-bearing, the doc owes the
+  reader *what breaks when it moves*, and the adjective lets the author skip
+  writing that. It is a stand-in for the WHY, so it actively hides the gap.
+- **Good instead:** state the consequence, not the importance. Not "this is a
+  load-bearing invariant", but "if this ordering changes, `X` deadlocks". Not
+  "a hard-fought lesson", but "we tried Y first; it broke on Z (see ADR-N)".
+  If no consequence can be named, the sentence was filler and fails the S2
+  delete test.
+- **Detect:** grep the phrase family, case-insensitive:
+  `grep -rniE 'load.bearing|hard.(fought|won)|key insight|crucially|worth noting|make no mistake|at (its|the) core|beating heart|battle.tested|not just .*, but'`
+  Also the shape test: strip the adjective and ask whether the sentence lost
+  anything. If not, it was gravitas, not content.
+- **Fix:** prune the phrase. Then check whether it was masking a why-gap: if the
+  claim of importance was true, replace it with the concrete consequence or an
+  ADR pointer; if it was not, delete the sentence.
+
 ## Capture THE WHY (the inverse failure)
 
 Slop is content that should not exist; the opposite failure is the **missing

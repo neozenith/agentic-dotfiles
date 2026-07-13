@@ -41,8 +41,8 @@ reserve humour for self-deprecating battle scars, never for hype.**
    adjectives; a claim worth making is a claim worth counting. Add a
    `### Proof` section when the claim is surprising.
 9. **Short declarative sentences; fragments allowed for emphasis.** "No
-   conversion needed. DST-proof by construction." Bold the load-bearing words
-   mid-sentence ("it **silently miscalculates** local times").
+   conversion needed. DST-proof by construction." Bold the words that carry the
+   claim mid-sentence ("it **silently miscalculates** local times").
 10. **Emoji are rare and semantic, never decorative**: 🚨 flanking a warning,
     ✅ only inside real command output, 🫠 exclusively for self-deprecating
     experience-scars, in parenthetical italic asides: "(Yes this comes from

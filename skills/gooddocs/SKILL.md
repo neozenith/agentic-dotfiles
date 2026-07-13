@@ -133,7 +133,7 @@ authoritative.
    - *Explanation* — understanding; why it is so — decisions, constraints,
      alternatives weighed; opinion is legitimate here.
    ADRs, runbooks, changelogs map onto these (see lenses.md §"Extended lenses").
-2. Apply the 15 style principles in lenses.md — most load-bearing: runnable
+2. Apply the 15 style principles in lenses.md; the ones a reader notices first: runnable
    verified examples (run every command before writing it, include expected
    output), document the negative space (what it does NOT do, when NOT to use
    it), fixed templates for reference pages, problem-before-solution for

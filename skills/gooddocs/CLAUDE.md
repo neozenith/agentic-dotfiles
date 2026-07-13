@@ -261,10 +261,33 @@ Eval suite (`.claude/rules/claude_skills/evals.md`): `make -C
   voice habit and a slop smell collide, the slop catalog wins, and the fix is to
   delete the habit from voice.md, not to carve an exception into the smell.
 
+### ADR-14: gravitas adjectives are slop; state the consequence instead
+
+- **Status:** Accepted (2026-07)
+- **Context:** The maintainer flagged phrases like "load-bearing idea" and
+  "hard-fought idea" as AI slop. They are the lexical cousin of the em-dash
+  (ADR-13): a model reaches for them because they *sound* like an author who
+  earned the scar, but they assert importance without evidence a reader can
+  check. Worse than filler, they stand in for the WHY, so the author is
+  excused from writing the consequence that would have proved the claim.
+- **Decision:** Add slop smell S5 (borrowed-gravitas phrases) with a greppable,
+  growable phrase family. Audit prunes the phrase, then asks whether it was
+  masking a `why-gap`: if the importance was real, it is replaced with the named
+  consequence or an ADR pointer; if not, the sentence goes.
+- **Consequences:** Write, restructure, and voice passes all strip these
+  phrases. S5 explicitly hands off to the why-gap category rather than deleting
+  a real rationale, keeping ADR-12 intact (autofix never invents a WHY).
+- **Lens:** When prose *claims* something matters, demand the consequence. If
+  the doc cannot name what breaks when the thing moves, the adjective was
+  decoration, and decoration fails the S2 delete test. Importance is shown, not
+  asserted.
+
 ## Extension checklist
 
 - [ ] New claim types added to the SKILL.md check table define their evidence
       form (ADR-3).
+- [ ] No gravitas adjectives ("load-bearing", "hard-fought/won", "key insight",
+      "crucially") in authored prose (ADR-14, slop S5); name the consequence.
 - [ ] No new em-dash (`—`) in any authored doc or skill prose (ADR-13, slop S4);
       use comma, colon, parentheses, or two sentences.
 - [ ] Style additions routed per ADR-2 (lenses vs voice).
