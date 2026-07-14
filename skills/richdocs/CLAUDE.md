@@ -20,7 +20,10 @@ make -C .claude/skills/richdocs/scripts ci    # gate: must exit 0 before handoff
 | `resources/discovery-docs.md` | per-archetype upgrade recipes, fidelity ladder |
 | `scripts/serve.py` | no-store localhost server (stdlib) |
 | `scripts/stencil.py` | stencil query/extract CLI (stdlib, in-memory zip load) |
-| `scripts/md2html.py` | markdown → HTML companion generator (stdlib; template embedded) |
+| `scripts/md2html.py` | markdown → HTML companion **generator** (stdlib). Contains no HTML/CSS/JS source — it assembles the `assets/viewer.*` files (ADR-008) |
+| `assets/viewer.html` | the page shell — the **only** file carrying `{{...}}` placeholders |
+| `assets/viewer.css` | viewer chrome; all colour/font via `--rd-*` custom properties |
+| `assets/viewer.js` | runtime renderer (marked → fenced-block upgrades → theme flip). **Placeholder-free by contract** — reads generation-time values from the `#rd-config` JSON block |
 | `scripts/Makefile` | fix/ci contract per `.claude/rules/claude_skills/scripts.md` |
 | `assets/stencils.json.zip` | vendored draw.io icon packs (~3.4 MB; see `assets/NOTICE`) |
 | `assets/design-tokens.json` | default neutral brandpack (schema in `rich-blocks.md`) |
@@ -91,20 +94,57 @@ make -C .claude/skills/richdocs/scripts ci    # gate: must exit 0 before handoff
 - **Lens:** when the pack needs new shapes, re-vendor the whole zip from the
   source extractor — never hand-edit entries or unzip into the repo.
 
+### ADR-008 — The generator holds no template; `assets/viewer.*` is the page
+
+- **Status:** accepted (supersedes the `FALLBACK_TOKENS` half of ADR-004)
+- **Context:** `md2html.py` had grown to 641 lines, of which **334 (58%) were a
+  triple-quoted `TEMPLATE` string** containing the entire HTML shell, all CSS and
+  all JS. Consequences: no syntax highlighting, no linting, no editor support;
+  regexes needed double-escaping for Python (`[\\w-]+`); and a maintainer opening
+  the file to understand *the generator* had to scroll past a whole web page to
+  find 241 lines of actual logic. Signal was buried in noise.
+  Separately, `FALLBACK_TOKENS` was a 55-line hand-copy of
+  `assets/design-tokens.json` — ADR-004 named this a "hand-sync hazard" and
+  guarded it with a test. A test asserting two things are identical is a smell:
+  if they must be identical, there should only be one of them.
+- **Decision:** split at three seams — `assets/viewer.html` (shell, 44 lines),
+  `assets/viewer.css` (chrome, 80), `assets/viewer.js` (renderer, 261).
+  `md2html.py` (274) is now purely a generator: read assets, substitute, write.
+  **All generation-time values (build id, source, CDN pins, fallback tokens) are
+  delivered in one `<script type="application/json" id="rd-config">` block**, so
+  `viewer.js` carries **zero placeholders** and is real, lintable JavaScript.
+  `viewer.html` is the only file with `{{...}}`. `FALLBACK_TOKENS` is now *read*
+  from `design-tokens.json` at import — the duplicate literal is deleted, and the
+  hazard is retired rather than policed.
+- **Consequences:** the browser behaviour is untestable by the Python suite
+  (ADR-006 still bites), so a browser smoke-test of **both** output modes is
+  mandatory after any asset edit. Missing/corrupt asset files now crash at import
+  — correct (escalators-not-stairs). Two tests enforce the seam:
+  `test_viewer_js_has_no_template_placeholders` and
+  `test_assembled_html_inlines_the_css_and_js_assets`.
+- **Lens:** when a generator starts carrying the artifact it generates, split
+  them. Code that is *data to this program but source to another language*
+  belongs in a file of that language, where its own tooling can see it. And when
+  you find yourself writing a test that asserts two copies are equal, **delete a
+  copy** — don't police the duplication, remove it.
+
 ### ADR-004 — Two-palette brandpack (chrome CSS vars + canvas JS palette)
 
-- **Status:** accepted
+- **Status:** accepted; the `FALLBACK_TOKENS` hand-sync hazard is **retired by
+  ADR-008** (the fallback is now read from the asset, not re-declared)
 - **Context:** proven in the adaf sdag viewer; canvas renderers (cytoscape,
   plotly) cannot read CSS custom properties.
 - **Decision:** one `design-tokens.json` carries both palettes; the template
   applies `themes.*` as CSS vars and feeds `canvas.*` into renderers; theme
   flip does both. Data-encoding colours (`categoryColours`, status) are
   brand- and theme-invariant.
-- **Consequences:** one hand-sync hazard remains: `FALLBACK_TOKENS` in the
-  template JS mirrors the JSON. A test asserts they stay aligned.
+- **Consequences:** ~~one hand-sync hazard remains~~ — retired by ADR-008.
+  `FALLBACK_TOKENS` is now read from `assets/design-tokens.json`, so there is
+  only one copy of the default palette.
 - **Lens:** any new themable surface gets a token in *one* of the two
-  palettes by asking "can CSS reach it?" — never a hardcoded hex in the
-  template.
+  palettes by asking "can CSS reach it?" — never a hardcoded hex in
+  `viewer.css` or `viewer.js`. (The sole exception is `.rd-error`, which must
+  stay visible when token loading is the thing that failed.)
 
 ### ADR-005 — Pinned CDN, lazy canvas loads, no vendoring of JS libs
 
@@ -166,6 +206,13 @@ make -C .claude/skills/richdocs/scripts ci    # gate: must exit 0 before handoff
 
 - **Symptom: page loads, data never arrives, console CORS error** — opened
   multi-file output over `file://`. Expected; use `serve.py` or `--inline`.
+- **Symptom: a `<script>` written inside a markdown doc never runs** — by design.
+  The doc is rendered into `innerHTML`, and browsers never execute scripts
+  inserted that way (XSS mitigation). `<style>` blocks *do* apply. To pin a
+  doc's initial theme, set `defaultTheme` in its brandpack — not a script.
+- **Symptom: a brandpack names a webfont but the page renders in system fonts** —
+  `design-tokens.json` sets `font-family`; it does not *load* fonts. The doc must
+  `@import` the webfont itself in a `<style>` block.
 - **Symptom: dark chrome, light charts after theme toggle** — a template fork
   dropped the canvas re-feed half of the flip (ADR-004).
 - **Symptom: stale content despite edits** — something is caching; confirm
@@ -183,13 +230,17 @@ make -C .claude/skills/richdocs/scripts ci    # gate: must exit 0 before handoff
 
 ## Extension checklist
 
-- [ ] New fenced block type: add lazy loader + renderer in the template,
+- [ ] New fenced block type: add lazy loader + renderer in **`assets/viewer.js`**,
       token sub-palette if themable, contract section in `rich-blocks.md`,
       degradation behaviour on GitHub noted in `discovery-docs.md`.
 - [ ] New stencil pack: re-vendor zip per `stencil-library.md`, smoke-test
       `packs`/`extract`, update NOTICE if provenance changed.
-- [ ] Any template change: run all three block types + theme flip manually;
-      `make ci` cannot see browser behaviour (ADR-006).
+- [ ] Any `assets/viewer.*` change: run all three block types + theme flip in a
+      real browser, in **both** `--inline` and multi-file mode. `make ci` cannot
+      see browser behaviour (ADR-006).
+- [ ] New generation-time value: add it to `build_config()` → the `#rd-config`
+      block. **Never** add a `{{...}}` placeholder to `viewer.js` (ADR-008) — a
+      test will fail, and the file stops being valid JS.
 
 ## Related (maintainer provenance only — never cite these from runtime surfaces)
 

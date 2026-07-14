@@ -46,14 +46,19 @@ def test_make_build_id_format() -> None:
     assert len(md2html.make_build_id()) == 16
 
 
-def test_apply_tokens_substitutes_all() -> None:
-    out = md2html._apply_tokens(
-        "a {{BUILD_ID}} b {{TITLE}} c {{SOURCE}} d {{BUILD_ID}}",
-        build_id="B1",
-        title="T1",
-        source="S1",
-    )
-    assert out == "a B1 b T1 c S1 d B1"
+def test_viewer_js_has_no_template_placeholders() -> None:
+    """ADR-008: viewer.js must stay real, lintable JS. A `{{...}}` breaks parsing."""
+    js = md2html.VIEWER_JS.read_text(encoding="utf-8")
+    assert "{{" not in js
+    assert 'document.getElementById("rd-config")' in js
+
+
+def test_build_config_carries_everything_the_viewer_needs() -> None:
+    cfg = md2html.build_config(build_id="B1", source="doc.md")
+    assert cfg["buildId"] == "B1"
+    assert cfg["source"] == "doc.md"
+    assert set(cfg["cdn"]) == {"cytoscape", "dagre", "cytoscapeDagre", "plotly"}
+    assert cfg["fallbackTokens"] == md2html.FALLBACK_TOKENS
 
 
 def test_embed_json_escapes_script_close() -> None:
@@ -65,10 +70,38 @@ def test_embed_json_escapes_script_close() -> None:
 def test_build_multi_html_has_no_unresolved_tokens() -> None:
     html = md2html.build_multi_html(build_id="B", title="T", source="doc.md")
     assert "{{" not in html
-    assert 'SOURCE = "doc.md"' in html
+    assert '"source": "doc.md"' in html  # now arrives via the #rd-config block
     assert "__DOC_MD__ =" not in html
     for url in md2html.CDN.values():
         assert url in html
+
+
+@pytest.mark.parametrize(
+    ("tokens", "expected"),
+    [
+        ({"defaultTheme": "dark"}, "dark"),
+        ({"defaultTheme": "light"}, "light"),
+        ({"defaultTheme": "midnight"}, ""),  # invalid -> fall through
+        ({}, ""),  # unset -> prefers-color-scheme
+        (None, ""),
+    ],
+)
+def test_resolve_default_theme(tokens: dict[str, object] | None, expected: str) -> None:
+    assert md2html.resolve_default_theme(tokens) == expected
+
+
+def test_default_theme_is_baked_into_the_pre_paint_script() -> None:
+    """A brandpack may pin the initial theme; it must land before first paint."""
+    html = md2html.build_multi_html(
+        build_id="B", title="T", source="doc.md", default_theme="dark"
+    )
+    assert 't = "dark";' in html
+    assert "{{DEFAULT_THEME}}" not in html
+
+    # Unset leaves the placeholder empty, so the prefers-color-scheme branch runs.
+    plain = md2html.build_multi_html(build_id="B", title="T", source="doc.md")
+    assert 't = "";' in plain
+    assert "prefers-color-scheme" in plain
 
 
 def test_build_inline_html_embeds_doc_and_tokens() -> None:
@@ -83,11 +116,18 @@ def test_build_inline_html_embeds_doc_and_tokens() -> None:
     assert html.count("</script>") == html.count("<script")
 
 
-def test_fallback_tokens_mirror_asset_tokens() -> None:
-    """ADR-004 hand-sync hazard: baked fallback palettes must match the asset JSON."""
+def test_fallback_tokens_are_the_default_brandpack() -> None:
+    """ADR-008 retires the ADR-004 hand-sync hazard: one source, not two copies."""
     asset = json.loads(md2html.DEFAULT_TOKENS.read_text(encoding="utf-8"))
-    assert md2html.FALLBACK_TOKENS["themes"] == asset["themes"]
-    assert md2html.FALLBACK_TOKENS["canvas"] == asset["canvas"]
+    assert md2html.FALLBACK_TOKENS == asset
+    assert {"fonts", "themes", "canvas"} <= set(md2html.FALLBACK_TOKENS)
+
+
+def test_assembled_html_inlines_the_css_and_js_assets() -> None:
+    html = md2html.build_multi_html(build_id="B", title="T", source="doc.md")
+    assert md2html.VIEWER_CSS.read_text(encoding="utf-8") in html
+    assert md2html.VIEWER_JS.read_text(encoding="utf-8") in html
+    assert '<script type="application/json" id="rd-config">' in html
 
 
 # ── Output writers ──────────────────────────────────────────────────────────
