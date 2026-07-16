@@ -22,6 +22,10 @@
   })();
 </script>
 <style>{{VIEWER_CSS}}</style>
+<!-- Per-brand overrides: webfont @imports, display face, chrome refinements.
+     Comes AFTER viewer.css so a theme can override anything it needs. Empty
+     when no --theme is selected. -->
+<style>{{THEME_CSS}}</style>
 <script src="{{CDN_MARKED}}"></script>
 <script src="{{CDN_MERMAID}}"></script>
 </head>
@@ -37,6 +41,14 @@
 <!-- Everything md2html.py injects lives here, so viewer.js stays placeholder-free
      and remains real, lintable JavaScript. -->
 <script type="application/json" id="rd-config">{{RD_CONFIG}}</script>
+<!-- Graph styling first: viewer.js calls rdRenderCytoscape() from here. -->
+<script>
+{{VIEWER_CYTOSCAPE_JS}}
+</script>
+<!-- Likewise rdRenderDeckGL(): hoisted before the renderer that calls it. -->
+<script>
+{{VIEWER_DECKGL_JS}}
+</script>
 <script>
 {{VIEWER_JS}}
 </script>

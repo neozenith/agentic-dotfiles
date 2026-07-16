@@ -1,0 +1,221 @@
+{
+  "defaultTheme": "light",
+  "fonts": {
+    "display": "'Poppins', system-ui, sans-serif",
+    "body": "'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    "mono": "'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace"
+  },
+  "themes": {
+    "light": {
+      "bg": "#ffffff",
+      "fg": "#3a474e",
+      "muted": "#616c71",
+      "accent": "#a5c84d",
+      "surface": "#f7f7f8",
+      "border": "#e4e7ec",
+      "onAccent": "#3a474e",
+      "link": "#5d7702",
+      "radius": "8px",
+      "pill": "999px"
+    },
+    "dark": {
+      "bg": "#242c30",
+      "fg": "#e3e6e7",
+      "muted": "#9aa4a8",
+      "accent": "#9bb856",
+      "surface": "#2d373d",
+      "border": "#4b5c65",
+      "onAccent": "#242c30",
+      "link": "#9bb856",
+      "radius": "8px",
+      "pill": "999px"
+    }
+  },
+  "canvas": {
+    "cytoscape": {
+      "light": {
+        "nodeFill": "#e7efd9",
+        "nodeBorder": "#5d7702",
+        "nodeLabel": "#3a474e",
+        "nodeFillAlt": "#fbe4f0",
+        "edge": "#616c71",
+        "edgeLabel": "#616c71",
+        "edgeLabelBg": "#ffffff",
+        "compoundBg": "#f7f7f8",
+        "compoundBorder": "#e4e7ec",
+        "selected": "#5d7702",
+        "shape": "round-rectangle",
+        "roundness": 8
+      },
+      "dark": {
+        "nodeFill": "#1c2211",
+        "nodeBorder": "#9bb856",
+        "nodeLabel": "#e3e6e7",
+        "nodeFillAlt": "#291923",
+        "edge": "#9aa4a8",
+        "edgeLabel": "#9aa4a8",
+        "edgeLabelBg": "#242c30",
+        "compoundBg": "#2d373d",
+        "compoundBorder": "#4b5c65",
+        "selected": "#9bb856",
+        "shape": "round-rectangle",
+        "roundness": 8
+      }
+    },
+    "plotly": {
+      "light": {
+        "paper": "#f7f7f8",
+        "plot": "#ffffff",
+        "font": "#3a474e",
+        "grid": "#e4e7ec",
+        "series": [
+          "#6a8703",
+          "#4076d7",
+          "#c65028",
+          "#038f78",
+          "#9b58bc",
+          "#947702",
+          "#0886ae",
+          "#c4486c"
+        ],
+        "muted": [
+          "#929292",
+          "#808080",
+          "#6f6f6f",
+          "#5d5d5d"
+        ],
+        "sequential": [
+          "#cded89",
+          "#a7c563",
+          "#77922e",
+          "#4c6200",
+          "#2b3900"
+        ],
+        "diverging": {
+          "good": [
+            "#95b250",
+            "#718c26",
+            "#4c6200"
+          ],
+          "zero": "#8a8a8a",
+          "bad": [
+            "#dd82b9",
+            "#b45e94",
+            "#87346a"
+          ],
+          "label": "brand ↔ counter"
+        },
+        "divergingAlt": {
+          "good": [
+            "#39bab4",
+            "#0a938e",
+            "#056662"
+          ],
+          "zero": "#8a8a8a",
+          "bad": [
+            "#c4a032",
+            "#9c7c03",
+            "#6c5500"
+          ],
+          "label": "teal ↔ counter"
+        }
+      },
+      "dark": {
+        "paper": "#2d373d",
+        "plot": "#242c30",
+        "font": "#e3e6e7",
+        "grid": "#4b5c65",
+        "series": [
+          "#7a9b00",
+          "#4d88f2",
+          "#df5f34",
+          "#0ca389",
+          "#b068d4",
+          "#aa8804",
+          "#0999c7",
+          "#dd577c"
+        ],
+        "muted": [
+          "#636363",
+          "#505050",
+          "#3d3d3d",
+          "#2e2e2e"
+        ],
+        "sequential": [
+          "#303e00",
+          "#516801",
+          "#77922e",
+          "#a1bf5c",
+          "#c7e683"
+        ],
+        "diverging": {
+          "good": [
+            "#718c26",
+            "#95b250",
+            "#bad976"
+          ],
+          "zero": "#5a5a5a",
+          "bad": [
+            "#b45e94",
+            "#dd82b9",
+            "#feaddd"
+          ],
+          "label": "brand ↔ counter"
+        },
+        "divergingAlt": {
+          "good": [
+            "#0a938e",
+            "#39bab4",
+            "#67e2da"
+          ],
+          "zero": "#5a5a5a",
+          "bad": [
+            "#9c7c03",
+            "#c4a032",
+            "#ebc75e"
+          ],
+          "label": "teal ↔ counter"
+        }
+      }
+    }
+  },
+  "categoryColours": {
+    "Compute": "#7a9b00",
+    "Storage": "#4d88f2",
+    "Database": "#df5f34",
+    "Networking": "#0ca389",
+    "Security": "#b068d4",
+    "Integration": "#aa8804",
+    "General": "#858585"
+  },
+  "status": {
+    "light": {
+      "colours": {
+        "good": "#258343",
+        "warning": "#8e7002",
+        "serious": "#b05f1a",
+        "critical": "#b8544f"
+      },
+      "labels": {
+        "good": "Good",
+        "warning": "Warning",
+        "serious": "Serious",
+        "critical": "Critical"
+      }
+    },
+    "dark": {
+      "colours": {
+        "good": "#4ca563",
+        "warning": "#b4911b",
+        "serious": "#d58042",
+        "critical": "#dd766f"
+      },
+      "labels": {
+        "good": "Good",
+        "warning": "Warning",
+        "serious": "Serious",
+        "critical": "Critical"
+      }
+    }
+  }
+}

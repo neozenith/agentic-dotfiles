@@ -34,6 +34,7 @@ def _args(doc: Path, out: Path, **overrides: object) -> Namespace:
         "tokens": str(md2html.DEFAULT_TOKENS),
         "title": None,
         "serve_hint": False,
+        "theme": None,
     }
     base.update(overrides)
     return Namespace(**base)
@@ -53,12 +54,37 @@ def test_viewer_js_has_no_template_placeholders() -> None:
     assert 'document.getElementById("rd-config")' in js
 
 
+def test_viewer_deckgl_js_has_no_template_placeholders() -> None:
+    """ADR-008 applies to every hoisted renderer, not just viewer.js."""
+    js = md2html.VIEWER_DECKGL_JS.read_text(encoding="utf-8")
+    assert "{{" not in js
+    assert "function rdRenderDeckGL(" in js
+
+
 def test_build_config_carries_everything_the_viewer_needs() -> None:
     cfg = md2html.build_config(build_id="B1", source="doc.md")
     assert cfg["buildId"] == "B1"
     assert cfg["source"] == "doc.md"
-    assert set(cfg["cdn"]) == {"cytoscape", "dagre", "cytoscapeDagre", "plotly"}
+    assert set(cfg["cdn"]) == {
+        "cytoscape",
+        "dagre",
+        "cytoscapeDagre",
+        "plotly",
+        "deckgl",
+        "maplibre",
+        "maplibreCss",
+        "duckdb",
+    }
     assert cfg["fallbackTokens"] == md2html.FALLBACK_TOKENS
+
+
+def test_deckgl_renderer_is_inlined_and_hoisted_before_viewer_js() -> None:
+    """rdRenderDeckGL is called by viewer.js, so it must be DEFINED earlier in the page."""
+    html = md2html.build_multi_html(build_id="B", title="T", source="doc.md")
+    assert "function rdRenderDeckGL(" in html
+    assert html.index("function rdRenderDeckGL(") < html.index(
+        'JSON.parse(document.getElementById("rd-config")'
+    )
 
 
 def test_embed_json_escapes_script_close() -> None:
@@ -123,11 +149,111 @@ def test_fallback_tokens_are_the_default_brandpack() -> None:
     assert {"fonts", "themes", "canvas"} <= set(md2html.FALLBACK_TOKENS)
 
 
-def test_assembled_html_inlines_the_css_and_js_assets() -> None:
+def test_assembled_html_inlines_every_asset() -> None:
     html = md2html.build_multi_html(build_id="B", title="T", source="doc.md")
     assert md2html.VIEWER_CSS.read_text(encoding="utf-8") in html
     assert md2html.VIEWER_JS.read_text(encoding="utf-8") in html
+    assert md2html.VIEWER_CYTOSCAPE_JS.read_text(encoding="utf-8") in html
     assert '<script type="application/json" id="rd-config">' in html
+
+
+def test_viewer_cytoscape_js_has_no_template_placeholders() -> None:
+    """ADR-008 applies to every asset, not just viewer.js."""
+    js = md2html.VIEWER_CYTOSCAPE_JS.read_text(encoding="utf-8")
+    assert "{{" not in js
+    assert "function rdRenderCytoscape(" in js
+
+
+# ── Named themes ────────────────────────────────────────────────────────────
+def test_available_themes_finds_the_installed_brandpacks() -> None:
+    themes = md2html.available_themes()
+    assert "osakanights" in themes
+    for name in themes:
+        assert (md2html.THEMES_DIR / name / "design-tokens.json").is_file()
+
+
+def test_load_theme_returns_tokens_and_css() -> None:
+    theme = md2html.load_theme("osakanights")
+    assert theme.name == "osakanights"
+    assert theme.tokens_path.is_file()
+    assert "Fraunces" in theme.css  # theme.css is what actually loads the webfont
+
+
+def test_installed_brandpacks_declare_a_display_face() -> None:
+    """A typeface is a brand value; it belongs in the pack, not only in CSS."""
+    for name in md2html.available_themes():
+        tokens = json.loads(
+            md2html.load_theme(name).tokens_path.read_text(encoding="utf-8")
+        )
+        assert "display" in tokens["fonts"], f"{name} has no fonts.display"
+
+
+def test_themes_are_real_files_not_symlinks() -> None:
+    """The skill must be portable: copy .claude/ anywhere and themes still resolve.
+
+    A symlink out to a project directory is a co-dependency, not a theme.
+    """
+    for name in md2html.available_themes():
+        pack = md2html.THEMES_DIR / name / "design-tokens.json"
+        assert not pack.is_symlink(), f"{name} brandpack is a symlink"
+        css = md2html.THEMES_DIR / name / "theme.css"
+        assert not css.is_symlink(), f"{name} theme.css is a symlink"
+
+
+def test_two_themed_docs_in_one_dir_keep_their_own_brand(tmp_path: Path) -> None:
+    """REGRESSION: a shared design-tokens.json let one doc clobber another's brand.
+
+    Rendering doc B with --theme v2ai overwrote the pack that doc A (--theme
+    osakanights) fetches at runtime, so BOTH pages loaded V2's palette and fonts.
+    The brandpack is now paired with the doc, like the markdown already was.
+    """
+    out = tmp_path / "out"
+    for stem, theme in [("alpha", "osakanights"), ("beta", "v2ai")]:
+        src = tmp_path / f"{stem}.md"
+        src.write_text(f"# {stem}\n", encoding="utf-8")
+        md2html.main(_args(src, out, theme=theme))
+
+    alpha = json.loads((out / "alpha.tokens.json").read_text(encoding="utf-8"))
+    beta = json.loads((out / "beta.tokens.json").read_text(encoding="utf-8"))
+    assert "Fraunces" in alpha["fonts"]["display"]
+    assert "Outfit" in beta["fonts"]["display"]
+
+    # and each page must fetch ITS OWN pack, not a shared filename
+    assert '"tokensSource": "alpha.tokens.json"' in (out / "alpha.html").read_text(
+        encoding="utf-8"
+    )
+    assert '"tokensSource": "beta.tokens.json"' in (out / "beta.html").read_text(
+        encoding="utf-8"
+    )
+
+
+def test_load_theme_unknown_name_crashes_loudly() -> None:
+    """escalators-not-stairs: a typo'd theme must fail, never silently fall back."""
+    with pytest.raises(SystemExit) as excinfo:
+        md2html.load_theme("nope")
+    assert "unknown theme" in str(excinfo.value)
+    assert "osakanights" in str(excinfo.value)  # lists what IS available
+
+
+def test_theme_css_is_injected_after_viewer_css() -> None:
+    theme = md2html.load_theme("osakanights")
+    html = md2html.build_multi_html(
+        build_id="B", title="T", source="d.md", theme_css=theme.css
+    )
+    assert theme.css in html
+    assert html.index(md2html.VIEWER_CSS.read_text(encoding="utf-8")) < html.index(
+        theme.css
+    )
+
+
+def test_main_theme_supersedes_tokens(
+    doc: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    md2html.main(_args(doc, tmp_path, theme="osakanights"))
+    out = capsys.readouterr().out
+    assert "theme: osakanights" in out
+    html = (tmp_path / "mydoc.html").read_text(encoding="utf-8")
+    assert "Fraunces" in html
 
 
 # ── Output writers ──────────────────────────────────────────────────────────
@@ -138,8 +264,8 @@ def test_write_multi_outputs(doc: Path, tmp_path: Path) -> None:
     )
     assert html_path == out_dir / "mydoc.html"
     assert (out_dir / "mydoc.md").read_text(encoding="utf-8") == DOC_MD
-    copied = json.loads((out_dir / "design-tokens.json").read_text(encoding="utf-8"))
-    assert set(copied) == {"fonts", "themes", "canvas", "categoryColours"}
+    copied = json.loads((out_dir / "mydoc.tokens.json").read_text(encoding="utf-8"))
+    assert {"fonts", "themes", "canvas"} <= set(copied)
     html = html_path.read_text(encoding="utf-8")
     assert "build B123" in html
     assert "<title>My Doc</title>" in html
@@ -154,7 +280,7 @@ def test_write_inline_output(doc: Path, tmp_path: Path) -> None:
     assert "window.__DOC_MD__ = " in html
     assert "graph LR" in html
     assert "categoryColours" in html
-    assert not (out_dir / "design-tokens.json").exists()
+    assert not (out_dir / "mydoc.tokens.json").exists()
 
 
 # ── main() ──────────────────────────────────────────────────────────────────

@@ -57,6 +57,62 @@ Rendered with `Plotly.react`. The theme's `canvas.plotly.<theme>` tokens set
 Prefer `type: "scatter"` over `scattergl` when points must be clickable or
 e2e-addressable.
 
+`height` sizes the canvas (default 420), same as the other blocks. Set it on the
+payload, **not** in `layout` — the container is what Plotly's responsive mode
+measures.
+
+### ` ```deckgl `
+
+3D and geographic scenes (deck.gl, lazy-loaded — it is the heaviest CDN lib, so
+a doc that never uses it never pays for it).
+
+```json
+{ "view": "orbit", "space": "oklch", "height": 520,
+  "gamut": [0.65], "targetChroma": 0.19,
+  "layers": [ { "type": "PointCloudLayer", "pointSize": 11,
+                "data": [ { "hex": "#7180fe", "label": "series 1" } ] } ] }
+```
+
+| Key | Meaning |
+|-----|---------|
+| `view` | `"orbit"` (3D, default) or `"map"` (geographic; positions are `[lng, lat]`) |
+| `space` | orbit only — `"oklch"` (default), `"oklab"`, `"rgb"`. The projection applied to `hex` data |
+| `layers[].type` | **any** deck.gl layer name, looked up on the global (`PointCloudLayer`, `ArcLayer`, `GeoJsonLayer`, …) |
+| `gamut` | orbit only — draw the sRGB boundary ring at each listed lightness |
+| `targetChroma` | orbit only — draw the *requested* chroma as a circle, and spoke every swatch that could not reach it |
+| `basemap` | map only — `true` (OSM) or a raster tile URL template; a deck `TileLayer` under the scene |
+| `basemapStyle` | map only — a **vector** GL style URL (e.g. CartoDB dark-matter); MapLibre owns the map, deck rides as a `MapboxOverlay`. Preferred over `basemap` (robust tiles) |
+| `height` | canvas height in px (default 460) |
+
+**`type` is looked up on deck's global, so every deck.gl layer works with no code
+change here.** The block is open by construction; only the colour-space sugar
+below is specific.
+
+**The sugar — a datum that carries `hex` needs neither a position nor a colour.**
+Both are derived from the colour itself: the datum *is* its own coordinate. That
+is what lets a palette be authored as a plain list of hex strings. Supply
+`getPosition`/`getColor` explicitly to override.
+
+**Lighting is OFF by default** (`material: false` on every layer). deck.gl's lit
+layers shade marks as 3D solids, which *darkens the fill* — a swatch would render
+muddier than its own hex, and in a colour-space scene the mark is a colour claim.
+Flat/unlit is the only colour-correct default; put `material` on a layer spec to opt
+into shaded geometry.
+
+`map` view draws **no basemap by default** — the brand canvas *is* the basemap, so no
+vendor token is required. Opt into real tiles with `basemap` (raster) or `basemapStyle`
+(vector, via MapLibre); both are free and keyless. Supply `initialViewState` to frame it.
+The vector path needs MapLibre GL loaded (`cdn.maplibre` + its CSS) before the block renders.
+
+> **Orbit framing gotcha:** deck's `zoom` here is `log2(pixels per world unit)`,
+> **not** a map zoom. Every space is normalised to a ~1-unit extent, so a scene
+> needs `zoom ≈ 9`; framing it like a map (`zoom: 2`) renders a perfectly correct
+> scene the size of a postage stamp. The defaults handle this — override with care.
+
+Theming reads `canvas.deckgl.<theme>` (`background`, `ink`, `text`, `warn`) when
+present, and otherwise derives them from tokens every brandpack already ships, so
+**no brandpack change is needed to adopt the block**.
+
 ### The data pointer (data-driven mode)
 
 ```json

@@ -4,7 +4,7 @@
 # ── Python source ──────────────────────────────────────────────────────────
 
 # Public Python scripts (referenced in SKILL.md)
-PY_SCRIPTS = serve stencil md2html
+PY_SCRIPTS = serve stencil md2html showcase themecheck
 
 # Private scripts: maintenance helpers for the skill itself (none yet)
 PRIVATE_PY_SCRIPTS =
@@ -24,7 +24,7 @@ UV = uv run --no-project
 # Isolate pytest from any root pyproject.toml config (addopts, plugins).
 PYTEST_ARGS = -v -c /dev/null --rootdir .
 
-.PHONY: all debug help clean \
+.PHONY: themecheck all debug help clean \
         format format-py \
         format-check format-check-py \
         lint lint-py \
@@ -83,6 +83,8 @@ test-py:
 	$(UV) test_serve.py $(PYTEST_ARGS)
 	$(UV) test_stencil.py $(PYTEST_ARGS)
 	$(UV) test_md2html.py $(PYTEST_ARGS)
+	$(UV) test_showcase.py $(PYTEST_ARGS)
+	$(UV) test_themecheck.py $(PYTEST_ARGS)
 
 test-cov: test-cov-py
 
@@ -93,13 +95,21 @@ test-cov-py:
 		--cov=stencil --cov-report=term-missing --cov-fail-under=90
 	$(UV) test_md2html.py $(PYTEST_ARGS) \
 		--cov=md2html --cov-report=term-missing --cov-fail-under=90
+	$(UV) test_showcase.py $(PYTEST_ARGS) \
+		--cov=showcase --cov-report=term-missing --cov-fail-under=90
+	$(UV) test_themecheck.py $(PYTEST_ARGS) \
+		--cov=themecheck --cov-report=term-missing --cov-fail-under=90
 
 # ── CI / Fix / Misc ────────────────────────────────────────────────────────
 
 # Run all checks with coverage enforcement (CI standard).
-ci: format-check lint typecheck test-cov
+ci: format-check lint typecheck test-cov themecheck
 
 # Run all auto-fixers (local development)
+# The brandpack gate: a theme that renders unreadable text must not ship.
+themecheck:
+	$(UV) themecheck.py
+
 fix: format lint-fix
 
 # Clean up cache and temp files

@@ -10,6 +10,8 @@ from __future__ import annotations
 import importlib
 
 import md2html
+import showcase
+import themecheck
 import pytest
 import serve
 import stencil
@@ -21,3 +23,5 @@ def _reload_for_coverage() -> None:
     importlib.reload(serve)
     importlib.reload(stencil)
     importlib.reload(md2html)
+    importlib.reload(showcase)
+    importlib.reload(themecheck)

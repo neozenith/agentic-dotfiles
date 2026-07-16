@@ -1,0 +1,8 @@
+/* LocoMotif — a fictional rail-logistics brand (anonymised).
+   Warm-industrial orange primary against cool neutrals; sturdy geometric type.
+   The brandpack NAMES these faces; this file LOADS them. */
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap');
+
+h1, h2, h3, h4 { font-family: var(--rd-font-display); letter-spacing: -0.01em; }
+h1 { font-weight: 800; }
+h2 { color: var(--rd-accent); }

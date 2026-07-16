@@ -1,0 +1,9 @@
+/* FreshGreens — a fictional retail-media brand (anonymised).
+   Fresh lime-green primary on clean neutrals with slate ink; rounded, bright.
+   Fresh Sans is proprietary; Poppins is the free geometric stand-in.
+   The brandpack NAMES these faces; this file LOADS them. */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap');
+
+h1, h2, h3, h4 { font-family: var(--rd-font-display); letter-spacing: -0.005em; }
+h1 { font-weight: 700; }
+h2 { color: var(--rd-accent); }

@@ -1,8 +1,8 @@
 # Prose Style for Authored Content
 
-Load when richdocs **authors or rewrites** prose. This is a self-contained
-standard: it references no other skill, and it is copied here on purpose so
-richdocs stands alone (see CLAUDE.md ADR-015 and `.claude/skills/CLAUDE.md`).
+Load when this skill **authors or rewrites** prose. It applies to prose this
+skill produces, never to the user's canonical markdown, which is rendered as
+written.
 
 ## Where this applies (and where it must not)
 
@@ -75,6 +75,41 @@ for everyone.
   "a cached response". Keep the gerund for titles ("Getting Started").
 - **Avoid slang and idioms.** They do not translate.
 
+### Evaluating ESL and translator readability
+
+"ESL-friendly" is only real if it can be checked. Evaluate authored prose with
+concrete, tool-agnostic methods, cheapest first. Pick the one that fits the
+environment and report which you used.
+
+1. **Proxy metrics (deterministic).** Count what a rule already bounds: sentence
+   length (about 25 words or fewer), one main clause per sentence where possible,
+   and a reading-grade target (aim for roughly grade 8 to 10) from any readability
+   measure. One term per concept, one concept per term.
+2. **Round-trip translation (optional; the translator-specific check).**
+   Translate the passage to another language and back to English with any
+   available translator, then compare. Idioms, tangled clauses, and ambiguous
+   `-ing`/`-ed` words break in the round trip; if the back-translation drifts or
+   confuses, rewrite the source, not the translation. This check is **blind to
+   register and punctuation** (a translator normalises an em-dash away, and
+   universal metaphors survive), so it never replaces the proxy-metric or rubric
+   checks. Scale the effort to the rigour you want, and default to fast and cheap:
+   - **Default (cheap):** skip it when the proxy-metric and rubric checks are
+     clean, or run **one** diverse pivot. A single distant pivot already catches
+     blatant problems.
+   - **Escalate (a small council):** run single trips through a few diverse
+     pivots and require the passage to survive all of them. Recommended trio:
+     **German** (exposes nested clauses and merged terminology), **Mandarin
+     Chinese** (exposes `-ing`/`-ed` and definiteness ambiguity), **Arabic**
+     (maximal idiom distance; forces number and definiteness). German plus
+     Chinese alone is a strong two-pivot bar.
+   - **Deep (broad council):** add more distant languages (for example Japanese,
+     Russian, Spanish) only when the user asks for thorough multilingual
+     accessibility. Russian is weak at exposing nesting, so it does not replace
+     German. Cost rises with each pivot, so run the broad council on request.
+3. **Read from the reader's seat.** A reviewer (person or model) reads as an ESL
+   reader and flags any sentence that needs a second pass to parse. The rules
+   above become the rubric, which turns the read into a repeatable score.
+
 ## Inclusive language
 
 Content is inclusive and free of bias. Replace the term on the left with one that
@@ -125,3 +160,29 @@ word rather than trusting the reader to infer the sense.
 [ ] Skill vocabulary reused exactly; determiners disambiguate canvas/theme/render.
 [ ] User's canonical markdown rendered as written, never silently corrected.
 ```
+
+### ESL/translator evaluation (auditable checks)
+
+Run and record which methods you used. Method A is the free deterministic
+pre-filter; Method D is the primary check; round-trip is a confirmatory pass for
+ambiguity and terminology (and is blind to punctuation, so it never runs alone).
+
+```text
+Method A, proxy metrics (deterministic gate; a tripped box fails the passage):
+[ ] A1 Longest sentence ≤ 25 words.
+[ ] A2 Reading grade ≤ 12 (target grade 8–10) by any readability measure.
+[ ] A3 No sentence carries more than 2 nested subordinate clauses.
+
+Method D, reader's-seat rubric (read as an intermediate ESL reader; any tripped
+item fails the passage):
+[ ] D1 Every sentence parses on the first pass, with no re-read.
+[ ] D2 No idiom, slang, or figurative phrase.
+[ ] D3 No bare -ing/-ed word left ambiguous between verb and noun (add a determiner).
+[ ] D4 One concept is named by one term throughout, with no synonym drift.
+[ ] D5 No em-dash or other authorship tell (an en-dash in a numeric range is exempt).
+```
+
+Method A catches sentence *shape* and nothing semantic; it passes short idioms and
+ambiguity. Method D covers all five defect classes at low cost, but D1 and D3 are
+judgement calls, so pin them to a fixed reader band (for example CEFR B1) when the
+result must be repeatable.

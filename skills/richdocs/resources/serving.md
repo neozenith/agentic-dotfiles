@@ -55,6 +55,8 @@ versions** — floating majors is how a working document breaks a month later.
 | dagre + cytoscape-dagre | 0.8.5 / 2.5.0 | `…/npm/dagre@0.8.5/dist/dagre.min.js`, `…/npm/cytoscape-dagre@2.5.0/cytoscape-dagre.js` |
 | plotly | 2.35.2 | `cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js` |
 | deck.gl | 9.0.36 | `cdn.jsdelivr.net/npm/deck.gl@9.0.36/dist.min.js` |
+| MapLibre GL (vector basemap) | 4.7.1 | `…/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js` + `…/maplibre-gl.css` |
+| duckdb-wasm (in-browser SQL) | 1.32.0 | `…/npm/@duckdb/duckdb-wasm@1.32.0/+esm` (ESM; **pin the stable, not `latest` = a -dev build**) |
 | Tailwind (play CDN) | 3.4.16 | `cdn.jsdelivr.net/npm/tailwindcss-cdn@3.4.16/tailwindcss.js` (or `cdn.tailwindcss.com/3.4.16`) |
 | Google Fonts | n/a | `fonts.googleapis.com/css2?family=…&display=swap` |
 

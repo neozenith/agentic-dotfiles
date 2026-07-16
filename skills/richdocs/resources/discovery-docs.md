@@ -39,7 +39,22 @@ locally, and regenerated at will.
    table and a chart — one of them will rot.
 3. GitHub degradation is graceful *by construction*: a fenced `plotly` block
    renders on GitHub as a JSON code block — visible, inspectable, obviously
-   "the chart's data" — not broken markup.
+   "the chart's data" — not broken markup. The same holds for `deckgl`.
+
+## Recipe: spatial / colour-space arguments
+
+Reach for a ` ```deckgl ` block only when the claim is **inherently 3D or
+geographic** — i.e. a 2D chart would have to *assert* the finding rather than
+*show* it. The canonical case: "this palette is not what it claims to be",
+where the answer depends on lightness AND hue at once, so no swatch row can
+carry it.
+
+The discipline that keeps it honest: **a scene must contain its own referent.**
+Points alone prove nothing. Draw the boundary (`gamut`) and the intent
+(`targetChroma`) into the scene, so the reader *derives* the conclusion from
+the picture instead of taking the caption's word for it. If you find yourself
+writing a paragraph telling the reader what they are looking at, the missing
+referent is the bug — not the prose.
 
 ## Recipe: prose reviews
 
@@ -60,7 +75,7 @@ verdict document buries the verdicts.
 
 1. Plain markdown (GitHub renders it) —
 2. → `md2html.py` companion (theme, typography, live mermaid) —
-3. → + fenced cytoscape/plotly blocks (interaction, data-driven) —
+3. → + fenced cytoscape/plotly/deckgl blocks (interaction, data-driven, 3D) —
 4. → full SPA viewer with routing/sidebar/views — a real standalone
    sub-project with its own build, not a companion; out of richdocs' scope.
 

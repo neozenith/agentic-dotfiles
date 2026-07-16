@@ -1,0 +1,195 @@
+{
+  "defaultTheme": "light",
+  "fonts": {
+    "display": "'Outfit', system-ui, sans-serif",
+    "body": "'Outfit', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+    "mono": "'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace"
+  },
+  "themes": {
+    "light": {
+      "bg": "#ffffff",
+      "fg": "#1a1818",
+      "muted": "#666666",
+      "surface": "#ebebeb",
+      "border": "#c9c9c9",
+      "accent": "#ffc000",
+      "onAccent": "#000000",
+      "link": "#1a1818",
+      "radius": "0",
+      "pill": "0"
+    },
+    "dark": {
+      "bg": "#000000",
+      "fg": "#ebebeb",
+      "muted": "#bfbfbf",
+      "surface": "#1a1818",
+      "border": "#4d4d4d",
+      "accent": "#ffc000",
+      "onAccent": "#000000",
+      "link": "#ebebeb",
+      "radius": "0",
+      "pill": "0"
+    }
+  },
+  "canvas": {
+    "cytoscape": {
+      "light": {
+        "nodeFill": "#ffffff",
+        "nodeBorder": "#1a1818",
+        "nodeLabel": "#1a1818",
+        "nodeFillAlt": "#ebebeb",
+        "edge": "#666666",
+        "edgeLabel": "#1a1818",
+        "edgeLabelBg": "#ffffff",
+        "compoundBg": "#ebebeb",
+        "compoundBorder": "#666666",
+        "selected": "#ffc000",
+        "shape": "rectangle",
+        "roundness": 0
+      },
+      "dark": {
+        "nodeFill": "#000000",
+        "nodeBorder": "#ffc000",
+        "nodeLabel": "#ebebeb",
+        "nodeFillAlt": "#1a1818",
+        "edge": "#bfbfbf",
+        "edgeLabel": "#ebebeb",
+        "edgeLabelBg": "#000000",
+        "compoundBg": "#1a1818",
+        "compoundBorder": "#666666",
+        "selected": "#ffc000",
+        "shape": "rectangle",
+        "roundness": 0
+      }
+    },
+    "plotly": {
+      "light": {
+        "paper": "#ffffff",
+        "plot": "#ffffff",
+        "font": "#1a1818",
+        "grid": "#ebebeb",
+        "series": [
+          "#c6495d",
+          "#0085b5",
+          "#8c7a00",
+          "#a455b2",
+          "#008e81",
+          "#b56200",
+          "#5471d8",
+          "#249239"
+        ],
+        "muted": [
+          "#868686",
+          "#9e9e9e",
+          "#b1b1b1",
+          "#c4c4c4"
+        ],
+        "sequential": [
+          "#c7ebff",
+          "#61cbff",
+          "#0aa5df",
+          "#047fac",
+          "#015a7c"
+        ],
+        "diverging": {
+          "good": [
+            "#74b4d6",
+            "#1d91c2",
+            "#026c93"
+          ],
+          "zero": "#ebebeb",
+          "bad": [
+            "#da969b",
+            "#c36570",
+            "#a73449"
+          ],
+          "label": "cyan \u2194 pink"
+        }
+      },
+      "dark": {
+        "paper": "#000000",
+        "plot": "#000000",
+        "font": "#ebebeb",
+        "grid": "#333333",
+        "series": [
+          "#df576c",
+          "#0098ce",
+          "#a18c00",
+          "#ba64c9",
+          "#00a294",
+          "#ce7000",
+          "#6383f2",
+          "#32a646"
+        ],
+        "muted": [
+          "#7a7a7a",
+          "#636363",
+          "#505050",
+          "#404040"
+        ],
+        "sequential": [
+          "#a9e0fe",
+          "#4bc5fe",
+          "#0aa5df",
+          "#0585b4",
+          "#02668b"
+        ],
+        "diverging": {
+          "good": [
+            "#82c8ed",
+            "#2fa8dd",
+            "#0585b4"
+          ],
+          "zero": "#4d4d4d",
+          "bad": [
+            "#f1a7ad",
+            "#df7883",
+            "#c6495d"
+          ],
+          "label": "cyan \u2194 pink"
+        }
+      }
+    }
+  },
+  "categoryColours": {
+    "Compute": "#0085b5",
+    "Storage": "#249239",
+    "Database": "#a455b2",
+    "Networking": "#5471d8",
+    "Security": "#b56200",
+    "Integration": "#008e81",
+    "Analytics": "#8c7a00",
+    "AI": "#c6495d",
+    "General": "#a4a4a4"
+  },
+  "status": {
+    "light": {
+      "colours": {
+        "good": "#0e7126",
+        "warning": "#775801",
+        "serious": "#934302",
+        "critical": "#9c3345"
+      },
+      "labels": {
+        "good": "ENABLE",
+        "warning": "CAUTION",
+        "serious": "DEGRADED",
+        "critical": "CRITICAL"
+      }
+    },
+    "dark": {
+      "colours": {
+        "good": "#78cf80",
+        "warning": "#e0af3b",
+        "serious": "#fe9b61",
+        "critical": "#ff939e"
+      },
+      "labels": {
+        "good": "ENABLE",
+        "warning": "CAUTION",
+        "serious": "DEGRADED",
+        "critical": "CRITICAL"
+      }
+    }
+  }
+}

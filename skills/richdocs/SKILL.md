@@ -20,8 +20,14 @@ provider icons, branded theming — and serves it reliably on localhost.
 | "I need an AWS/GCP/Azure/K8s icon" | `stencil.py search TERM` → `stencil.py extract ID --color HEX` |
 | "Build a custom SVG diagram with real icons" | read `resources/stencil-library.md` (registry + compose pattern) |
 | "Interactive graph / chart in the doc" | fenced ` ```cytoscape ` / ` ```plotly ` block — see `resources/rich-blocks.md` |
+| "3D scene, colour-space study, or a map" | fenced ` ```deckgl ` block — see `resources/rich-blocks.md` |
+| "Why is my palette not the palette I designed?" | ` ```deckgl ` with `space: "oklch"`, `gamut: [L]` and `targetChroma` — draws the request against the sRGB gamut |
 | "HTML looks broken opened from Finder" | `file://` blocks fetch — run `serve.py` (see `resources/serving.md`) |
-| "Re-brand the output" | edit `design-tokens.json` in the output dir, refresh — no rebuild |
+| "Render it in a brand theme" | `md2html.py DOC.md --theme osakanights` (see `--help` for installed themes) |
+| "Re-brand the output" | edit `<stem>.tokens.json` in the output dir, refresh — no rebuild |
+| "Add a new brand theme" | `resources/themes/<name>/design-tokens.json` (+ optional `theme.css`) |
+| "Is this theme readable?" | `themecheck.py` — contrast gate over every brandpack; part of `make ci` |
+| "Show off / compare the themes" | `showcase.py` → gallery of all brands; `showcase.py --theme NAME` → that brand alone |
 | "Upgrade one of this repo's root docs" | read `resources/discovery-docs.md` (per-archetype recipes) |
 
 ## Quickstart
@@ -35,6 +41,9 @@ uv run --no-project .claude/skills/richdocs/scripts/serve.py tmp/richdocs --open
 
 # 3. Or produce one self-contained file (no server needed)
 uv run --no-project .claude/skills/richdocs/scripts/md2html.py REVIEW.md --inline
+
+# 3b. Render in a brand theme (fonts, palette, chrome, graph styling)
+uv run --no-project .claude/skills/richdocs/scripts/md2html.py DOC.md --theme osakanights
 
 # 4. Grab a tinted provider icon
 uv run --no-project .claude/skills/richdocs/scripts/stencil.py search lambda
@@ -67,7 +76,33 @@ in `resources/learned/` — treat them as already-decided, don't re-litigate.
 
 ## Command reference
 
-### `md2html.py DOC.md [--out DIR] [--inline] [--tokens FILE] [--title T]`
+### `showcase.py [--theme NAME] [--out DIR]`
+
+Emits a theme showcase exercising the full brand surface: colour ramps, the glyph
+disambiguation gate, type specimens, components, Plotly charts, a Cytoscape graph,
+Mermaid, and architecture diagrams built from the stencil pack.
+
+- **no `--theme`** — a **gallery**: every installed brand, with a brand switcher and a
+  light/dark toggle. Each brand honours its own `defaultTheme` when selected.
+- **`--theme NAME`** — that brand **alone**: no switcher, and no other brand's tokens
+  or CSS anywhere in the file. Safe to hand to a client.
+
+Architecture SVGs carry their `mxfile` source in a `content` attribute, so
+"Download editable SVG" / "Download .drawio" re-open in diagrams.net as real AWS
+shapes rather than a flat image.
+
+```bash
+uv run --no-project .claude/skills/richdocs/scripts/showcase.py                     # gallery
+uv run --no-project .claude/skills/richdocs/scripts/showcase.py --theme osakanights # one brand
+```
+
+### `md2html.py DOC.md [--out DIR] [--inline] [--theme NAME] [--tokens FILE] [--title T]`
+
+- **`--theme NAME`** — a named brand theme from `resources/themes/<name>/`. Supplies
+  both the brandpack (`design-tokens.json`) *and* its `theme.css` — which is the only
+  place a webfont can actually be `@import`ed and a display face assigned to headings.
+  A brandpack alone cannot do either. Overrides `--tokens`. An unknown name fails
+  loudly and lists what is installed. Run `--help` to see the current set.
 
 - **Multi-file (default, `--out` = `tmp/richdocs`)** — writes `<stem>.html`
   plus a copy of the `.md` and `design-tokens.json`. The HTML fetches the
@@ -146,6 +181,12 @@ Beyond standard markdown + ` ```mermaid `, the HTML companion renders:
   net only, never the source of truth.
 - Outputs land in project-local `tmp/richdocs/` (gitignored), never system
   `/tmp`.
+- **Authored prose follows the global-audience standard**: when this skill
+  writes prose (showcase copy, UI/error strings, its own docs, or a discovery
+  doc it is asked to upgrade), apply [resources/prose-style.md](resources/prose-style.md):
+  no em-dash, Australian English, short coherent clauses, inclusive language,
+  standardised vocabulary. The user's canonical markdown is rendered as written,
+  never silently corrected.
 
 ## Resources
 
@@ -155,6 +196,7 @@ Beyond standard markdown + ` ```mermaid `, the HTML companion renders:
 | `resources/stencil-library.md` | Stencil pack schema, tint mechanism, registry pattern, composing full custom SVG diagrams from icons |
 | `resources/rich-blocks.md` | Fenced block contract, design-tokens schema, two-palette (chrome vs canvas) theming |
 | `resources/discovery-docs.md` | Recipes for upgrading each discovery-doc archetype (diagram-driven, table-driven, prose review) to rich HTML |
+| `resources/prose-style.md` | Global-audience standard for prose this skill authors: no em-dash, Australian English, short clauses, inclusive language, standardised vocabulary (self-contained copy) |
 | `scripts/serve.py` | No-store localhost server |
 | `scripts/stencil.py` | Stencil library query/extract CLI |
 | `scripts/md2html.py` | Paired markdown → rich HTML generator |
