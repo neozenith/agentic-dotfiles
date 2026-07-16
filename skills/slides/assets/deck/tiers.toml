@@ -1,0 +1,38 @@
+# Audience tiers for this deck, in the order the deck addresses them.
+#
+# The deck is structured top-down: each tier's slides run together, and each
+# audience drops off after their tier. Tag every slide with ONE marker naming its
+# audience (an HTML comment wrapping `@tier <name>`), then run `make progress`.
+# Everything else is derived: the per-slide fraction AND the bar's segments.
+#
+# Order here IS the running order. Slides that use tiers out of this order, or
+# interleave them, fail the build: a progress bar over a non-monotonic deck lies.
+#
+# Rename, add or remove tiers freely. The generated bar follows the count, so no
+# CSS changes. Two to six tiers read well; past that the segments get too narrow
+# to tell apart on a projector.
+#
+# colour: one per tier, and use distinct HUES rather than shades of the accent.
+# The bar's job is to say WHICH audience is addressed, and shades of one hue do
+# not survive a projector or a GIF's 256-colour palette. Keep each readable
+# against the deck background.
+
+[[tier]]
+name = "exec"
+label = "Executives: the business case and the ask"
+colour = "#4c9f70"
+
+[[tier]]
+name = "mgmt"
+label = "Management: the risk exposure and how it is controlled"
+colour = "#e0a458"
+
+[[tier]]
+name = "lead"
+label = "Team leads: how it is built and operated"
+colour = "#5b8ff9"
+
+[[tier]]
+name = "ic"
+label = "Individual contributors: the implementation detail"
+colour = "#9d7bd8"

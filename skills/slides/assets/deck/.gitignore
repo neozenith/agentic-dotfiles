@@ -1,0 +1,13 @@
+# Build artifacts, regenerated from the deck source
+build/
+
+# Generated Mermaid diagram PNGs, rendered from assets/*.md by `make diagrams`.
+# The *.md sources are committed; the -1.png renders are build outputs.
+assets/*-1.png
+
+# bun / npm noise if anyone runs a local install (the Makefile uses bunx, so
+# these should never appear, but ignore them defensively).
+node_modules/
+.bun/
+*.pyc
+__pycache__/
