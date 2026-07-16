@@ -23,8 +23,9 @@ provider icons, branded theming — and serves it reliably on localhost.
 | "3D scene, colour-space study, or a map" | fenced ` ```deckgl ` block — see `resources/rich-blocks.md` |
 | "Why is my palette not the palette I designed?" | ` ```deckgl ` with `space: "oklch"`, `gamut: [L]` and `targetChroma` — draws the request against the sRGB gamut |
 | "HTML looks broken opened from Finder" | `file://` blocks fetch — run `serve.py` (see `resources/serving.md`) |
-| "Render it in a brand theme" | `md2html.py DOC.md --theme osakanights` (see `--help` for installed themes) |
+| "Render it in a brand theme" | default is `osakanights`; `md2html.py DOC.md --theme NAME` for another (see `--help` for installed themes) |
 | "Re-brand the output" | edit `<stem>.tokens.json` in the output dir, refresh — no rebuild |
+| "Override a theme for this project" | drop `tmp/richdocs/theme/<name>/design-tokens.json` (+ optional `theme.css`) — shadows the built-in of that name |
 | "Add a new brand theme" | `resources/themes/<name>/design-tokens.json` (+ optional `theme.css`) |
 | "Is this theme readable?" | `themecheck.py` — contrast gate over every brandpack; part of `make ci` |
 | "Show off / compare the themes" | `showcase.py` → gallery of all brands; `showcase.py --theme NAME` → that brand alone |
@@ -42,8 +43,8 @@ uv run --no-project .claude/skills/richdocs/scripts/serve.py tmp/richdocs --open
 # 3. Or produce one self-contained file (no server needed)
 uv run --no-project .claude/skills/richdocs/scripts/md2html.py REVIEW.md --inline
 
-# 3b. Render in a brand theme (fonts, palette, chrome, graph styling)
-uv run --no-project .claude/skills/richdocs/scripts/md2html.py DOC.md --theme osakanights
+# 3b. Render in a brand theme (default is osakanights; pass --theme for another)
+uv run --no-project .claude/skills/richdocs/scripts/md2html.py DOC.md --theme v2ai
 
 # 4. Grab a tinted provider icon
 uv run --no-project .claude/skills/richdocs/scripts/stencil.py search lambda
@@ -98,11 +99,19 @@ uv run --no-project .claude/skills/richdocs/scripts/showcase.py --theme osakanig
 
 ### `md2html.py DOC.md [--out DIR] [--inline] [--theme NAME] [--tokens FILE] [--title T]`
 
-- **`--theme NAME`** — a named brand theme from `resources/themes/<name>/`. Supplies
-  both the brandpack (`design-tokens.json`) *and* its `theme.css` — which is the only
-  place a webfont can actually be `@import`ed and a display face assigned to headings.
-  A brandpack alone cannot do either. Overrides `--tokens`. An unknown name fails
-  loudly and lists what is installed. Run `--help` to see the current set.
+- **`--theme NAME`** — a named brand theme. Supplies both the brandpack
+  (`design-tokens.json`) *and* its `theme.css` — which is the only place a webfont
+  can actually be `@import`ed and a display face assigned to headings. A brandpack
+  alone cannot do either. Overrides `--tokens`. An unknown name fails loudly and
+  lists what is installed. Run `--help` to see the current set.
+  - **Default theme is `osakanights`** — a plain `md2html.py DOC.md` renders branded,
+    not neutral. Pass `--theme NAME` for a different brand, or `--tokens FILE` (with no
+    `--theme`) for the raw-brandpack escape hatch.
+  - **Themes resolve from two roots, project first**: `tmp/richdocs/theme/<name>/`
+    (optional project overrides, run from repo root) then the skill's built-in
+    `resources/themes/<name>/`. A project theme shadows the built-in of the same name
+    and can add project-only themes. With no override dir the skill is the built-in set
+    only — fully self-contained.
 
 - **Multi-file (default, `--out` = `tmp/richdocs`)** — writes `<stem>.html`
   plus a copy of the `.md` and `design-tokens.json`. The HTML fetches the
@@ -112,8 +121,9 @@ uv run --no-project .claude/skills/richdocs/scripts/showcase.py --theme osakanig
 - **`--inline`** — one self-contained HTML with the markdown embedded on
   `window.__DOC_MD__` and tokens on `window.__DOC_TOKENS__`. Opens over
   `file://`. Network still needed for the pinned CDN libraries.
-- **`--tokens FILE`** — swap the brandpack (see schema in
-  `resources/rich-blocks.md`). Default: `assets/design-tokens.json`.
+- **`--tokens FILE`** — raw-brandpack escape hatch (see schema in
+  `resources/rich-blocks.md`). Applies only when passed **and** `--theme` is not;
+  otherwise the default `osakanights` theme wins.
 
 ### `serve.py [DIR] [--port 8642] [--open]`
 

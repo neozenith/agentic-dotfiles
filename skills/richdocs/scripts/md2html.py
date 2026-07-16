@@ -39,6 +39,16 @@ SKILL_DIR = SCRIPT_DIR.parent
 ASSETS_DIR = SKILL_DIR / "assets"
 THEMES_DIR = SKILL_DIR / "resources" / "themes"
 
+# The brand a plain `md2html.py doc.md` renders with (ADR-018). A named theme,
+# not raw tokens, so the default output is fully branded (fonts + chrome + canvas).
+DEFAULT_THEME = "osakanights"
+
+# Optional PROJECT-LOCAL theme overrides, resolved relative to the cwd (run from
+# repo root). A theme dir here supersedes the skill's built-in of the same name and
+# adds project-only themes. When the dir is absent the skill is byte-for-byte the
+# self-contained built-in set (ADR-018 keeps ADR-009 portability intact).
+PROJECT_THEMES_DIR = Path("tmp/richdocs/theme")
+
 DEFAULT_TOKENS = ASSETS_DIR / "design-tokens.json"
 VIEWER_HTML = ASSETS_DIR / "viewer.html"
 VIEWER_CSS = ASSETS_DIR / "viewer.css"
@@ -97,35 +107,73 @@ class Theme(NamedTuple):
     css: str
 
 
-def available_themes() -> list[str]:
-    """Theme names: directories under resources/themes/ holding a brandpack.
+def theme_search_dirs(project_dir: Path = PROJECT_THEMES_DIR) -> list[Path]:
+    """Theme roots in precedence order: project overrides first, skill built-ins last.
 
-    Themes are **real files inside the skill** — never symlinks out to a project.
-    The skill must stay self-contained and portable: copy `.claude/` anywhere and
-    every theme still resolves (ADR-009).
+    `project_dir` is included only when it exists on disk, so with no override dir the
+    result is exactly `[THEMES_DIR]` and the skill stays self-contained (ADR-018). The
+    built-in dir is never a symlink out (ADR-009); the override dir is the *project's*
+    own directory, so it may hold whatever the project puts there.
     """
-    if not THEMES_DIR.is_dir():
-        return []
-    return sorted(
-        d.name
-        for d in THEMES_DIR.iterdir()
-        if d.is_dir() and (d / "design-tokens.json").is_file()
+    dirs: list[Path] = []
+    if project_dir.is_dir():
+        dirs.append(project_dir)
+    dirs.append(THEMES_DIR)
+    return dirs
+
+
+def available_themes(project_dir: Path = PROJECT_THEMES_DIR) -> list[str]:
+    """Theme names: directories holding a brandpack, unioned across the search dirs.
+
+    A name present in the project override dir shadows the built-in of the same name,
+    but both contribute to the returned set (project-only themes appear too).
+    """
+    names: set[str] = set()
+    for root in theme_search_dirs(project_dir):
+        if not root.is_dir():
+            continue
+        for d in root.iterdir():
+            if d.is_dir() and (d / "design-tokens.json").is_file():
+                names.add(d.name)
+    return sorted(names)
+
+
+def load_theme(name: str, project_dir: Path = PROJECT_THEMES_DIR) -> Theme:
+    """Resolve a named theme, project override winning over the built-in of the same name.
+
+    Crashes loudly on an unknown name (escalators-not-stairs) — a typo must never
+    silently fall back to a different brand.
+    """
+    for root in theme_search_dirs(project_dir):
+        tokens_path = root / name / "design-tokens.json"
+        if tokens_path.is_file():
+            css_path = root / name / "theme.css"
+            css = css_path.read_text(encoding="utf-8") if css_path.is_file() else ""
+            return Theme(name=name, tokens_path=tokens_path, css=css)
+    known = ", ".join(available_themes(project_dir)) or "(none installed)"
+    raise SystemExit(
+        f"error: unknown theme {name!r}. Available: {known}\n"
+        f"       (a theme is a directory holding design-tokens.json under "
+        f"{PROJECT_THEMES_DIR}/ or {THEMES_DIR})"
     )
 
 
-def load_theme(name: str) -> Theme:
-    """Resolve a named theme. Crashes loudly on an unknown name (escalators-not-stairs)."""
-    theme_dir = THEMES_DIR / name
-    tokens_path = theme_dir / "design-tokens.json"
-    if not tokens_path.is_file():
-        known = ", ".join(available_themes()) or "(none installed)"
-        raise SystemExit(
-            f"error: unknown theme {name!r}. Available: {known}\n"
-            f"       (a theme is a directory under {THEMES_DIR} containing design-tokens.json)"
-        )
-    css_path = theme_dir / "theme.css"
-    css = css_path.read_text(encoding="utf-8") if css_path.is_file() else ""
-    return Theme(name=name, tokens_path=tokens_path, css=css)
+def resolve_brand(
+    theme_arg: str | None,
+    tokens_arg: str | None,
+    project_dir: Path = PROJECT_THEMES_DIR,
+) -> Theme | None:
+    """Pick the brand: explicit --theme wins, else explicit --tokens, else DEFAULT_THEME.
+
+    Returns a `Theme` (named brand, with its `theme.css`) or `None` when an explicit
+    `--tokens` path is the chosen escape hatch (raw brandpack, no theme CSS). This is
+    why a plain `md2html.py doc.md` renders branded rather than neutral (ADR-018).
+    """
+    if theme_arg:
+        return load_theme(theme_arg, project_dir)
+    if tokens_arg is not None:
+        return None
+    return load_theme(DEFAULT_THEME, project_dir)
 
 
 def resolve_default_theme(tokens: dict[str, object] | None) -> str:
@@ -345,15 +393,19 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--theme",
         help=(
-            "Named brand theme from resources/themes/ "
-            f"(available: {', '.join(available_themes()) or 'none installed'}). "
+            f"Named brand theme (default: {DEFAULT_THEME}; "
+            f"available: {', '.join(available_themes()) or 'none installed'}). "
+            f"Project overrides in {PROJECT_THEMES_DIR}/ shadow built-ins of the same name. "
             "Supplies the brandpack AND its theme.css. Overrides --tokens."
         ),
     )
     parser.add_argument(
         "--tokens",
-        default=str(DEFAULT_TOKENS),
-        help="design-tokens.json to use (ignored when --theme is given)",
+        default=None,
+        help=(
+            "Raw design-tokens.json escape hatch (no theme.css). Used only when it is "
+            f"passed AND --theme is not; otherwise the {DEFAULT_THEME} theme applies."
+        ),
     )
     parser.add_argument("--title", help="Page title (default: doc stem)")
     parser.add_argument(
@@ -370,8 +422,9 @@ def main(args: argparse.Namespace) -> None:
         print(f"error: markdown file not found: {doc}", file=sys.stderr)
         raise SystemExit(1)
 
-    # A named theme brings its own brandpack + CSS, so it supersedes --tokens.
-    theme = load_theme(args.theme) if args.theme else None
+    # A named theme brings its own brandpack + CSS. With neither --theme nor an
+    # explicit --tokens, this defaults to DEFAULT_THEME (ADR-018).
+    theme = resolve_brand(args.theme, args.tokens)
     tokens_path = theme.tokens_path if theme else Path(args.tokens)
     theme_css = theme.css if theme else ""
     if not tokens_path.is_file():

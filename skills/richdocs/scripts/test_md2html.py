@@ -256,6 +256,91 @@ def test_main_theme_supersedes_tokens(
     assert "Fraunces" in html
 
 
+# ── Default theme + project overrides (ADR-018) ──────────────────────────────
+def test_default_theme_is_osakanights_and_installed() -> None:
+    assert md2html.DEFAULT_THEME == "osakanights"
+    assert md2html.DEFAULT_THEME in md2html.available_themes()
+
+
+@pytest.mark.parametrize(
+    "theme_arg,tokens_arg,expect_name",
+    [
+        (None, None, "osakanights"),  # plain run → default brand
+        ("v2ai", None, "v2ai"),  # explicit theme wins
+        ("v2ai", "whatever.json", "v2ai"),  # theme beats tokens
+    ],
+)
+def test_resolve_brand_picks_the_right_named_theme(
+    theme_arg: str | None, tokens_arg: str | None, expect_name: str
+) -> None:
+    theme = md2html.resolve_brand(theme_arg, tokens_arg)
+    assert theme is not None
+    assert theme.name == expect_name
+
+
+def test_resolve_brand_explicit_tokens_is_the_raw_escape_hatch() -> None:
+    """An explicit --tokens with no --theme opts out of themed CSS (returns None)."""
+    assert md2html.resolve_brand(None, str(md2html.DEFAULT_TOKENS)) is None
+
+
+def test_argparse_defaults_realize_the_default_theme() -> None:
+    """The CLI leaves --theme/--tokens unset; resolve_brand supplies the default."""
+    args = md2html.build_parser().parse_args(["doc.md"])
+    assert args.theme is None
+    assert args.tokens is None
+    brand = md2html.resolve_brand(args.theme, args.tokens)
+    assert brand is not None
+    assert brand.name == "osakanights"
+
+
+def test_main_with_no_flags_renders_the_default_theme(
+    doc: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    md2html.main(_args(doc, tmp_path, theme=None, tokens=None))
+    assert "theme: osakanights" in capsys.readouterr().out
+    assert "Fraunces" in (tmp_path / "mydoc.html").read_text(encoding="utf-8")
+
+
+def _write_override_theme(root: Path, name: str, marker: str) -> None:
+    d = root / name
+    d.mkdir(parents=True)
+    (d / "design-tokens.json").write_text(
+        json.dumps(
+            {"fonts": {"display": marker}, "themes": {"light": {}}, "canvas": {}}
+        ),
+        encoding="utf-8",
+    )
+    (d / "theme.css").write_text(f"/* {marker} */", encoding="utf-8")
+
+
+def test_project_override_shadows_the_builtin_of_the_same_name(tmp_path: Path) -> None:
+    """A project theme dir supersedes the skill's built-in of the same name (ADR-018)."""
+    _write_override_theme(tmp_path, "osakanights", "OVERRIDDEN")
+    theme = md2html.load_theme("osakanights", project_dir=tmp_path)
+    assert theme.tokens_path == tmp_path / "osakanights" / "design-tokens.json"
+    assert "OVERRIDDEN" in theme.css
+
+
+def test_project_only_theme_is_discoverable_and_loadable(tmp_path: Path) -> None:
+    _write_override_theme(tmp_path, "projectbrand", "PROJECT")
+    names = md2html.available_themes(project_dir=tmp_path)
+    assert "projectbrand" in names  # project-only theme surfaces
+    assert "osakanights" in names  # built-ins still present
+    assert (
+        md2html.load_theme("projectbrand", project_dir=tmp_path).name == "projectbrand"
+    )
+
+
+def test_missing_override_dir_leaves_only_builtins(tmp_path: Path) -> None:
+    """With no override dir the search collapses to the built-in set — self-contained."""
+    absent = tmp_path / "nope"
+    assert md2html.theme_search_dirs(project_dir=absent) == [md2html.THEMES_DIR]
+    assert md2html.available_themes(project_dir=absent) == md2html.available_themes(
+        project_dir=absent
+    )
+    assert "osakanights" in md2html.available_themes(project_dir=absent)
+
+
 # ── Output writers ──────────────────────────────────────────────────────────
 def test_write_multi_outputs(doc: Path, tmp_path: Path) -> None:
     out_dir = tmp_path / "out"
@@ -330,7 +415,9 @@ def test_build_parser_defaults() -> None:
     assert args.doc == "doc.md"
     assert args.out == str(md2html.DEFAULT_OUT)
     assert args.inline is False
-    assert args.tokens == str(md2html.DEFAULT_TOKENS)
+    # --theme/--tokens both unset by default; resolve_brand supplies DEFAULT_THEME.
+    assert args.theme is None
+    assert args.tokens is None
     assert args.title is None
     assert args.serve_hint is False
 
