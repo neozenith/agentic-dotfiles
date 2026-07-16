@@ -25,6 +25,7 @@ All files ≤ 500 lines (`.claude/rules/claude_skills/index.md`).
 | `resources/structure.md` | Markdown structure rules, smells, spec/plan skeletons (lazy) |
 | `resources/voice.md` | Maintainer voice fingerprint — loaded only on `voice` |
 | `resources/slop_smells.md` | Curated AI-slop smell catalog + capture-THE-WHY guidance (lazy; maintainer-grown) |
+| `resources/prose_style.md` | Sentence-level global-audience style: no em-dash, Australian English, short coherent clauses, ESL/translator empathy, inclusive language, standardised domain language (lazy; write/restructure) |
 | `scripts/evals/` | Base eval: drifted-README fixture, golden, runner (via `_evalkit`) |
 | `CLAUDE.md` | This file — rationale and decision log |
 | `../../workflows/gooddocs-audit.js` | Reusable named **dynamic workflow** wrapping AUDIT (+ safe-fix) for loop/schedule use; reads this skill's doctrine at runtime |
@@ -282,10 +283,39 @@ Eval suite (`.claude/rules/claude_skills/evals.md`): `make -C
   decoration, and decoration fails the S2 delete test. Importance is shown, not
   asserted.
 
+### ADR-15: global-audience prose style is its own lazy resource; detection stays tooling-agnostic
+
+- **Status:** Accepted (2026-07)
+- **Context:** Sentence-level discipline (Australian English, no em-dash, short
+  coherent clauses, ESL/translator readability, inclusive language, standardised
+  domain language) is a distinct concern from the structural lens taxonomy
+  (`lenses.md`) and the pruning catalogue (`slop_smells.md`). It governs how one
+  sentence reads, not the page's shape or what to delete. Folding it into either
+  would blur two concerns.
+- **Decision:** Add `resources/prose_style.md`, loaded lazily during write and
+  restructure. Write mode applies it in full; restructure applies only the
+  meaning-preserving subset (em-dash removal, spelling, an inclusive-term swap, a
+  single non-claim-altering split), because ADR-5 forbids reword during shape-only
+  passes. ESL/translator readability is made an evaluable check (proxy metrics or
+  a round-trip translation), not an adjective. The resource states **what** to
+  detect, never **which command** finds it; tooling is the running agent's choice.
+- **Consequences:** SKILL.md write mode gained a step; restructure and
+  cross-cutting rules gained a scoped pointer.
+- **Lens:** Sentence-mechanics go in `prose_style.md`; page-shape in
+  `structure.md`; content-to-delete in `slop_smells.md`; register in `voice.md`.
+  When a rule is about how one sentence reads for the hardest reader (ESL,
+  translator, skimmer), it belongs in prose_style, and when a rule needs
+  enforcing, describe the target, not the tool. Shared doctrine is copied into
+  this skill, never referenced from anywhere outside its own folder.
+
 ## Extension checklist
 
 - [ ] New claim types added to the SKILL.md check table define their evidence
       form (ADR-3).
+- [ ] Global-audience prose applied in write mode; meaning-preserving subset only
+      in restructure (ADR-15, `prose_style.md`); detection left tooling-agnostic.
+- [ ] ESL/translator readability is evaluated, not assumed: a proxy metric or a
+      round-trip translation that preserves meaning (ADR-15).
 - [ ] No gravitas adjectives ("load-bearing", "hard-fought/won", "key insight",
       "crucially") in authored prose (ADR-14, slop S5); name the consequence.
 - [ ] No new em-dash (`—`) in any authored doc or skill prose (ADR-13, slop S4);

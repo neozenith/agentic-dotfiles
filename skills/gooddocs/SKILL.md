@@ -37,6 +37,11 @@ Resources (read on first use):
 - [resources/slop_smells.md](resources/slop_smells.md) — the curated AI-slop
   smell catalog (grown by the maintainer over time) + how to capture THE WHY.
   Load during audit and write/restructure.
+- [resources/prose_style.md](resources/prose_style.md) — sentence-level
+  global-audience style: no em-dash, Australian English, short coherent clauses,
+  ESL/translator empathy, inclusive language, standardised domain language.
+  Load during write/restructure (full in write, meaning-preserving subset in
+  restructure).
 
 ## Mode selection
 
@@ -130,31 +135,35 @@ authoritative.
      sequence; practical beats complete.
    - *Reference* — lookup; austere, factual, structure mirrors the product;
      describe and only describe. Use a rigid repeated page template.
-   - *Explanation* — understanding; why it is so — decisions, constraints,
-     alternatives weighed; opinion is legitimate here.
+   - *Explanation* — understanding; why it is so (decisions, constraints,
+     alternatives weighed); opinion is legitimate here.
    ADRs, runbooks, changelogs map onto these (see lenses.md §"Extended lenses").
 2. Apply the 15 style principles in lenses.md; the ones a reader notices first: runnable
    verified examples (run every command before writing it, include expected
    output), document the negative space (what it does NOT do, when NOT to use
    it), fixed templates for reference pages, problem-before-solution for
    explanation, candor about limitations.
-3. Apply the structure rules in structure.md: BLUF at every level, headings
+3. Apply the sentence-level rules in prose_style.md at full force: no em-dash,
+   Australian English, clauses curated to ~25 words (clause count is the target,
+   not word count), active voice, ESL/translator empathy, inclusive language,
+   and one standardised term per concept with determiners to disambiguate.
+4. Apply the structure rules in structure.md: BLUF at every level, headings
    as frontloaded statements passing the TOC test, ≤H3 depth, bullets only
    for parallel items (reasoning stays in prose), repeated bullet patterns
    promoted to tables, blank line between blocks, no prose wall longer than
    ~4 paragraphs without a visual interrupt. New specs/plans start from the
    skeletons in structure.md.
-4. **Curate visuals where information is flow/structure/sequence-shaped**
+5. **Curate visuals where information is flow/structure/sequence-shaped**
    (structure.md rules 16-17): diagrams break prose walls and encode the
    information more densely than the paragraphs they replace. Use
-   **dual-density cascading detail** — simplified diagram inline, the
+   **dual-density cascading detail**: simplified diagram inline, the
    ultra-detailed variant in a `<details><summary>` block beneath it, each
    with a one-sentence prose summary. Delegate the diagram authoring to a
-   subagent instructed to invoke the `mermaidjs_diagrams` skill — it owns
+   subagent instructed to invoke the `mermaidjs_diagrams` skill; it owns
    palette, contrast, and complexity gates; never hand-roll mermaid here.
-5. If `voice` was requested, layer the voice fingerprint on top — it changes
+6. If `voice` was requested, layer the voice fingerprint on top; it changes
    register and signature moves, never the lens discipline.
-6. **Verify before done**: every command in the new doc executed (or `make -n`
+7. **Verify before done**: every command in the new doc executed (or `make -n`
    dry-run), every path globbed, every internal link resolved, TOC regenerated
    via the `mdtoc` skill for docs >100 lines, and any added diagrams passing
    the mermaidjs_diagrams gate scripts.
@@ -171,12 +180,16 @@ For improving the structural readability of an existing doc, spec, or plan
    smell list found, one line each. Get agreement before rewriting (the
    outline IS the restructure; prose moves are mechanical after that).
 3. **Rewrite preserving every claim verbatim where possible**: this mode
-   reorganizes — it does not re-research, re-verify, or reword technical
-   content beyond frontloading topic sentences. If a claim looks wrong,
-   flag it for an audit; don't silently fix it. Prose walls whose content is
-   flow/structure-shaped may become diagrams (the information, unchanged, in
-   visual form) — dual-density per structure.md rule 17, authored via a
-   `mermaidjs_diagrams` subagent.
+   reorganizes, it does not re-research, re-verify, or reword technical
+   content beyond frontloading topic sentences. Apply only the
+   **meaning-preserving subset** of prose_style.md here: remove em-dashes,
+   correct spelling to Australian English, replace a non-inclusive term, and
+   split one over-long sentence whose claim is unchanged. A rewrite that alters
+   a claim is a mode switch the user must see, not a drive-by edit. If a claim
+   looks wrong, flag it for an audit; don't silently fix it. Prose walls whose
+   content is flow/structure-shaped may become diagrams (the information,
+   unchanged, in visual form): dual-density per structure.md rule 17, authored
+   via a `mermaidjs_diagrams` subagent.
 4. For specs/plans, converge toward the canonical skeletons (status block,
    BLUF summary, numbered requirement IDs, Open Questions, phases with
    observable acceptance criteria) — preserving existing IDs/anchors that
@@ -197,8 +210,14 @@ For improving the structural readability of an existing doc, spec, or plan
   reverence, like a letter to a future reader, rather than letting it evaporate.
 - **Prune slop, don't add it.** Apply [resources/slop_smells.md](resources/slop_smells.md):
   every line must survive the delete test, and no value/identifier list is
-  copied into prose where it would drift from code. Fewest touch points wins —
-  write so the cost of a future refactor stays lean.
+  copied into prose where it would drift from code. Fewest touch points wins,
+  so write so the cost of a future refactor stays lean.
+- **Write for a global audience.** Apply
+  [resources/prose_style.md](resources/prose_style.md): no em-dash, Australian
+  English, clauses curated short and coherent, active voice, inclusive language,
+  and one standardised term per concept with determiners to disambiguate. The
+  test is the ESL reader and the translator; a sentence that parses for them on
+  the first pass parses for everyone.
 - One lens per page by default. A reference page that starts teaching, or a
   tutorial that starts enumerating options, gets split — unless the doc set
   deliberately fuses lenses with one consistent voice, in which case enforce
