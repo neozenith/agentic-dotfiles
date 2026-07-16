@@ -134,6 +134,97 @@ EVAL_MODELS = os.environ.get("EVAL_MODELS", "claude-haiku-4-5").split(",")
 A skill that only works on Opus is a finding, not a failure — record the
 floor model in the skill's CLAUDE.md.
 
+## The generative matrix (model × task)
+
+Goldens score a skill against *seeded truth*. The complement is the **generative
+matrix**: run the skill for real across `{model tier} × {task}` and keep every
+artefact next to the session log that produced it. Where goldens answer "did it
+find the planted bug", the matrix answers **"which models can actually follow
+this skill, and what does it cost to find out"** — the question that decides the
+floor model in CLAUDE.md.
+
+Reach for it when the skill's value *is* instruction-following at volume (a
+house style, a mechanical rule set, a multi-format authoring contract). Skip it
+when a golden already answers the question — it is strictly more expensive.
+
+```
+scripts/
+├── _generate_example.py   # private helper: one `claude -p` run per matrix cell
+├── _session_report.py     # private helper: reads the logs back (free, offline)
+└── examples/
+    └── {haiku,sonnet,opus}/{task-a,task-b,...}/
+        ├── <artefact>           # what the run produced
+        └── <artefact>.session.jsonl   # the transcript that produced it
+```
+
+Rules that make the matrix trustworthy:
+
+- **Tier names, pinned ids.** One `TIERS = {"haiku": "claude-haiku-4-5", ...}`
+  table maps a tier to a **full model id, never an alias** — aliases silently
+  re-point, and a committed log would then misattribute the run. Only that table
+  knows ids; Makefile targets pass tier names.
+- **One directory per cell.** The cwd determines the transcript slug, so a
+  per-cell working directory is also what keeps logs unambiguously attributable.
+  Targets are named after their output (`make haiku/md`), so a single cell is
+  re-runnable.
+- **Prompts name the artefact, never the rules.** The generator prompt carries
+  only the task shape and format mechanics; it tells the agent to *read* the
+  skill. A prompt containing a copy of the rules is a third copy, and it rots.
+- **Pre-pick the session id.** `--session-id <uuid>` makes the log path
+  (`~/.claude/projects/<cwd-slug>/<uuid>.jsonl`) knowable *before* the run, so
+  the transcript is copied deterministically next to its artefact. Discovering
+  it afterwards by globbing or mtime is a race you eventually lose.
+- **Paid targets are siblings of `ci`, never dependencies** — per
+  [`scripts.md`](scripts.md), private helpers wire to `docs`, which `ci` depends
+  on. Followed literally here, every CI run would spawn a fleet and spend money.
+  Keep `docs` free; give generation its own targets, like `make evals`.
+- **Cap every cell** with `--max-budget-usd`, and fan out with `-j` so the sweep
+  is bounded in both dollars and wall clock.
+
+## Post-run reporting (the logs are the eval)
+
+The matrix is only half the artefact. A **report script** reads the committed
+`*.session.jsonl` back and turns a pile of runs into a verdict. It is free,
+offline, and deterministic, so unlike generation it *can* live in `ci`.
+
+Report on **outcome, wall clock, and cost — in that order**:
+
+1. **Did the artefact land?** Check the expected output file exists. Import the
+   filename from the generator; never restate it.
+2. **How did the run stop?** Take the **last** non-null `stop_reason` — every
+   intermediate turn stops with `tool_use`, and only the final turn says how the
+   run ended. `end_turn` is the only clean stop; `max_tokens` (truncated) and
+   `refusal` are failures.
+3. **Wall clock** — min→max of the `timestamp` field across **every** record,
+   not just assistant turns: tool execution is real elapsed time.
+4. **Cost** — sum `input_tokens`, `output_tokens`, `cache_creation_input_tokens`,
+   `cache_read_input_tokens` per model and price them.
+
+Non-obvious rules, each learned the hard way:
+
+- **Both outcome checks are load-bearing.** A `max_tokens` truncation leaves a
+  *real but half-written* file (file check alone passes); a declined tool call
+  can end cleanly with `end_turn` and no file (stop-reason check alone passes).
+  Fail on either.
+- **Transcripts record the served snapshot id** (`claude-haiku-4-5-20251001`),
+  not the id you requested. Strip the `-\d{8}` suffix before pricing, or a real
+  paid run reports as unpriced and vanishes from the total.
+- **A failed run still costs money.** Price and report it exactly like a
+  successful one — failure changes the verdict, never the accounting. A tier
+  that fails *fast and cheap* is a different finding from one that fails
+  *slow and expensive*.
+- **An unknown model is `unpriced`, never `$0.00`.** Silent zeros read as fact.
+- **Derive cache rates from the input rate** (1.25× write, 0.1× read) rather
+  than typing four numbers per model. Date the pricing table and source it;
+  never write a rate from memory.
+- **Failures are an exit code, not a table cell.** A reader skims a table; CI
+  cannot skim an exit code.
+
+The pattern's payoff is that the matrix + report make the floor model *fall out
+of the data*: when every cell of one tier reports `MISSING ARTEFACT` while the
+tiers above it pass, that tier is below the skill's floor — and you have the
+per-cell spend to say what learning it cost.
+
 ## Metric tiers (cheapest first)
 
 1. **Deterministic `BaseMetric`s** (free, non-flaky — the bulk of the suite):
