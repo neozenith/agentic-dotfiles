@@ -1,0 +1,88 @@
+/* Viewer chrome. Every colour/font comes from design-tokens.json via the
+   --rd-* custom properties that applyTokenCss() injects at runtime — never
+   hardcode a hex here (ADR-004). The one exception is .rd-error, which must
+   stay visible even when token loading is what failed. */
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--rd-bg);
+  color: var(--rd-fg);
+  font-family: var(--rd-font-body);
+  line-height: 1.65;
+}
+
+/* ── Header ──────────────────────────────────────────────────────────── */
+header.rd-header {
+  position: sticky; top: 0; z-index: 10;
+  display: flex; align-items: baseline; gap: 0.75rem;
+  padding: 0.6rem 1rem;
+  background: var(--rd-surface);
+  border-bottom: 1px solid var(--rd-border);
+}
+header.rd-header h1 { font-size: 1rem; margin: 0; }
+header.rd-header .rd-meta {
+  color: var(--rd-muted); font-size: 0.75rem; font-family: var(--rd-font-mono);
+}
+header.rd-header button {
+  margin-left: auto;
+  background: var(--rd-bg); color: var(--rd-fg);
+  border: 1px solid var(--rd-border); border-radius: var(--rd-radius, 8px);
+  padding: 0.25rem 0.7rem; cursor: pointer; font-size: 0.85rem;
+}
+
+/* ── Document body ───────────────────────────────────────────────────── */
+main { max-width: 52rem; margin: 0 auto; padding: 1.5rem 1rem 5rem; }
+
+/* Headings wear the brand's display face, declared as `fonts.display` in the
+   brandpack. Falls back to the body face when a brand has only one. */
+main h1, main h2, main h3, main h4 {
+  font-family: var(--rd-font-display, var(--rd-font-body));
+  line-height: 1.25;
+}
+main h2 { border-bottom: 1px solid var(--rd-border); padding-bottom: 0.3rem; }
+/* Links use the TEXT-SAFE accent, never the fill. A brand whose fill is a
+   bright yellow would be illegible here. */
+main a { color: var(--rd-link, var(--rd-accent)); }
+main img { max-width: 100%; }
+
+main code {
+  font-family: var(--rd-font-mono); font-size: 0.875em;
+  background: var(--rd-surface); border: 1px solid var(--rd-border);
+  border-radius: calc(var(--rd-radius, 8px) / 2); padding: 0.1em 0.35em;
+}
+main pre {
+  background: var(--rd-surface); border: 1px solid var(--rd-border);
+  border-radius: var(--rd-radius, 8px); padding: 0.9rem 1rem; overflow-x: auto;
+}
+main pre code { background: none; border: none; padding: 0; }
+
+main blockquote {
+  margin: 1rem 0; padding: 0.25rem 1rem;
+  border-left: 3px solid var(--rd-accent);   /* a RULE, not text — the fill is fine here */
+  color: var(--rd-muted); background: var(--rd-surface);
+}
+
+/* Wide tables scroll inside their own container; the page never scrolls sideways. */
+.rd-table-wrap { overflow-x: auto; }
+main table { border-collapse: collapse; margin: 1rem 0; width: 100%; }
+main th, main td {
+  border: 1px solid var(--rd-border); padding: 0.4rem 0.7rem; text-align: left;
+}
+main th { background: var(--rd-surface); }
+
+/* ── Rich blocks ─────────────────────────────────────────────────────── */
+.rd-canvas {
+  background: var(--rd-surface); border: 1px solid var(--rd-border);
+  border-radius: var(--rd-radius, 8px); margin: 1rem 0;
+}
+.rd-mermaid { display: flex; justify-content: center; padding: 0.75rem; }
+
+/* Hardcoded red on purpose: a token failure must still render visibly. */
+.rd-error {
+  border: 1px solid #dc2626; color: #dc2626;
+  border-radius: 8px; padding: 0.75rem 1rem; margin: 1rem 0;
+  font-family: var(--rd-font-mono); font-size: 0.85rem; white-space: pre-wrap;
+}

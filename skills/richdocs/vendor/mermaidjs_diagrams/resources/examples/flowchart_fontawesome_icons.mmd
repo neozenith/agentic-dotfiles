@@ -1,0 +1,30 @@
+flowchart LR
+    subgraph Ingress
+        dns["fa:fa-globe Route 53"]
+        cdn["fa:fa-cloud CloudFront"]
+    end
+    subgraph web["Web Tier"]
+        alb["fa:fa-random Load Balancer"]
+        web1["fa:fa-desktop Web 1"]
+        web2["fa:fa-desktop Web 2"]
+    end
+    subgraph app["App Tier"]
+        api["fa:fa-cog App Service"]
+        worker["fa:fa-bolt Worker"]
+    end
+    subgraph data["Data Tier"]
+        cache["fa:fa-bolt Redis Cache"]
+        db[("fa:fa-database Primary DB")]
+        replica[("fa:fa-copy Read Replica")]
+    end
+
+    dns --> cdn
+    cdn --> alb
+    alb --> web1
+    alb --> web2
+    web1 --> api
+    web2 --> api
+    api --> cache
+    api --> db
+    worker --> db
+    db -- replication --> replica

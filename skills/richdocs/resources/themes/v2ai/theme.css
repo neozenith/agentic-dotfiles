@@ -1,0 +1,116 @@
+/* V2 AI — theme.css
+ *
+ * Stoic enterprise consultancy. Outfit everywhere, square corners, no shadows,
+ * no gradients, no glass. Affect comes from typography and colour, never from
+ * ornament. Loaded after viewer.css, so it may override anything.
+ *
+ * Anchor palette: yellow #FFC000 / black / white. Yellow is a SURFACE, never a
+ * text colour — it measures 1.64:1 on white, which fails even the large-text
+ * floor. Black on yellow (12.79:1) is the rule; white on yellow is banned.
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@100;300;400;500;700&family=JetBrains+Mono:wght@400;700&display=swap');
+
+/* The family arrives via --rd-font-display (fonts.display = Outfit).
+   Display sits at 100% line-height — tight and assertive. Do not loosen it. */
+main h1, main h2, main h3, main h4 {
+  line-height: 1.0;
+  letter-spacing: -0.01em;
+}
+main h1 { font-size: 3rem; font-weight: 700; }
+main h2 {
+  font-size: 2rem;
+  font-weight: 500;
+  border-bottom: 1px solid var(--rd-border);
+  padding-bottom: 0.5rem;
+  margin-top: 3rem;
+  line-height: 1.1;
+}
+main h3 {
+  font-size: 1.15rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;   /* the brand's second optical signature */
+  margin-top: 2rem;
+}
+
+/* "Airy authority": large Light weights carry the lead paragraph. */
+main > p:first-of-type {
+  font-weight: 300;
+  font-size: 1.35rem;
+  line-height: 1.35;
+  color: var(--rd-fg);
+}
+main p, main li { font-size: 1.05rem; line-height: 1.55; }
+
+/* SQUARE. The only rounded value in the entire brand is a 10px service card,
+   and a document is not a service card. */
+main code, main pre, .rd-canvas, header.rd-header button, main blockquote {
+  border-radius: 0;
+}
+
+/* The yellow block IS the primary emphasis on light beds — no pill, no shadow. */
+main blockquote {
+  border-left: 4px solid var(--rd-accent);
+  background: var(--rd-surface);
+  font-weight: 300;
+  font-size: 1.15rem;
+}
+
+header.rd-header button {
+  text-transform: uppercase;
+  font-weight: 500;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  border-width: 2px;
+}
+header.rd-header button:hover { opacity: 0.75; }   /* hover = opacity, never a colour swap */
+
+main th {
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+
+/* Every transcribable string wears the mono face. Outfit fails the glyph
+   disambiguation gate (bare `l`, unslashed `0`), and the brand is fixed — so the
+   gate is enforced by ROUTING rather than by changing the typeface. */
+main code, main pre code, main td:has(code) { font-family: 'JetBrains Mono', monospace; }
+
+/* No motion but fades. The brand is stoic. */
+* { transition-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1); }
+
+
+/* ── Showcase / viewer chrome, in V2's actual geometry ────────────────────
+   Square. Outlined. UPPERCASE. The brand's ONLY rounded value is a 10px service
+   card, and a document is not a service card. Radius comes from the pack
+   (radius: 0, pill: 0); these rules add the parts CSS alone must express. */
+
+/* "The yellow block IS the primary CTA." Yellow fill, black text (12.79:1),
+   2px black border so the control is discernible on a white bed (yellow-on-white
+   is 1.64:1 — the fill alone cannot define an edge). */
+.sc-btn, .sc-seg button[aria-pressed="true"] {
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  font-weight: 700;
+  border: 2px solid var(--rd-on-accent);
+}
+.sc-btn.ghost {
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  font-weight: 700;
+  border: 2px solid currentColor;
+}
+.sc-btn:hover, .sc-mini:hover, .sc-seg button:hover { opacity: .75; }  /* never a colour swap */
+
+.sc-eyebrow, .sc-tag, .sc-mini { text-transform: uppercase; letter-spacing: .04em; }
+.sc-tag { border-radius: 0; }
+
+/* Links: ink text with a YELLOW RULE under it. Yellow is a surface, never a
+   glyph — this is how the brand gets its colour into text without breaking it. */
+main a, .sc-archwrap a {
+  color: var(--rd-fg);
+  text-decoration: none;
+  border-bottom: 2px solid var(--rd-accent);
+}

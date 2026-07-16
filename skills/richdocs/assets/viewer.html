@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{TITLE}}</title>
+<script>
+  // Pre-paint theme resolution, deliberately inline and blocking so the page
+  // never flashes the wrong theme:
+  //   localStorage (explicit user toggle) -> tokens.defaultTheme -> prefers-color-scheme -> light
+  //
+  // defaultTheme is baked in at generation time rather than read from the token
+  // file, because the token file is fetched later — long after first paint.
+  (function () {
+    var t = null;
+    try { t = localStorage.getItem("richdocs-theme"); } catch (e) {}
+    if (t !== "light" && t !== "dark") { t = "{{DEFAULT_THEME}}"; }
+    if (t !== "light" && t !== "dark") {
+      t = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    }
+    document.documentElement.setAttribute("data-theme", t);
+  })();
+</script>
+<style>{{VIEWER_CSS}}</style>
+<!-- Per-brand overrides: webfont @imports, display face, chrome refinements.
+     Comes AFTER viewer.css so a theme can override anything it needs. Empty
+     when no --theme is selected. -->
+<style>{{THEME_CSS}}</style>
+<script src="{{CDN_MARKED}}"></script>
+<script src="{{CDN_MERMAID}}"></script>
+</head>
+<body>
+<header class="rd-header">
+  <h1 id="rd-title">{{TITLE}}</h1>
+  <span class="rd-meta">{{SOURCE}}</span>
+  <span class="rd-meta">build {{BUILD_ID}}</span>
+  <button id="rd-theme-toggle" type="button" aria-label="Toggle theme">theme</button>
+</header>
+<main><article id="rd-article">Loading…</article></main>
+{{BOOTSTRAP}}
+<!-- Everything md2html.py injects lives here, so viewer.js stays placeholder-free
+     and remains real, lintable JavaScript. -->
+<script type="application/json" id="rd-config">{{RD_CONFIG}}</script>
+<!-- Graph styling first: viewer.js calls rdRenderCytoscape() from here. -->
+<script>
+{{VIEWER_CYTOSCAPE_JS}}
+</script>
+<!-- Likewise rdRenderDeckGL(): hoisted before the renderer that calls it. -->
+<script>
+{{VIEWER_DECKGL_JS}}
+</script>
+<script>
+{{VIEWER_JS}}
+</script>
+</body>
+</html>
