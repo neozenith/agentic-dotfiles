@@ -260,11 +260,13 @@ case "$SUBCMD" in
                WHERE requestId IS NOT NULL AND message.usage IS NOT NULL ${extra}
                GROUP BY requestId
              )
-             SELECT CASE WHEN model_id LIKE '%opus%'   THEN 'opus'
+             SELECT CASE WHEN model_id LIKE '%fable%'  THEN 'fable'
+                         WHEN model_id LIKE '%opus%'   THEN 'opus'
                          WHEN model_id LIKE '%sonnet%' THEN 'sonnet'
                          WHEN model_id LIKE '%haiku%'  THEN 'haiku' ELSE 'unknown' END AS family,
                     COUNT(*) AS requests,
-                    ROUND(SUM(billable * CASE WHEN model_id LIKE '%opus%'   THEN 15.0
+                    ROUND(SUM(billable * CASE WHEN model_id LIKE '%fable%'  THEN 10.0
+                                              WHEN model_id LIKE '%opus%'   THEN 5.0
                                               WHEN model_id LIKE '%sonnet%' THEN 3.0
                                               WHEN model_id LIKE '%haiku%'  THEN 1.0
                                               ELSE 0.0 END / 1e6), 2) AS cost_usd

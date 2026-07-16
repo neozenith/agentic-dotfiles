@@ -111,12 +111,13 @@ Three cost fields are computed at ingestion time and **stored** in the `events` 
 
 | Family | `token_rate` ($/Mtok) |
 |--------|-----------------------|
-| `opus` | 15.0 |
+| `fable` | 10.0 |
+| `opus` | 5.0 |
 | `sonnet` | 3.0 |
 | `haiku` | 1.0 |
 | unknown | 0.0 |
 
-Model family is detected from `model_id` via substring match (`opus`, `sonnet`, `haiku`). New model versions are handled automatically without config changes.
+Model family is detected from `model_id` via substring match (`fable`, `opus`, `sonnet`, `haiku`). New model versions are handled automatically without config changes.
 
 ### Billable Tokens Formula
 

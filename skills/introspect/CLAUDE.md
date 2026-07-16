@@ -75,8 +75,8 @@ silently serve stale schemas. Migration cost is acceptable because the cache is 
 ### ADR-004 — Cost denormalized at ingest; pricing is a hardcoded family dict
 **Status:** Accepted.
 **Decision:** `token_rate`/`billable_tokens`/`total_cost_usd` are computed at ingest and stored.
-`token_rate` is by model **family** (substring match: opus 15.0 / sonnet 3.0 / haiku 1.0 /
-unknown 0.0), so new model versions price automatically.
+`token_rate` is by model **family** (substring match: fable 10.0 / opus 5.0 / sonnet 3.0 /
+haiku 1.0 / unknown 0.0), so new model versions price automatically.
 **Lens:** A price change means editing the dict in **every** copy (package + script) **and**
 bumping `SCHEMA_VERSION` so existing rows get re-costed. Family-substring keeps it version-proof —
 don't special-case individual model ids.

@@ -220,7 +220,7 @@ LIMIT 20;"
 
 Pricing mirrors the cache's pre-computed cost: family rate × billable tokens, where
 `billable = input + output×5 + cache_read×0.1 + cache_creation×1.25`, priced at
-opus 15.0 / sonnet 3.0 / haiku 1.0 $ per Mtok.
+fable 10.0 / opus 5.0 / sonnet 3.0 / haiku 1.0 $ per Mtok.
 
 ```bash
 duckdb -markdown -c "
@@ -238,10 +238,12 @@ WITH per_req AS (   -- collapse N block-rows to one row per request
   GROUP BY requestId
 )
 SELECT
-  CASE WHEN model_id LIKE '%opus%'   THEN 'opus'
+  CASE WHEN model_id LIKE '%fable%'  THEN 'fable'
+       WHEN model_id LIKE '%opus%'   THEN 'opus'
        WHEN model_id LIKE '%sonnet%' THEN 'sonnet'
        WHEN model_id LIKE '%haiku%'  THEN 'haiku' ELSE 'unknown' END AS family,
-  ROUND(SUM(billable * CASE WHEN model_id LIKE '%opus%'   THEN 15.0
+  ROUND(SUM(billable * CASE WHEN model_id LIKE '%fable%'  THEN 10.0
+                            WHEN model_id LIKE '%opus%'   THEN 5.0
                             WHEN model_id LIKE '%sonnet%' THEN 3.0
                             WHEN model_id LIKE '%haiku%'  THEN 1.0 ELSE 0.0 END / 1e6), 2) AS cost_usd
 FROM per_req

@@ -391,7 +391,7 @@ total_cost_usd  = billable_tokens × token_rate / 1_000_000
 ```
 
 `token_rate` ($/Mtok input) is by model **family**, detected from `model_id` by
-substring (`opus` 15.0, `sonnet` 3.0, `haiku` 1.0, unknown 0.0) — so new model
+substring (`fable` 10.0, `opus` 5.0, `sonnet` 3.0, `haiku` 1.0, unknown 0.0) — so new model
 versions price automatically. All families share the relative multipliers above.
 
 ## Knowledge graph

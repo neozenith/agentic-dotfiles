@@ -72,7 +72,7 @@ log = logging.getLogger(__name__)
 #   parity (producing identical summary rows) is G11; this is the DDL mirror.
 # v19 (Summariser G3): rollup_summaries table mirrored from the backend schema
 #   (same DDL-mirror rationale as v18).
-SCHEMA_VERSION = "19"
+SCHEMA_VERSION = "20"
 
 # Sentinel key in cache_metadata used to gate the one-shot (session_id, uuid)
 # dedupe migration. Mirrors DEDUPE_SESSION_UUID_MIGRATION_KEY in
@@ -86,12 +86,20 @@ DEDUPE_SESSION_UUID_MIGRATION_KEY = "dedupe_session_uuid_v1"
 # Pricing Configuration
 # ============================================================================
 
+# Verified 2026-07-13. Output is always 5x input. Must stay in sync with the
+# package copy in database/sqlite/pricing.py (parity-tested).
 PRICING = {
-    "opus": {
-        "input": 15.0,  # per 1M tokens
-        "output": 75.0,
+    "fable": {
+        "input": 10.0,  # per 1M tokens
+        "output": 50.0,
         "cache_read_multiplier": 0.1,  # 90% discount
         "cache_write_multiplier": 1.25,  # 25% premium
+    },
+    "opus": {
+        "input": 5.0,
+        "output": 25.0,
+        "cache_read_multiplier": 0.1,
+        "cache_write_multiplier": 1.25,
     },
     "sonnet": {
         "input": 3.0,
@@ -109,11 +117,11 @@ PRICING = {
 
 
 def model_family_from_id(model_id: str | None) -> str:
-    """Extract model family (opus/sonnet/haiku) from a full model ID string."""
+    """Extract model family (fable/opus/sonnet/haiku) from a full model ID string."""
     if model_id is None:
         return "unknown"
     model_lower = model_id.lower()
-    for family in ("opus", "sonnet", "haiku"):
+    for family in ("fable", "opus", "sonnet", "haiku"):
         if family in model_lower:
             return family
     return "unknown"
@@ -245,9 +253,7 @@ def _first_content_block_type(content: Any) -> str | None:
     return None
 
 
-def _message_kind(
-    event_type: str, is_meta: bool, content: Any, is_subagent: bool = False
-) -> str:
+def _message_kind(event_type: str, is_meta: bool, content: Any, is_subagent: bool = False) -> str:
     """Classify an event into one of 9 fine-grained message kinds.
 
     Kinds:
@@ -774,6 +780,8 @@ def _extract_tool_use(idx: int, block: dict[str, Any]) -> list[tuple[int, str, s
                     rows.append((idx, "bun_script", script))
 
     return rows
+
+
 # ============================================================================
 # SQLite Cache Schema
 # ============================================================================
@@ -1182,13 +1190,6 @@ CREATE INDEX IF NOT EXISTS idx_rollup_summaries_scope
 """
 
 
-
-
-
-
-
-
-
 # ============================================================================
 # Embedding pipeline (byte-equivalent copy of
 # src/claude_code_sessions/database/sqlite/embeddings.py — keep in lockstep)
@@ -1591,6 +1592,8 @@ def sync_embeddings(conn: sqlite3.Connection) -> int:
         time.monotonic() - t0,
     )
     return total_embedded
+
+
 # ============================================================================
 # Knowledge-graph pipeline (byte-equivalent inline copy of
 # src/claude_code_sessions/database/sqlite/kg/*.py — keep in lockstep)
@@ -3479,9 +3482,9 @@ class CacheManager:
     # the composite PRIMARY KEY enforces uniqueness correctly.
 
     _AGG_BUCKET_EXPRS: dict[str, str] = {
-        "hourly":  "strftime('%Y-%m-%dT%H:00:00', timestamp)",
-        "daily":   "date(timestamp)",
-        "weekly":  "date(timestamp, 'weekday 0', '-6 days')",
+        "hourly": "strftime('%Y-%m-%dT%H:00:00', timestamp)",
+        "daily": "date(timestamp)",
+        "weekly": "date(timestamp, 'weekday 0', '-6 days')",
         "monthly": "strftime('%Y-%m-01', timestamp)",
     }
 
@@ -3506,7 +3509,8 @@ class CacheManager:
                 range_clause = f"AND {bucket_expr} BETWEEN ? AND ?"
                 range_params = (start_bucket, end_bucket)
 
-            cursor.execute(f"""
+            cursor.execute(
+                f"""
                 INSERT INTO agg (
                     granularity, time_bucket, project_id, session_id, model_id,
                     event_count,
@@ -3532,7 +3536,9 @@ class CacheManager:
                   {range_clause}
                 GROUP BY {bucket_expr}, project_id,
                          COALESCE(session_id, ''), COALESCE(model_id, '')
-            """, range_params)
+            """,
+                range_params,
+            )
             counts[granularity] = cursor.rowcount
         self.conn.commit()
         return counts
@@ -3752,8 +3758,7 @@ class CacheManager:
         events_after = cursor.execute("SELECT COUNT(*) FROM events").fetchone()[0]
 
         log.info(
-            "  pruned: events %d → %d (-%d), edges -%d, source_files -%d, "
-            "ner_log -%d, re_log -%d",
+            "  pruned: events %d → %d (-%d), edges -%d, source_files -%d, ner_log -%d, re_log -%d",
             events_before,
             events_after,
             events_deleted,
@@ -3767,8 +3772,7 @@ class CacheManager:
         self.refresh_aggregates_for_range()
 
         log.info(
-            "  dedupe migration complete in %.1f s "
-            "(run VACUUM separately to reclaim disk space)",
+            "  dedupe migration complete in %.1f s (run VACUUM separately to reclaim disk space)",
             time.monotonic() - t0,
         )
 
@@ -3896,7 +3900,8 @@ class CacheManager:
             chunks_added = sync_chunks(self.conn)
             embeddings_added = 0
             if os.environ.get(
-                "CLAUDE_SESSIONS_DISABLE_EMBEDDINGS", "",
+                "CLAUDE_SESSIONS_DISABLE_EMBEDDINGS",
+                "",
             ).strip().lower() not in {"1", "true", "yes", "on"}:
                 model_path = ensure_model_downloaded()
                 setup_embedding_runtime(self.conn, model_path)
@@ -3968,7 +3973,8 @@ class CacheManager:
         chunks_added = sync_chunks(self.conn)
         embeddings_added = 0
         if os.environ.get(
-            "CLAUDE_SESSIONS_DISABLE_EMBEDDINGS", "",
+            "CLAUDE_SESSIONS_DISABLE_EMBEDDINGS",
+            "",
         ).strip().lower() not in {"1", "true", "yes", "on"}:
             model_path = ensure_model_downloaded()
             setup_embedding_runtime(self.conn, model_path)
@@ -4205,8 +4211,6 @@ def cmd_sessions(
     return [dict(row) for row in results]
 
 
-
-
 def _escape_fts5_query(pattern: str) -> str:
     """Escape a plain-text search string for safe use in FTS5 MATCH.
 
@@ -4282,8 +4286,6 @@ def cmd_search(
 
     results = cursor.execute(query, params).fetchall()
     return [dict(row) for row in results]
-
-
 
 
 def cmd_event(
@@ -5031,7 +5033,9 @@ if __name__ == "__main__":  # pragma: no cover
             "assistant_text thinking tool_use other"
         ),
     )
-    traverse_parser.add_argument("--since", help="Only events after TIME (ISO or relative: 1h, 30m)")
+    traverse_parser.add_argument(
+        "--since", help="Only events after TIME (ISO or relative: 1h, 30m)"
+    )
     traverse_parser.add_argument("--until", help="Only events before TIME")
     traverse_parser.add_argument(
         "-n",

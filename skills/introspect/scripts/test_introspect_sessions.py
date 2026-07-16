@@ -1016,27 +1016,58 @@ class TestBuildCrossAgentEdges:
 
         parent_file = project_dir / f"{session_id}.jsonl"
         parent_file.write_text(
-            "\n".join([
-                make_event("user", "p-uuid-001", timestamp="2026-01-01T00:00:00.000Z",
-                           session_id=session_id),
-                # tool_use event that spawns the agent
-                json.dumps({
-                    "type": "assistant", "uuid": tool_use_uuid, "parentUuid": "p-uuid-001",
-                    "timestamp": "2026-01-01T00:00:01.000Z", "sessionId": session_id,
-                    "message": {"role": "assistant",
-                                "content": [{"type": "tool_use", "name": "Agent",
-                                             "id": "toolu-001", "input": {}}]},
-                }),
-                # tool_result event — carries the same promptId as the subagent's first event
-                json.dumps({
-                    "type": "user", "uuid": tool_result_uuid, "parentUuid": tool_use_uuid,
-                    "timestamp": "2026-01-01T00:00:05.000Z", "sessionId": session_id,
-                    "promptId": prompt_id,  # ← natural join key
-                    "message": {"role": "user",
-                                "content": [{"type": "tool_result", "tool_use_id": "toolu-001",
-                                             "content": "agent output"}]},
-                }),
-            ]),
+            "\n".join(
+                [
+                    make_event(
+                        "user",
+                        "p-uuid-001",
+                        timestamp="2026-01-01T00:00:00.000Z",
+                        session_id=session_id,
+                    ),
+                    # tool_use event that spawns the agent
+                    json.dumps(
+                        {
+                            "type": "assistant",
+                            "uuid": tool_use_uuid,
+                            "parentUuid": "p-uuid-001",
+                            "timestamp": "2026-01-01T00:00:01.000Z",
+                            "sessionId": session_id,
+                            "message": {
+                                "role": "assistant",
+                                "content": [
+                                    {
+                                        "type": "tool_use",
+                                        "name": "Agent",
+                                        "id": "toolu-001",
+                                        "input": {},
+                                    }
+                                ],
+                            },
+                        }
+                    ),
+                    # tool_result event — carries the same promptId as the subagent's first event
+                    json.dumps(
+                        {
+                            "type": "user",
+                            "uuid": tool_result_uuid,
+                            "parentUuid": tool_use_uuid,
+                            "timestamp": "2026-01-01T00:00:05.000Z",
+                            "sessionId": session_id,
+                            "promptId": prompt_id,  # ← natural join key
+                            "message": {
+                                "role": "user",
+                                "content": [
+                                    {
+                                        "type": "tool_result",
+                                        "tool_use_id": "toolu-001",
+                                        "content": "agent output",
+                                    }
+                                ],
+                            },
+                        }
+                    ),
+                ]
+            ),
             encoding="utf-8",
         )
 
@@ -1044,13 +1075,19 @@ class TestBuildCrossAgentEdges:
         sub_dir.mkdir(parents=True, exist_ok=True)
         subagent_file = sub_dir / f"agent-{sa_agent_id}.jsonl"
         subagent_file.write_text(
-            json.dumps({
-                "type": "user", "uuid": sa_first_uuid, "parentUuid": None,
-                "timestamp": "2026-01-01T00:00:01.003Z", "sessionId": session_id,
-                "agentId": sa_agent_id, "isSidechain": True,
-                "promptId": prompt_id,  # ← same as tool_result.promptId
-                "message": {"role": "user", "content": "do the task"},
-            }),
+            json.dumps(
+                {
+                    "type": "user",
+                    "uuid": sa_first_uuid,
+                    "parentUuid": None,
+                    "timestamp": "2026-01-01T00:00:01.003Z",
+                    "sessionId": session_id,
+                    "agentId": sa_agent_id,
+                    "isSidechain": True,
+                    "promptId": prompt_id,  # ← same as tool_result.promptId
+                    "message": {"role": "user", "content": "do the task"},
+                }
+            ),
             encoding="utf-8",
         )
         return parent_file, subagent_file
@@ -1060,19 +1097,27 @@ class TestBuildCrossAgentEdges:
     ) -> None:
         for f, ft in [(parent, "main_session"), (sub, "subagent")]:
             st = f.stat()
-            cache.ingest_file({
-                "filepath": str(f), "project_id": "-Test-Project",
-                "session_id": session_id, "file_type": ft,
-                "mtime": st.st_mtime, "size_bytes": st.st_size,
-            })
+            cache.ingest_file(
+                {
+                    "filepath": str(f),
+                    "project_id": "-Test-Project",
+                    "session_id": session_id,
+                    "file_type": ft,
+                    "mtime": st.st_mtime,
+                    "size_bytes": st.st_size,
+                }
+            )
         cache.conn.commit()
 
     def test_bridge_edge_created(self, temp_cache: iss.CacheManager, temp_dir: Path) -> None:
         """Bridge edge links subagent first event to parent tool_use via promptId."""
         session_id = "sess-bridge-01"
         parent_file, subagent_file = self._make_bridge_session(
-            temp_dir, session_id, prompt_id="pid-001",
-            tool_use_uuid="p-uuid-002", sa_first_uuid="sa-uuid-001",
+            temp_dir,
+            session_id,
+            prompt_id="pid-001",
+            tool_use_uuid="p-uuid-002",
+            sa_first_uuid="sa-uuid-001",
         )
         self._ingest_pair(temp_cache, parent_file, subagent_file, session_id)
 
@@ -1092,7 +1137,10 @@ class TestBuildCrossAgentEdges:
         """Calling build_cross_agent_edges twice does not create duplicate edges."""
         session_id = "sess-bridge-02"
         parent_file, subagent_file = self._make_bridge_session(
-            temp_dir, session_id, prompt_id="pid-002", sa_first_uuid="sa-uuid-002",
+            temp_dir,
+            session_id,
+            prompt_id="pid-002",
+            sa_first_uuid="sa-uuid-002",
         )
         self._ingest_pair(temp_cache, parent_file, subagent_file, session_id)
 
@@ -1117,39 +1165,76 @@ class TestBuildCrossAgentEdges:
         # Parent session: tool_use exists but NO tool_result with matching promptId
         parent_file = project_dir / f"{session_id}.jsonl"
         parent_file.write_text(
-            "\n".join([
-                make_event("user", "p-uuid-001", timestamp="2026-01-01T00:00:00.000Z",
-                           session_id=session_id),
-                json.dumps({
-                    "type": "assistant", "uuid": "p-uuid-002", "parentUuid": "p-uuid-001",
-                    "timestamp": "2026-01-01T00:00:01.000Z", "sessionId": session_id,
-                    "message": {"role": "assistant",
-                                "content": [{"type": "tool_use", "name": "Agent",
-                                             "id": "toolu-001", "input": {}}]},
-                }),
-                # tool_result with a DIFFERENT promptId — no match
-                json.dumps({
-                    "type": "user", "uuid": "p-uuid-003", "parentUuid": "p-uuid-002",
-                    "timestamp": "2026-01-01T00:00:05.000Z", "sessionId": session_id,
-                    "promptId": "pid-DIFFERENT",
-                    "message": {"role": "user",
-                                "content": [{"type": "tool_result", "tool_use_id": "toolu-001",
-                                             "content": "output"}]},
-                }),
-            ]),
+            "\n".join(
+                [
+                    make_event(
+                        "user",
+                        "p-uuid-001",
+                        timestamp="2026-01-01T00:00:00.000Z",
+                        session_id=session_id,
+                    ),
+                    json.dumps(
+                        {
+                            "type": "assistant",
+                            "uuid": "p-uuid-002",
+                            "parentUuid": "p-uuid-001",
+                            "timestamp": "2026-01-01T00:00:01.000Z",
+                            "sessionId": session_id,
+                            "message": {
+                                "role": "assistant",
+                                "content": [
+                                    {
+                                        "type": "tool_use",
+                                        "name": "Agent",
+                                        "id": "toolu-001",
+                                        "input": {},
+                                    }
+                                ],
+                            },
+                        }
+                    ),
+                    # tool_result with a DIFFERENT promptId — no match
+                    json.dumps(
+                        {
+                            "type": "user",
+                            "uuid": "p-uuid-003",
+                            "parentUuid": "p-uuid-002",
+                            "timestamp": "2026-01-01T00:00:05.000Z",
+                            "sessionId": session_id,
+                            "promptId": "pid-DIFFERENT",
+                            "message": {
+                                "role": "user",
+                                "content": [
+                                    {
+                                        "type": "tool_result",
+                                        "tool_use_id": "toolu-001",
+                                        "content": "output",
+                                    }
+                                ],
+                            },
+                        }
+                    ),
+                ]
+            ),
             encoding="utf-8",
         )
         sub_dir = project_dir / session_id / "subagents"
         sub_dir.mkdir(parents=True, exist_ok=True)
         subagent_file = sub_dir / "agent-sa003.jsonl"
         subagent_file.write_text(
-            json.dumps({
-                "type": "user", "uuid": "sa-uuid-003", "parentUuid": None,
-                "timestamp": "2026-01-01T00:00:01.003Z", "sessionId": session_id,
-                "agentId": "sa003", "isSidechain": True,
-                "promptId": "pid-003",  # ← different from parent's tool_result
-                "message": {"role": "user", "content": "task"},
-            }),
+            json.dumps(
+                {
+                    "type": "user",
+                    "uuid": "sa-uuid-003",
+                    "parentUuid": None,
+                    "timestamp": "2026-01-01T00:00:01.003Z",
+                    "sessionId": session_id,
+                    "agentId": "sa003",
+                    "isSidechain": True,
+                    "promptId": "pid-003",  # ← different from parent's tool_result
+                    "message": {"role": "user", "content": "task"},
+                }
+            ),
             encoding="utf-8",
         )
         self._ingest_pair(temp_cache, parent_file, subagent_file, session_id)
@@ -1163,8 +1248,12 @@ class TestBuildCrossAgentEdges:
         """After bridge edges are built, graph traversal reaches subagent events."""
         session_id = "sess-bridge-04"
         parent_file, _ = self._make_bridge_session(
-            temp_dir, session_id, prompt_id="pid-004",
-            tool_use_uuid="p-uuid-002", sa_first_uuid="sa-uuid-001", sa_agent_id="sa004",
+            temp_dir,
+            session_id,
+            prompt_id="pid-004",
+            tool_use_uuid="p-uuid-002",
+            sa_first_uuid="sa-uuid-001",
+            sa_agent_id="sa004",
         )
 
         # Add a second subagent event with parentUuid back to the first
@@ -1172,13 +1261,20 @@ class TestBuildCrossAgentEdges:
         subagent_file = sub_dir / "agent-sa004.jsonl"
         existing = subagent_file.read_text(encoding="utf-8")
         subagent_file.write_text(
-            existing + "\n" + json.dumps({
-                "type": "assistant", "uuid": "sa-uuid-002", "parentUuid": "sa-uuid-001",
-                "timestamp": "2026-01-01T00:00:03.000Z", "sessionId": session_id,
-                "agentId": "sa004", "isSidechain": True,
-                "message": {"role": "assistant",
-                            "content": [{"type": "text", "text": "done"}]},
-            }),
+            existing
+            + "\n"
+            + json.dumps(
+                {
+                    "type": "assistant",
+                    "uuid": "sa-uuid-002",
+                    "parentUuid": "sa-uuid-001",
+                    "timestamp": "2026-01-01T00:00:03.000Z",
+                    "sessionId": session_id,
+                    "agentId": "sa004",
+                    "isSidechain": True,
+                    "message": {"role": "assistant", "content": [{"type": "text", "text": "done"}]},
+                }
+            ),
             encoding="utf-8",
         )
         self._ingest_pair(temp_cache, parent_file, subagent_file, session_id)
@@ -1195,7 +1291,10 @@ class TestBuildCrossAgentEdges:
         temp_cache.build_cross_agent_edges(session_id, "-Test-Project")
 
         after = iss.cmd_traverse(
-            temp_cache, session_id=session_id, uuid="p-uuid-002", direction="descendants",
+            temp_cache,
+            session_id=session_id,
+            uuid="p-uuid-002",
+            direction="descendants",
             depth_limit=5,
         )
         after_uuids = {e["uuid"] for e in after}
@@ -1983,9 +2082,7 @@ class TestTraverseDetailFull:
         temp_cache.update(projects_dir)
 
         # Corrupt raw_json
-        temp_cache.conn.execute(
-            "UPDATE events SET raw_json = 'also invalid' WHERE uuid = '001'"
-        )
+        temp_cache.conn.execute("UPDATE events SET raw_json = 'also invalid' WHERE uuid = '001'")
         temp_cache.conn.commit()
 
         result = iss.cmd_traverse(temp_cache, "session-001", "001", detail="full")
@@ -3216,38 +3313,52 @@ class TestEventCallsExtraction:
     def test_extract_tool_use(self) -> None:
         ev = {
             "type": "assistant",
-            "message": {"role": "assistant", "content": [
-                {"type": "tool_use", "name": "Read", "input": {"file_path": "/x"}},
-            ]},
+            "message": {
+                "role": "assistant",
+                "content": [
+                    {"type": "tool_use", "name": "Read", "input": {"file_path": "/x"}},
+                ],
+            },
         }
         assert iss._extract_calls(ev) == [(0, "tool", "Read")]
 
     def test_extract_skill(self) -> None:
         ev = {
             "type": "assistant",
-            "message": {"role": "assistant", "content": [
-                {"type": "tool_use", "name": "Skill", "input": {"skill": "introspect"}},
-            ]},
+            "message": {
+                "role": "assistant",
+                "content": [
+                    {"type": "tool_use", "name": "Skill", "input": {"skill": "introspect"}},
+                ],
+            },
         }
         assert iss._extract_calls(ev) == [(0, "skill", "introspect")]
 
     def test_extract_subagent(self) -> None:
         ev = {
             "type": "assistant",
-            "message": {"role": "assistant", "content": [
-                {"type": "tool_use", "name": "Agent",
-                 "input": {"subagent_type": "Explore"}},
-            ]},
+            "message": {
+                "role": "assistant",
+                "content": [
+                    {"type": "tool_use", "name": "Agent", "input": {"subagent_type": "Explore"}},
+                ],
+            },
         }
         assert iss._extract_calls(ev) == [(0, "subagent", "Explore")]
 
     def test_extract_bash_fans_out_cli_heads(self) -> None:
         ev = {
             "type": "assistant",
-            "message": {"role": "assistant", "content": [
-                {"type": "tool_use", "name": "Bash",
-                 "input": {"command": "gh pr view 7 && uv run pytest"}},
-            ]},
+            "message": {
+                "role": "assistant",
+                "content": [
+                    {
+                        "type": "tool_use",
+                        "name": "Bash",
+                        "input": {"command": "gh pr view 7 && uv run pytest"},
+                    },
+                ],
+            },
         }
         assert iss._extract_calls(ev) == [
             (0, "tool", "Bash"),
@@ -3258,16 +3369,23 @@ class TestEventCallsExtraction:
     def test_extract_rule_paths(self) -> None:
         ev = {
             "type": "user",
-            "message": {"role": "user", "content": [
-                {"type": "text",
-                 "text": "<system-reminder>Contents of /u/.claude/rules/x.md:"
-                         " body.</system-reminder>"},
-            ]},
+            "message": {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "<system-reminder>Contents of /u/.claude/rules/x.md:"
+                        " body.</system-reminder>",
+                    },
+                ],
+            },
         }
         assert iss._extract_calls(ev) == [(0, "rule", "/u/.claude/rules/x.md")]
 
     def test_ingest_file_populates_event_calls(
-        self, temp_dir: Path, temp_cache: iss.CacheManager,
+        self,
+        temp_dir: Path,
+        temp_cache: iss.CacheManager,
     ) -> None:
         """End-to-end: ingest a JSONL file and verify event_calls rows."""
         session_id = "session-s1"
@@ -3285,22 +3403,23 @@ class TestEventCallsExtraction:
                 "role": "assistant",
                 "model": "claude-sonnet-4-5-20250929",
                 "content": [
-                    {"type": "tool_use", "name": "Bash",
-                     "input": {"command": "gh pr view 1"}},
+                    {"type": "tool_use", "name": "Bash", "input": {"command": "gh pr view 1"}},
                 ],
             },
         }
         jsonl_path.write_text(json.dumps(ev) + "\n", encoding="utf-8")
 
         stat_result = jsonl_path.stat()
-        temp_cache.ingest_file({
-            "filepath": str(jsonl_path),
-            "project_id": project_id,
-            "session_id": session_id,
-            "file_type": "main_session",
-            "mtime": stat_result.st_mtime,
-            "size_bytes": stat_result.st_size,
-        })
+        temp_cache.ingest_file(
+            {
+                "filepath": str(jsonl_path),
+                "project_id": project_id,
+                "session_id": session_id,
+                "file_type": "main_session",
+                "mtime": stat_result.st_mtime,
+                "size_bytes": stat_result.st_size,
+            }
+        )
 
         rows = temp_cache.conn.execute(
             "SELECT call_type, call_name FROM event_calls ORDER BY id"
