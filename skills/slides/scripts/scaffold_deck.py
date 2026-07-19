@@ -105,10 +105,18 @@ def render_template(text: str, mapping: dict[str, str]) -> str:
 
 
 def mapping_for(name: str, palette: dict[str, str], provenance: str) -> dict[str, str]:
+    # TOKEN_FONTDISPLAY_BARE exists for Mermaid's `init` block, and only for that.
+    # A font token is normally written `'Family', fallback` and carries its own
+    # quotes, which CSS and SVG both accept. Mermaid's init parser is not strict
+    # JSON: the nested quotes end the string early, it discards the ENTIRE init,
+    # and the diagram renders in default colours while reporting success. Verified
+    # by rendering, because nothing in the toolchain says a word about it.
+    bare_font = palette["fontDisplay"].replace("'", "").replace('"', "")
     return {
         "DECK_NAME": name,
         "THEME_NAME": name,
         "PALETTE_PROVENANCE": provenance,
+        "TOKEN_FONTDISPLAY_BARE": bare_font,
         **{f"TOKEN_{k.upper()}": v for k, v in palette.items()},
     }
 

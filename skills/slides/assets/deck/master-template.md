@@ -247,18 +247,50 @@ def slide_seconds(words: int, *, wpm: float, base: float) -> float:
 
 <!-- @tier ic -->
 
-## Diagrams
+## Diagrams: Mermaid, pre-rendered
 
-Marp has NO Mermaid runtime, so a fenced mermaid block renders as a code listing.
-Write the diagram as `assets/<name>.md`, run `make diagrams`, then embed the PNG:
+![w:880](assets/build-pipeline-1.png)
+
+That image is **rendered from `assets/build-pipeline.md`**, which is committed;
+the PNG is not. Marp has no Mermaid runtime, so a fenced mermaid block inside a
+slide renders as a code listing. Edit the source, then rebuild.
 
 ```markdown
-![w:820](assets/<name>-1.png)
+![w:880](assets/build-pipeline-1.png)   <- mmdc appends the -1
 ```
 
-`mmdc` appends the `-1`. Sources are committed; the PNGs are git-ignored build
-outputs. Size with `![w:820]`. An SVG in `assets/` embeds the same way, and both
-are wired into the build DAG, so editing one rebuilds the deck.
+---
+
+<!-- @tier ic -->
+
+## Diagrams: editable draw.io SVG
+
+![w:820](assets/example-architecture.svg)
+
+One file, two jobs: the image above, **and** a real draw.io document. The
+`content` attribute carries an `<mxfile>`, so diagrams.net reopens movable shapes.
+
+- **Mermaid** for flows, where the layout should solve itself.
+- **draw.io SVG** for architecture, where you want icons and hand placement.
+
+---
+
+<!-- @tier ic -->
+
+## How a diagram reaches a slide
+
+Both paths are wired into the build DAG, and that wiring is the point:
+
+- **Content is the source.** A Mermaid `.md` or an SVG is committed and diffable.
+  The `-1.png` renders are git-ignored build outputs.
+- **`make diagrams` renders only what changed**, through a pattern rule.
+- **Every render depends on the diagram**, so editing one rebuilds the deck.
+  Leave a diagram out of `SVG_SRC`/`MMD_SRC` and the deck ships a stale picture
+  with no warning.
+- **The palette came from the project's design tokens** at scaffold time, so a
+  diagram matches the theme without anyone picking a colour.
+
+<span class="badge">A diagram is content, not an attachment. Generate it, wire it, never paste it.</span>
 
 ---
 

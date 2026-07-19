@@ -94,12 +94,32 @@ def test_render_template_rejects_an_unresolved_placeholder() -> None:
 
 
 def test_mapping_for_upcases_token_keys() -> None:
-    mapping = sd.mapping_for("pitch", {"bg": "#000", "onAccent": "#fff"}, "placeholder palette")
+    # A palette always reaches mapping_for through read_tokens, which merges
+    # FALLBACK_TOKENS, so fontDisplay is always present. A partial palette is an
+    # impossible input, and the KeyError it raises is the correct answer to one.
+    palette = {"bg": "#000", "onAccent": "#fff", "fontDisplay": "system-ui"}
+    mapping = sd.mapping_for("pitch", palette, "placeholder palette")
     assert mapping["DECK_NAME"] == "pitch"
     assert mapping["THEME_NAME"] == "pitch"
     assert mapping["PALETTE_PROVENANCE"] == "placeholder palette"
     assert mapping["TOKEN_BG"] == "#000"
     assert mapping["TOKEN_ONACCENT"] == "#fff"
+
+
+def test_mapping_for_strips_quotes_from_the_mermaid_font_token() -> None:
+    """A quoted font token silently voids a Mermaid init, so the bare form exists.
+
+    Mermaid's init parser is not strict JSON: the token's own quotes end the
+    string early, it discards the whole init, and the diagram renders in default
+    colours while reporting success. CSS and SVG want the quoted form, so both
+    tokens ship.
+    """
+    palette = {"bg": "#000", "onAccent": "#fff", "fontDisplay": "'Some Face', system-ui, sans-serif"}
+    mapping = sd.mapping_for("pitch", palette, "placeholder palette")
+    assert mapping["TOKEN_FONTDISPLAY"] == "'Some Face', system-ui, sans-serif"
+    assert mapping["TOKEN_FONTDISPLAY_BARE"] == "Some Face, system-ui, sans-serif"
+    assert "'" not in mapping["TOKEN_FONTDISPLAY_BARE"]
+    assert '"' not in mapping["TOKEN_FONTDISPLAY_BARE"]
 
 
 # ── scaffold ─────────────────────────────────────────────────────────────

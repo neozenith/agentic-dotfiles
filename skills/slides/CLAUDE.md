@@ -224,6 +224,12 @@ Each cost real time. The symptom is the part worth recognising.
   the second run reports an unknown tier named `NAME`, or text leaks onto slide 1
   because a nested `-->` closed the comment early. `strip_managed()` removes the
   region before parsing, which kills the class of bug.
+- **A quoted font token breaks a Mermaid init.** *Symptom:* `make diagrams`
+  reports success and the diagram renders in DEFAULT colours, ignoring every
+  themeVariable. A font token is normally `'Family', fallback` and carries its own
+  quotes; Mermaid's init parser is not strict JSON, so they end the string early
+  and it discards the whole init. `mapping_for()` supplies `TOKEN_FONTDISPLAY_BARE`
+  for the init block, and only for it: CSS and SVG want the quoted form.
 - **`section#3` is invalid CSS.** *Symptom:* the bar silently never fills. An
   ident cannot start with a digit, so the rules use `section[id="3"]`.
 - **Marp parses a `key: value` comment as a directive.** *Symptom:* an unknown

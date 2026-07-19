@@ -80,6 +80,17 @@ main th { background: var(--rd-surface); }
 }
 .rd-mermaid { display: flex; justify-content: center; padding: 0.75rem; }
 
+/* Mermaid sizes each label's <foreignObject> from its own text measurement, and a
+   <foreignObject> establishes an SVG viewport that CLIPS by default. That measurement
+   runs a few percent short against a brand webfont, so labels lose their last glyph
+   or two ("Cloud Run: dev" → "Cloud Run: de"), silently, and only in themes carrying
+   a webfont. The node shape around the label is drawn far wider than the text, so
+   there is ample room to paint into: the box is the only thing cutting. Turning the
+   clip off renders the full label. Labels are centred, so any overshoot spills
+   evenly rather than lopsidedly. Do not "fix" this by widening flowchart
+   wrappingWidth — that changes where every diagram wraps, and the clip remains. */
+.rd-mermaid foreignObject { overflow: visible; }
+
 /* Hardcoded red on purpose: a token failure must still render visibly. */
 .rd-error {
   border: 1px solid #dc2626; color: #dc2626;

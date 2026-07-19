@@ -82,6 +82,9 @@ Write the diagram as `assets/<name>.md`, run `make diagrams`, embed the PNG
 (`mmdc` appends the fence index, so `foo.md` becomes `foo-1.png`). Sources are
 committed; the PNGs are git-ignored build outputs.
 
+The reference deck ships a worked example of each path (`make template`): a
+Mermaid source and an editable draw.io SVG, both themed from the project tokens.
+
 An SVG in `assets/` embeds directly, and is the better choice for architecture
 diagrams: it stays editable, and a transparent canvas sits on any slide
 background. If light labels must also read on a white editing canvas, give each

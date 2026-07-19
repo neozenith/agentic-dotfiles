@@ -107,34 +107,22 @@ function showError(el, err) {
 // Rendered mermaid SVG is not re-themable in place: it must be re-rendered from
 // source on every theme flip.
 //
-// Three settings here exist to stop labels being CLIPPED MID-WORD, a failure that
-// only appears in themes carrying a webfont, which is why it survived so long.
+// `fontFamily`: mermaid otherwise measures labels in its own default (`trebuchet
+// ms`) while the page paints them in the brand face (viewer.css sets `font-family:
+// var(--rd-font-body)` on body). Hand mermaid the same token plotly already gets
+// (see renderPlotly) so it measures the face it renders, and so diagrams stop
+// rendering off-brand. This narrows the label-box shortfall but does NOT close it;
+// viewer.css `foreignObject { overflow: visible }` is what actually stops the clip.
 //
-//  1. `fontFamily` — mermaid otherwise measures in its own default (`trebuchet ms`)
-//     while the page renders the label in the brand face (viewer.css sets
-//     `font-family: var(--rd-font-body)` on body). Hand mermaid the same token
-//     plotly already gets (see renderPlotly), so measurement and render agree, and
-//     mermaid stops rendering off-brand as a bonus.
-//  2. `fonts.ready` barrier — a theme @imports its face with `display=swap`, so an
-//     early measurement silently uses the fallback face and the real one swaps in
-//     afterwards. Measure only once the face is actually loaded. Guarded: the Font
-//     Loading API is absent in a few older engines.
-//  3. `wrappingWidth` — the real culprit. Mermaid caps each label at 200px and the
-//     enclosing foreignObject CLIPS the overflow rather than growing. 200px was
-//     chosen for trebuchet; every brand face here is wider, so ordinary labels
-//     ("aurizon-buildathon-dev") cross the cap and lose their tail. Labels carrying
-//     an explicit <br> are laid out `white-space: nowrap`, so they cannot even wrap
-//     out of trouble. Widen the cap to fit a realistic identifier.
-//
-// Raising the cap does not force diagrams wider: it only raises the point at which
-// mermaid wraps or clips, so short labels lay out exactly as before.
+// `fonts.ready`: a theme @imports its face with `display=swap`, so measuring before
+// the face loads silently measures the fallback. Guarded, because the Font Loading
+// API is absent in a few older engines.
 function renderAllMermaid() {
   if (mermaidSources.length === 0) return Promise.resolve();
   window.mermaid.initialize({
     startOnLoad: false,
     theme: currentTheme() === "dark" ? "dark" : "default",
     fontFamily: TOKENS.fonts.body,
-    flowchart: { wrappingWidth: 340 },
     securityLevel: "loose"
   });
   var fontsReady = (document.fonts && document.fonts.ready)

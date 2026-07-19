@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="340" viewBox="0 0 980 340" content="&lt;mxfile host=&quot;slides-skill&quot;&gt;&lt;diagram name=&quot;architecture&quot;&gt;&lt;mxGraphModel dx=&quot;900&quot; dy=&quot;600&quot; grid=&quot;1&quot; gridSize=&quot;10&quot; page=&quot;1&quot; background=&quot;none&quot;&gt;&lt;root&gt;&lt;mxCell id=&quot;0&quot;/&gt;&lt;mxCell id=&quot;1&quot; parent=&quot;0&quot;/&gt;&lt;mxCell id=&quot;client&quot; value=&quot;Client&quot; style=&quot;rounded=1;arcSize=12;fillColor={{TOKEN_SURFACE}};strokeColor={{TOKEN_BORDER}};fontColor={{TOKEN_FG}};fontSize=14;verticalAlign=middle;&quot; vertex=&quot;1&quot; parent=&quot;1&quot;&gt;&lt;mxGeometry x=&quot;20&quot; y=&quot;120&quot; width=&quot;200&quot; height=&quot;88&quot; as=&quot;geometry&quot;/&gt;&lt;/mxCell&gt;&lt;mxCell id=&quot;api&quot; value=&quot;Service&quot; style=&quot;rounded=1;arcSize=12;fillColor={{TOKEN_SURFACE}};strokeColor={{TOKEN_BORDER}};fontColor={{TOKEN_FG}};fontSize=14;verticalAlign=middle;&quot; vertex=&quot;1&quot; parent=&quot;1&quot;&gt;&lt;mxGeometry x=&quot;340&quot; y=&quot;120&quot; width=&quot;200&quot; height=&quot;88&quot; as=&quot;geometry&quot;/&gt;&lt;/mxCell&gt;&lt;mxCell id=&quot;store&quot; value=&quot;Store&quot; style=&quot;rounded=1;arcSize=12;fillColor={{TOKEN_SURFACE}};strokeColor={{TOKEN_BORDER}};fontColor={{TOKEN_FG}};fontSize=14;verticalAlign=middle;&quot; vertex=&quot;1&quot; parent=&quot;1&quot;&gt;&lt;mxGeometry x=&quot;700&quot; y=&quot;40&quot; width=&quot;200&quot; height=&quot;88&quot; as=&quot;geometry&quot;/&gt;&lt;/mxCell&gt;&lt;mxCell id=&quot;cache&quot; value=&quot;Cache&quot; style=&quot;rounded=1;arcSize=12;fillColor={{TOKEN_SURFACE}};strokeColor={{TOKEN_BORDER}};fontColor={{TOKEN_FG}};fontSize=14;verticalAlign=middle;&quot; vertex=&quot;1&quot; parent=&quot;1&quot;&gt;&lt;mxGeometry x=&quot;700&quot; y=&quot;200&quot; width=&quot;200&quot; height=&quot;88&quot; as=&quot;geometry&quot;/&gt;&lt;/mxCell&gt;&lt;mxCell id=&quot;e1&quot; value=&quot;request&quot; style=&quot;edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor={{TOKEN_MUTED}};fontColor={{TOKEN_MUTED}};&quot; edge=&quot;1&quot; parent=&quot;1&quot; source=&quot;client&quot; target=&quot;api&quot;&gt;&lt;mxGeometry relative=&quot;1&quot; as=&quot;geometry&quot;/&gt;&lt;/mxCell&gt;&lt;mxCell id=&quot;e2&quot; value=&quot;reads&quot; style=&quot;edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor={{TOKEN_MUTED}};fontColor={{TOKEN_MUTED}};&quot; edge=&quot;1&quot; parent=&quot;1&quot; source=&quot;api&quot; target=&quot;store&quot;&gt;&lt;mxGeometry relative=&quot;1&quot; as=&quot;geometry&quot;/&gt;&lt;/mxCell&gt;&lt;mxCell id=&quot;e3&quot; value=&quot;caches&quot; style=&quot;edgeStyle=orthogonalEdgeStyle;rounded=1;dashed=1;strokeColor={{TOKEN_MUTED}};fontColor={{TOKEN_MUTED}};&quot; edge=&quot;1&quot; parent=&quot;1&quot; source=&quot;api&quot; target=&quot;cache&quot;&gt;&lt;mxGeometry relative=&quot;1&quot; as=&quot;geometry&quot;/&gt;&lt;/mxCell&gt;&lt;/root&gt;&lt;/mxGraphModel&gt;&lt;/diagram&gt;&lt;/mxfile&gt;">
+  <!--
+    An editable draw.io document that is ALSO a rendered image.
+
+    The `content` attribute above carries an <mxfile> model, so opening this file
+    in diagrams.net gives back real, movable shapes rather than a flat picture.
+    Edit it there, save, and the file stays embeddable: the deck references the
+    same path. The Makefile lists assets/*.svg as a render prerequisite, so an
+    edit here rebuilds the deck.
+
+    Why no background rect: the canvas stays transparent, so the diagram sits on
+    any slide colour. Each node carries its own surface chip instead. That is
+    deliberate. A transparent canvas plus light labels would be unreadable on
+    draw.io's white editing canvas; the chips keep the file legible in both
+    places.
+
+    The palette came from the project's design tokens at scaffold time. For
+    provider icons (AWS, GCP, Azure, Kubernetes), paste shapes from a draw.io
+    stencil pack in the editor, or generate the SVG with a script that inlines
+    tinted stencils and writes the same `content` attribute.
+  -->
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="{{TOKEN_MUTED}}"/>
+    </marker>
+  </defs>
+
+  <path d="M 220 164 L 340 164" stroke="{{TOKEN_MUTED}}" stroke-width="1.6" fill="none" marker-end="url(#arrow)"/>
+  <rect x="252" y="154" width="56" height="19" rx="4" fill="{{TOKEN_BG}}"/>
+  <text x="280" y="168" fill="{{TOKEN_MUTED}}" font-family="{{TOKEN_FONTDISPLAY}}" font-size="12" text-anchor="middle">request</text>
+
+  <path d="M 540 164 L 620 164 L 620 84 L 700 84" stroke="{{TOKEN_MUTED}}" stroke-width="1.6" fill="none" stroke-linejoin="round" marker-end="url(#arrow)"/>
+  <rect x="594" y="114" width="52" height="19" rx="4" fill="{{TOKEN_BG}}"/>
+  <text x="620" y="128" fill="{{TOKEN_MUTED}}" font-family="{{TOKEN_FONTDISPLAY}}" font-size="12" text-anchor="middle">reads</text>
+
+  <path d="M 540 164 L 620 164 L 620 244 L 700 244" stroke="{{TOKEN_MUTED}}" stroke-width="1.6" fill="none" stroke-linejoin="round" stroke-dasharray="6 5" marker-end="url(#arrow)"/>
+  <rect x="592" y="196" width="56" height="19" rx="4" fill="{{TOKEN_BG}}"/>
+  <text x="620" y="210" fill="{{TOKEN_MUTED}}" font-family="{{TOKEN_FONTDISPLAY}}" font-size="12" text-anchor="middle">caches</text>
+
+  <g>
+    <rect x="20" y="120" width="200" height="88" rx="12" fill="{{TOKEN_SURFACE}}" stroke="{{TOKEN_BORDER}}"/>
+    <rect x="20" y="120" width="5" height="88" rx="2" fill="{{TOKEN_ACCENT}}"/>
+    <text x="44" y="158" fill="{{TOKEN_FG}}" font-family="{{TOKEN_FONTDISPLAY}}" font-size="17" font-weight="600">Client</text>
+    <text x="44" y="180" fill="{{TOKEN_MUTED}}" font-family="{{TOKEN_FONTDISPLAY}}" font-size="12.5">the browser</text>
+  </g>
+
+  <g>
+    <rect x="340" y="120" width="200" height="88" rx="12" fill="{{TOKEN_SURFACE}}" stroke="{{TOKEN_BORDER}}"/>
+    <rect x="340" y="120" width="5" height="88" rx="2" fill="{{TOKEN_ACCENT}}"/>
+    <text x="364" y="158" fill="{{TOKEN_FG}}" font-family="{{TOKEN_FONTDISPLAY}}" font-size="17" font-weight="600">Service</text>
+    <text x="364" y="180" fill="{{TOKEN_MUTED}}" font-family="{{TOKEN_FONTDISPLAY}}" font-size="12.5">what you deploy</text>
+  </g>
+
+  <g>
+    <rect x="700" y="40" width="200" height="88" rx="12" fill="{{TOKEN_SURFACE}}" stroke="{{TOKEN_BORDER}}"/>
+    <rect x="700" y="40" width="5" height="88" rx="2" fill="{{TOKEN_ACCENT}}"/>
+    <text x="724" y="78" fill="{{TOKEN_FG}}" font-family="{{TOKEN_FONTDISPLAY}}" font-size="17" font-weight="600">Store</text>
+    <text x="724" y="100" fill="{{TOKEN_MUTED}}" font-family="{{TOKEN_FONTDISPLAY}}" font-size="12.5">the source of truth</text>
+  </g>
+
+  <g>
+    <rect x="700" y="200" width="200" height="88" rx="12" fill="{{TOKEN_SURFACE}}" stroke="{{TOKEN_BORDER}}"/>
+    <rect x="700" y="200" width="5" height="88" rx="2" fill="{{TOKEN_ACCENT}}"/>
+    <text x="724" y="238" fill="{{TOKEN_FG}}" font-family="{{TOKEN_FONTDISPLAY}}" font-size="17" font-weight="600">Cache</text>
+    <text x="724" y="260" fill="{{TOKEN_MUTED}}" font-family="{{TOKEN_FONTDISPLAY}}" font-size="12.5">optional, dashed</text>
+  </g>
+</svg>

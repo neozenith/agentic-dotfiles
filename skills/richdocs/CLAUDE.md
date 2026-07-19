@@ -139,6 +139,19 @@ is the same log, just split out.
   reject quoted labels, leading parens, HTML entities). Run the vendored
   parse gate on the source `.md` (ADR-007); details in
   `resources/learned/mermaid-syntax-gate.md`.
+- **Symptom: mermaid labels are cut mid-word (`Cloud Run: dev` → `Cloud Run: de`),
+  but only under a `--theme` that carries a webfont** — mermaid sizes each label's
+  `<foreignObject>` from its own measurement, which runs a few percent short against
+  a brand face, and a `foreignObject` **clips by default**. The node shape has ample
+  spare room, so the cure is to stop the clip, not to fix the measurement:
+  `viewer.css` `.rd-mermaid foreignObject { overflow: visible; }`. Do **not** reach
+  for `flowchart.wrappingWidth` (moves `max-width`, clip unaffected, wraps every
+  other diagram) or a `document.fonts.ready` barrier (shortfall is identical) —
+  both were tried and measured. Full autopsy, including the probe that settled it:
+  `resources/learned/mermaid-foreignobject-clipping.md`.
+- **Symptom: a subgraph/cluster TITLE is still cut after the above** — a cluster
+  header has no spare height, so a title long enough to wrap loses its second line.
+  This one is authored, not systemic: shorten the title.
 
 ## Extension checklist
 
