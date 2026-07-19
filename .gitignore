@@ -9,3 +9,4 @@ cache/
 node_modules/
 scheduled_tasks.lock
 worktrees/
+settings.local.json
