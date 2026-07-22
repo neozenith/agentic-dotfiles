@@ -154,7 +154,7 @@ FAQs, release notes, ADRs.
   readers need high-coherence connected prose
   ([McNamara et al.](https://www.tandfonline.com/doi/abs/10.1207/s1532690xci1401_1)).
   Hence: scannability rules at full force on how-to/reference rungs, relaxed
-  on tutorial/explanation. BLUF on tutorials = destination preview, never the
+  on tutorial/explanation. The opening summary on tutorials = destination preview, never the
   resolution of each step (productive-failure evidence: withholding the
   answer can improve retention).
 - **Narrative long-form keeps winning in the wild** (Laravel, SQLite essays,

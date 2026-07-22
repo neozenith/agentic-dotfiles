@@ -147,6 +147,23 @@ documentation** (comments, docstrings) equally.
   claim of importance was true, replace it with the concrete consequence or an
   ADR pointer; if it was not, delete the sentence.
 
+### S6: Insider jargon acronyms ("BLUF")
+
+- **Smell:** military/consulting jargon acronyms used where a plain word
+  exists. The canonical case is **"BLUF"** (bottom line up front) naming an
+  opening summary. Sibling offenders: "TL;DR" as a section heading in formal
+  docs, "MECE", "SITREP".
+- **Why it's slop:** no regular reader uses or recognises these terms; they
+  appear because a model absorbed writing-advice blogs, so they read as
+  machine-generated and force the reader to decode an acronym that adds
+  nothing over "Summary". Jargon fails the same trust test as S3/S4 tells.
+- **Good instead:** "Summary", "Overview", or a description of the behaviour
+  ("frontloaded summary", "summary first", "opening summary").
+- **Detect:** `grep -rniE '\bBLUF\b|\bMECE\b|\bSITREP\b'`; "TL;DR" outside a
+  deliberately informal context.
+- **Fix:** replace with the plain word; this is a sanctioned rewrite, not a
+  flag.
+
 ## Capture THE WHY (the inverse failure)
 
 Slop is content that should not exist; the opposite failure is the **missing

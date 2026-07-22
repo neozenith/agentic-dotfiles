@@ -145,7 +145,7 @@ Eval suite (`.claude/rules/claude_skills/evals.md`): `make -C
   the ladder at top-level nav with Diátaxis types inside rungs; Diátaxis's
   own author disclaims per-page purity; whole genres don't fit the four
   types; scannability evidence is about lookup tasks, not learning.
-- **Decision:** Two-axis classification (rung × lens). Scannability/BLUF at
+- **Decision:** Two-axis classification (rung × lens). Scannability/summary-first at
   full force on lookup rungs, relaxed on learning rungs. Purity is a default
   with sanctioned escapes (deliberate fusion, small-project single README,
   overview/FAQ/gallery categories).
@@ -307,6 +307,28 @@ Eval suite (`.claude/rules/claude_skills/evals.md`): `make -C
   translator, skimmer), it belongs in prose_style, and when a rule needs
   enforcing, describe the target, not the tool. Shared doctrine is copied into
   this skill, never referenced from anywhere outside its own folder.
+
+### ADR-16: jargon acronyms are slop; "BLUF" is banned in favour of plain words
+
+- **Status:** Accepted (2026-07)
+- **Context:** The skill's doctrine used "BLUF" throughout to name the
+  frontloaded-summary rule. The maintainer flagged it as AI slop: a
+  military/consulting acronym no regular person uses, absorbed from
+  writing-advice blogs. Like the em-dash (ADR-13), its presence signals
+  machine authorship and forces the reader to decode an acronym that adds
+  nothing over "Summary".
+- **Decision:** Purge "BLUF" from every gooddocs surface; use "Summary",
+  "Overview", or behaviour descriptions ("frontloaded summary", "summary
+  first", "opening summary"). Add slop smell S6 (insider jargon acronyms) so
+  audit and write modes catch the family, not just this word.
+- **Consequences:** Skeletons say `<Summary: …>`; the frontloading rule is
+  named by what it does, not by an acronym. Note structure.md's smell table
+  still flags "Overview" as a *vague heading label*: the ban is on the
+  acronym, not a mandate to head every section "Overview".
+- **Lens:** Name a rule by the behaviour it demands, in words the reader
+  already knows. When doctrine vocabulary itself trips an authorship-tell
+  test, replace the word everywhere and add it to the slop catalog so it
+  cannot re-enter.
 
 ## Extension checklist
 

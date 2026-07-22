@@ -34,12 +34,12 @@ citation — justify whitespace by chunking and scanning, never by that number.
    immediately by another heading) **and no lonely subheading** (exactly one
    H3 under an H2 — a split with one part is not a split).
 
-### Frontloading (BLUF — scoped by rung)
+### Frontloading (summary first, scoped by rung)
 
 7. **Doc opens with a 1-3 sentence summary; every section's first sentence
    states its point; every paragraph's first sentence is its topic sentence.**
    Scanners read first sentences and bail. **Scope:** full force on lookup
-   pages (how-to, reference, reports); on tutorials the BLUF is a
+   pages (how-to, reference, reports); on tutorials the opening summary is a
    *destination preview* ("here's what you'll build"), never each step's
    resolution; explanations may open with a motivated question. Scanning
    research comes from lookup tasks — learning pages legitimately favor
@@ -106,7 +106,7 @@ citation — justify whitespace by chunking and scanning, never by that number.
 ### Specs and plans
 
 18. **Specs/plans follow a canonical skeleton** with a status/metadata block,
-    BLUF summary, stable numbered requirement IDs (R1, R2… — citable from
+    opening Summary section, stable numbered requirement IDs (R1, R2… — citable from
     reviews and commits), and an explicit Open Questions section (the Rust
     RFC's "Unresolved questions" — prevents fake completeness).
 
@@ -120,7 +120,7 @@ citation — justify whitespace by chunking and scanning, never by that number.
 | Heading skip | H2 → H4 | fix levels (MD001) |
 | Vague label heading | "Overview", "Notes", "Considerations" | rewrite as a frontloaded statement |
 | Orphan / lonely heading | heading→heading; one H3 under an H2 | merge or genuinely split |
-| Buried lede | summary at the bottom | move to BLUF position |
+| Buried lede | summary at the bottom | move the summary to the top |
 | Mixed-grammar list | fragments + sentences interleaved | pick one; rewrite for parallelism |
 | Disguised table | repeated `**Bold** — value (note)` bullets | promote to a table |
 | Alert spam | 3+ admonitions per screen, stacked alerts | demote to prose; keep the one that matters |
@@ -141,7 +141,7 @@ citation — justify whitespace by chunking and scanning, never by that number.
 | Draft / In review / Approved / Superseded | @who | YYYY-MM-DD | link |
 
 ## Summary
-<BLUF: 2-4 sentences — what, why, and the decision if made.>
+<Summary: 2-4 sentences — what, why, and the decision if made.>
 
 ## Background
 <Why now; constraints. Link to prior docs, don't restate them.>
@@ -175,7 +175,7 @@ citation — justify whitespace by chunking and scanning, never by that number.
 **Done means:** <1-2 sentence acceptance statement for the whole plan>
 
 ## Summary
-<BLUF: approach in 2-3 sentences + current phase.>
+<Summary: approach in 2-3 sentences + current phase.>
 
 ### Phase 1: <result, not activity: "Backend persists sessions">
 Goal: <one sentence>.
@@ -204,7 +204,7 @@ MD022/MD031/MD032/MD012 (blank-line discipline), MD004/MD005/MD007/MD029/MD030
 (list consistency), MD040 (fence language), MD013 (line length), MD043
 (required skeleton per glob). Scriptable but non-stock: orphan headings,
 nesting depth, flat-list length, alert count. **Pure judgment — this skill's
-actual job:** frontloaded headings, the TOC test, BLUF placement, parallelism,
+actual job:** frontloaded headings, the TOC test, opening-summary placement, parallelism,
 prose-vs-bullets for reasoning, list→table promotion, `<details>` candidates.
 
 ## Sources

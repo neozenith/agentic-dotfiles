@@ -1,6 +1,6 @@
 ---
 name: gooddocs
-description: "Documentation quality skill with three modes: (1) AUDIT — fan out parallel subagents to corroborate that docs still reflect the reality of the code (commands run, paths exist, signatures match, claims hold) and produce a drift report; (2) WRITE/IMPROVE — author or rewrite docs using the researched lens taxonomy (Diátaxis + distilled style principles from great OSS docs), optionally in the maintainer's personal voice; (3) RESTRUCTURE — reorganize an existing doc, spec, or plan file for structural readability (heading hierarchy, list/table discipline, whitespace rhythm, BLUF) without changing its claims. Use when the user asks to check/audit docs, fix stale docs, write or improve documentation, restructure a doc/spec/plan for readability, or says 'gooddocs'. Add 'voice' to the invocation to write in the maintainer's voice; default is the neutral researched style."
+description: "Documentation quality skill with three modes: (1) AUDIT — fan out parallel subagents to corroborate that docs still reflect the reality of the code (commands run, paths exist, signatures match, claims hold) and produce a drift report; (2) WRITE/IMPROVE — author or rewrite docs using the researched lens taxonomy (Diátaxis + distilled style principles from great OSS docs), optionally in the maintainer's personal voice; (3) RESTRUCTURE — reorganize an existing doc, spec, or plan file for structural readability (heading hierarchy, list/table discipline, whitespace rhythm, frontloaded summaries) without changing its claims. Use when the user asks to check/audit docs, fix stale docs, write or improve documentation, restructure a doc/spec/plan for readability, or says 'gooddocs'. Add 'voice' to the invocation to write in the maintainer's voice; default is the neutral researched style."
 argument-hint: "[audit | write <target> | restructure <target>] [voice] [paths] (default: audit all docs)"
 user-invocable: true
 ---
@@ -126,7 +126,7 @@ authoritative.
 1. **Pick the rung, then the lens, and say both.** The rung sets register:
    Quickstart = zero decisions and minutes-to-success; User guide = coherent
    prose legal, trade-offs introduced; Reference = uniform schema, dense and
-   dry. Scannability/BLUF rules apply at full force on lookup pages (how-to,
+   dry. Scannability/summary-first rules apply at full force on lookup pages (how-to,
    reference) and relaxed on learning pages (tutorial narration, explanation)
    where connected causal prose wins. The lenses:
    - *Tutorial* — a lesson; learner mindset; guaranteed-success path; no
@@ -147,7 +147,7 @@ authoritative.
    Australian English, clauses curated to ~25 words (clause count is the target,
    not word count), active voice, ESL/translator empathy, inclusive language,
    and one standardised term per concept with determiners to disambiguate.
-4. Apply the structure rules in structure.md: BLUF at every level, headings
+4. Apply the structure rules in structure.md: a frontloaded summary at every level, headings
    as frontloaded statements passing the TOC test, ≤H3 depth, bullets only
    for parallel items (reasoning stays in prose), repeated bullet patterns
    promoted to tables, blank line between blocks, no prose wall longer than
@@ -191,7 +191,7 @@ For improving the structural readability of an existing doc, spec, or plan
    unchanged, in visual form): dual-density per structure.md rule 17, authored
    via a `mermaidjs_diagrams` subagent.
 4. For specs/plans, converge toward the canonical skeletons (status block,
-   BLUF summary, numbered requirement IDs, Open Questions, phases with
+   opening Summary section, numbered requirement IDs, Open Questions, phases with
    observable acceptance criteria) — preserving existing IDs/anchors that
    other docs may reference.
 5. **Verify before done**: heading levels never skip, every fence keeps its
