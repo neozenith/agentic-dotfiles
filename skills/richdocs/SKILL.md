@@ -125,6 +125,17 @@ uv run --no-project .claude/skills/richdocs/scripts/showcase.py --theme osakanig
   `resources/rich-blocks.md`). Applies only when passed **and** `--theme` is not;
   otherwise the default `osakanights` theme wins.
 
+#### Reporting a generated doc (worktree-aware)
+
+`md2html.py` ends every run with a `── richdoc output ──` block: the **slug**
+(doc stem — use it as the shared shorthand), the **worktree dir** and **branch**
+the output landed in (resolved from the output file, not the process cwd), the
+**absolute** source `.md` and `.html` paths (so they cmd+click open in the editor
+across worktrees), and two **serve commands** for the absolute output dir
+(`serve.py` with no-store, and stdlib `python3 -m http.server <port> --directory
+<abs-dir>`). When you report a generated doc back to the user, relay these
+verbatim — absolute paths and the slug, never a bare relative path.
+
 ### `serve.py [DIR] [--port 8642] [--open]`
 
 Serves DIR (default `tmp/richdocs`) on `127.0.0.1` with `Cache-Control:

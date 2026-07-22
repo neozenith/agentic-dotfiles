@@ -28,6 +28,7 @@ from __future__ import annotations
 import argparse
 import json
 import shutil
+import subprocess
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -373,6 +374,74 @@ def write_inline(
     return html_path
 
 
+# ── Output reporting (worktree-aware) ──────────────────────────────────────
+def git_context(target: Path) -> tuple[str | None, str | None]:
+    """Return (worktree_root, branch) for the git worktree containing `target`.
+
+    Resolved from the target's OWN directory via `git -C`, so it is correct even
+    when the process cwd is a different worktree (or repo) than where the output
+    landed — the common case in a multi-worktree checkout. Returns (None, None)
+    when the target is not inside a git worktree. Read-only; never raises.
+    """
+    directory = target if target.is_dir() else target.parent
+
+    def _rev_parse(*flags: str) -> str | None:
+        try:
+            out = subprocess.run(
+                ["git", "-C", str(directory), "rev-parse", *flags],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+            return out or None
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            return None
+
+    return _rev_parse("--show-toplevel"), _rev_parse("--abbrev-ref", "HEAD")
+
+
+def serve_commands(out_dir: Path, slug: str, *, port: int = 8642) -> list[str]:
+    """Two copy-paste ways to serve the ABSOLUTE output dir on localhost.
+
+    Both use --directory so no `cd` is needed and both work whether out_dir is
+    under tmp/ or in the repo under docs/. serve.py adds Cache-Control: no-store
+    (edits show on refresh); http.server is the stdlib fallback needing no skill
+    files.
+    """
+    abs_out = out_dir.resolve()
+    url = f"http://localhost:{port}/{slug}.html"
+    return [
+        f"serve (no-store): uv run --no-project {SCRIPT_DIR / 'serve.py'} {abs_out} --port {port} --open",
+        f"serve (stdlib)  : python3 -m http.server {port} --directory {abs_out}   # then open {url}",
+    ]
+
+
+def output_report(
+    *,
+    source: Path,
+    html_path: Path,
+    extras: list[Path],
+    slug: str,
+    mode_note: str,
+    port: int = 8642,
+) -> str:
+    """Human report: slug, worktree dir + branch, ABSOLUTE paths, serve commands."""
+    worktree, branch = git_context(html_path)
+    lines = [
+        "",
+        "── richdoc output ─────────────────────────────────────────",
+        f"  slug     : {slug}",
+        f"  worktree : {worktree or '(not a git worktree)'}",
+        f"  branch   : {branch or '-'}",
+        f"  source   : {source.resolve()}",
+        f"  html     : {html_path.resolve()}",
+    ]
+    lines += [f"  file     : {extra.resolve()}" for extra in extras]
+    lines.append(f"  note     : {mode_note}")
+    lines += [f"  {hint}" for hint in serve_commands(html_path.parent, slug, port=port)]
+    return "\n".join(lines)
+
+
 # ── CLI ────────────────────────────────────────────────────────────────────
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -411,7 +480,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--serve-hint",
         action="store_true",
-        help="Print the serve.py invocation for the output dir",
+        help="Deprecated no-op; serve commands now always print in the output report",
     )
     return parser
 
@@ -444,9 +513,8 @@ def main(args: argparse.Namespace) -> None:
             build_id=build_id,
             theme_css=theme_css,
         )
-        print(
-            f"wrote {html_path} (self-contained; opens over file://, CDN network still required)"
-        )
+        extras: list[Path] = []
+        mode_note = "self-contained; opens over file://, CDN network still required"
     else:
         html_path = write_multi(
             doc,
@@ -456,18 +524,21 @@ def main(args: argparse.Namespace) -> None:
             build_id=build_id,
             theme_css=theme_css,
         )
-        print(f"wrote {html_path} (+ {doc.stem}.md, {tokens_source_for(doc.stem)})")
-        print(
-            "note: multi-file mode fetches at runtime — file:// blocks fetch, serve it over HTTP."
+        extras = [out_dir / f"{doc.stem}.md", out_dir / tokens_source_for(doc.stem)]
+        mode_note = "multi-file; serve over HTTP (file:// blocks fetch)"
+
+    print(
+        output_report(
+            source=doc,
+            html_path=html_path,
+            extras=extras,
+            slug=doc.stem,
+            mode_note=mode_note,
         )
+    )
 
     if theme:
         print(f"theme: {theme.name}")
-
-    if args.serve_hint:
-        print(
-            f"serve with: uv run --no-project {SCRIPT_DIR / 'serve.py'} {out_dir} --open"
-        )
 
 
 if __name__ == "__main__":  # pragma: no cover

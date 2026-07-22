@@ -139,6 +139,15 @@ is the same log, just split out.
   reject quoted labels, leading parens, HTML entities). Run the vendored
   parse gate on the source `.md` (ADR-007); details in
   `resources/learned/mermaid-syntax-gate.md`.
+- **Symptom: a flowchart node shows "Unsupported Markdown: list" instead of its
+  label** — the label starts with a list marker (`1. `, `- `, `* `, `+ ` at the
+  front of the quoted text, e.g. `S1["1. Renumber ADRs<br/>…"]`). The pinned
+  mermaid 11.4.1 lexes every plain label as markdown (v11 regression, upstream
+  issue #5824; fixed after 11.4.1 by PR #7276), and no `mermaid.initialize`
+  option gates it. Authoring fix only: `"Step 1: …"`, `"1) …"`, or
+  `"1&#46; …"`. The vendored parse gate does NOT catch this (the fence parses;
+  only label rendering fails). Details:
+  `resources/learned/mermaid-list-label-pitfall.md`.
 - **Symptom: mermaid labels are cut mid-word (`Cloud Run: dev` → `Cloud Run: de`),
   but only under a `--theme` that carries a webfont** — mermaid sizes each label's
   `<foreignObject>` from its own measurement, which runs a few percent short against

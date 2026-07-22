@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 from argparse import Namespace
 from datetime import UTC, datetime
@@ -15,6 +16,7 @@ from pathlib import Path
 
 import md2html
 import pytest
+from md2html import git_context, output_report, serve_commands
 
 DOC_MD = "# Title\n\nSome `</script>` text.\n\n```mermaid\ngraph LR; a-->b\n```\n"
 
@@ -369,15 +371,18 @@ def test_write_inline_output(doc: Path, tmp_path: Path) -> None:
 
 
 # ── main() ──────────────────────────────────────────────────────────────────
-def test_main_multi_prints_serve_reminder(
+def test_main_multi_prints_worktree_report(
     doc: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     out_dir = tmp_path / "out"
-    md2html.main(_args(doc, out_dir, serve_hint=True))
+    md2html.main(_args(doc, out_dir))
     out = capsys.readouterr().out
-    assert "wrote" in out
+    assert "── richdoc output" in out
+    assert "slug     : mydoc" in out
     assert "file:// blocks fetch" in out
     assert "serve.py" in out
+    assert "python3 -m http.server" in out
+    assert str((out_dir / "mydoc.html").resolve()) in out
     assert (out_dir / "mydoc.html").is_file()
 
 
@@ -431,6 +436,70 @@ def test_write_multi_same_dir_source(tmp_path: Path) -> None:
     )
     assert html_path.is_file()
     assert doc.read_text(encoding="utf-8") == "# hi\n"
+
+
+# ── Worktree-aware output report ────────────────────────────────────────────
+def test_git_context_reports_worktree_root_and_branch(tmp_path: Path) -> None:
+    subprocess.run(["git", "-C", str(tmp_path), "init", "-q"], check=True)
+    subprocess.run(
+        ["git", "-C", str(tmp_path), "checkout", "-q", "-b", "feature-x"], check=True
+    )
+    # A real worktree has at least one commit; an unborn branch has no resolvable
+    # HEAD, so seed an identity + empty commit to mirror the live case.
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(tmp_path),
+            "-c",
+            "user.email=t@t",
+            "-c",
+            "user.name=t",
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            "init",
+        ],
+        check=True,
+    )
+    html = tmp_path / "doc.html"
+    html.write_text("x", encoding="utf-8")
+    root, branch = git_context(html)
+    assert root is not None and Path(root).resolve() == tmp_path.resolve()
+    assert branch == "feature-x"
+
+
+def test_git_context_returns_none_outside_a_git_worktree(tmp_path: Path) -> None:
+    html = tmp_path / "doc.html"
+    html.write_text("x", encoding="utf-8")
+    assert git_context(html) == (None, None)
+
+
+def test_output_report_has_slug_absolute_paths_and_serve_commands(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "a.md"
+    source.write_text("# a", encoding="utf-8")
+    out = tmp_path / "out"
+    out.mkdir()
+    html = out / "a.html"
+    html.write_text("x", encoding="utf-8")
+    report = output_report(
+        source=source, html_path=html, extras=[out / "a.md"], slug="a", mode_note="test"
+    )
+    assert "slug     : a" in report
+    assert str(html.resolve()) in report
+    assert str(source.resolve()) in report
+    assert "python3 -m http.server" in report
+    assert "--directory" in report
+
+
+def test_serve_commands_point_at_the_absolute_dir_and_slug(tmp_path: Path) -> None:
+    cmds = serve_commands(tmp_path, "mydoc", port=9001)
+    joined = "\n".join(cmds)
+    assert str(tmp_path.resolve()) in joined
+    assert "http://localhost:9001/mydoc.html" in joined
 
 
 if __name__ == "__main__":  # pragma: no cover

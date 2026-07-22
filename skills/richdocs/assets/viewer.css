@@ -65,9 +65,13 @@ main blockquote {
   color: var(--rd-muted); background: var(--rd-surface);
 }
 
-/* Wide tables scroll inside their own container; the page never scrolls sideways. */
-.rd-table-wrap { overflow-x: auto; }
-main table { border-collapse: collapse; margin: 1rem 0; width: 100%; }
+/* Wide tables scroll inside their own container; the page never scrolls sideways.
+   max-width pins the wrap to the content column even when the table inside is
+   wider, so the scrollbar belongs to the wrap, never the page. The slightly
+   smaller face (same 0.875em scale as `main code`) buys wide tables more
+   columns before they overflow at all. */
+.rd-table-wrap { overflow-x: auto; max-width: 100%; }
+main table { border-collapse: collapse; margin: 1rem 0; width: 100%; font-size: 0.875em; }
 main th, main td {
   border: 1px solid var(--rd-border); padding: 0.4rem 0.7rem; text-align: left;
 }

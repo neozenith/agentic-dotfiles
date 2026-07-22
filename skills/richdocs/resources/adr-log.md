@@ -7,6 +7,29 @@ before changing anything: each entry carries a **Lens**, a forward-looking rule 
 apply to the next related decision.
 
 
+### ADR-019 — Output report is worktree-aware and prints absolute paths
+
+- **Status:** accepted
+- **Context:** docs are generated across a multi-worktree checkout; the source `.md`
+  frequently sits in a different worktree than the process cwd. The old
+  `wrote <path>` line was relative, so it only cmd+clicked open when the editor root
+  matched cwd — in another worktree it did not resolve. The output also carried no
+  worktree/branch context, so cross-worktree docs in flight had no concise shared name.
+- **Decision:** after every render, `main()` prints a `── richdoc output ──` block via
+  `output_report()`: slug (the doc stem), worktree dir + branch resolved from the
+  **output file's own directory** with `git -C <dir> rev-parse` (never the cwd),
+  absolute source and html paths, any extra companion files, and two serve commands
+  (`serve.py` no-store + stdlib `python3 -m http.server --directory <abs-dir>`) from
+  `serve_commands()`. `git_context()` is read-only and returns `(None, None)` outside a
+  git worktree rather than raising. The old `--serve-hint` print branch is subsumed
+  (the report always prints serve commands); the flag remains parsed for back-compat.
+- **Consequences:** `git` is invoked read-only twice per run; a non-git output dir
+  reports `(not a git worktree)` and still prints absolute paths + serve commands. An
+  unborn branch (repo with no commit) resolves to `-`; real worktrees have a commit.
+- **Lens:** when a tool emits a path a human is meant to act on, resolve it from the
+  artefact's own location and print it **absolute** — a relative path silently assumes
+  the reader shares your cwd, which across worktrees they do not.
+
 ### ADR-018 — A project-local override dir supplies themes; the default brand is a named theme
 
 - **Status:** accepted (user adjudication)
