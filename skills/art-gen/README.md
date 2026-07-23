@@ -92,7 +92,7 @@ flowchart LR
 flowchart TD
     subgraph in["Inputs"]
         PF["Prompt files (.md)"]:::src
-        KEY["GOOGLE_API_KEY"]:::src
+        KEY["API key or ADC"]:::src
     end
     subgraph pure["Pure core - tested offline"]
         LP["load_prompt_file"]:::proc
@@ -141,13 +141,23 @@ The injected **boundary** (`make_client`, config factories) is the only part tha
 
 | Need | Why |
 |------|-----|
-| `GOOGLE_API_KEY` (non-empty) | The only supported auth. This skill uses the API-key path — **not** Vertex AI or application-default credentials. Missing/blank → it fails fast. |
+| One of two credentials | Either a non-empty `GOOGLE_API_KEY` (Gemini Developer API) **or** application-default credentials (Vertex AI). `--auth` picks; the default `auto` prefers the key, falls back to ADC, and says which it used. Neither available → it fails fast naming both remedies. |
 | `uv` on `PATH` | The script declares its deps inline (PEP 723: `google-genai`, `Pillow`); `uv` builds the venv on first run. |
 | Internet access | For the GenAI API call. |
 
 ```bash
+# Option A — API key
 export GOOGLE_API_KEY='…'
+
+# Option B — no key allowed? Use your existing gcloud login (Vertex AI)
+gcloud auth application-default login
+gcloud auth application-default set-quota-project <PROJECT>
 ```
+
+For ADC, the project resolves `--project` → `GOOGLE_CLOUD_PROJECT` → the ADC file's
+`quota_project_id`; the location resolves `--location` → `GOOGLE_CLOUD_LOCATION` →
+`global`. `CLOUDSDK_CONFIG` is honoured when locating the ADC file, so per-project gcloud
+configurations work. Whichever mode ran is recorded in each sidecar under `auth`.
 
 ## Backends
 
@@ -285,7 +295,10 @@ planning aid, not a billing record.
 
 | Symptom | Cause / fix |
 |---------|-------------|
-| `GOOGLE_API_KEY is not set (or is empty)` | Export a non-empty key. Vertex AI / ADC is intentionally not supported. |
+| `No usable credentials` | Neither auth mode is available: export a `GOOGLE_API_KEY`, or run `gcloud auth application-default login`. |
+| `GOOGLE_API_KEY is not set (or is empty)` | You passed `--auth api-key` explicitly. Export a non-empty key, or use `--auth adc`/`auto`. |
+| `no GCP project could be resolved` | ADC was found but has no project. Pass `--project`, export `GOOGLE_CLOUD_PROJECT`, or run `gcloud auth application-default set-quota-project <PROJECT>`. |
+| Wrong credential picked | `auto` prefers the API key. Force the other path with `--auth adc` (the chosen mode is logged and written to the sidecar). |
 | `Prompt file is empty after stripping comments` | Every line started with `#`/`<!--`; add a prompt body. |
 | 4K rejected on imagen | 4K is gemini-only; use `--size 2K`. |
 

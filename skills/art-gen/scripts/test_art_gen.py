@@ -111,6 +111,152 @@ def test_require_api_key_accepts_value() -> None:
     assert art_gen.require_api_key({"GOOGLE_API_KEY": "  secret  "}) == "secret"
 
 
+# ── Auth resolution (api-key ↔ ADC) ────────────────────────────────────────
+# Every case drives a real env mapping and real files on disk — no patching of os.environ.
+def _write_adc(path: Path, *, quota_project: str | None = "proj-from-adc") -> Path:
+    """Write a structurally realistic (but entirely fake) ADC file."""
+    payload: dict[str, str] = {
+        "type": "authorized_user",
+        "client_id": "fake.apps.googleusercontent.com",
+    }
+    if quota_project:
+        payload["quota_project_id"] = quota_project
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    return path
+
+
+@pytest.mark.parametrize(
+    "env,expected",
+    [
+        ({}, False),
+        ({"GOOGLE_API_KEY": "   "}, False),
+        ({"GOOGLE_API_KEY": "k"}, True),
+    ],
+)
+def test_has_api_key(env: dict[str, str], expected: bool) -> None:
+    assert art_gen.has_api_key(env) is expected
+
+
+def test_adc_path_prefers_explicit_credentials_file(tmp_path: Path) -> None:
+    explicit = _write_adc(tmp_path / "sa.json")
+    env = {"GOOGLE_APPLICATION_CREDENTIALS": str(explicit)}
+    assert art_gen.adc_credentials_path(env, tmp_path) == explicit
+
+
+def test_adc_path_explicit_missing_file_is_none(tmp_path: Path) -> None:
+    env = {"GOOGLE_APPLICATION_CREDENTIALS": str(tmp_path / "absent.json")}
+    assert art_gen.adc_credentials_path(env, tmp_path) is None
+
+
+def test_adc_path_honours_cloudsdk_config(tmp_path: Path) -> None:
+    sdk = tmp_path / "gcloud-alt"
+    adc = _write_adc(sdk / "application_default_credentials.json")
+    assert art_gen.adc_credentials_path({"CLOUDSDK_CONFIG": str(sdk)}, tmp_path) == adc
+
+
+def test_adc_path_falls_back_to_home_config(tmp_path: Path) -> None:
+    adc = _write_adc(tmp_path / ".config" / "gcloud" / "application_default_credentials.json")
+    assert art_gen.adc_credentials_path({}, tmp_path) == adc
+
+
+def test_adc_path_absent_everywhere(tmp_path: Path) -> None:
+    assert art_gen.adc_credentials_path({}, tmp_path) is None
+
+
+def test_adc_quota_project_reads_field(tmp_path: Path) -> None:
+    adc = _write_adc(tmp_path / "adc.json", quota_project="my-proj")
+    assert art_gen.adc_quota_project(adc) == "my-proj"
+
+
+@pytest.mark.parametrize("content", ["not json at all", '["a list"]', '{"type": "authorized_user"}'])
+def test_adc_quota_project_missing_or_unreadable(tmp_path: Path, content: str) -> None:
+    bad = tmp_path / "adc.json"
+    bad.write_text(content, encoding="utf-8")
+    assert art_gen.adc_quota_project(bad) is None
+    assert art_gen.adc_quota_project(tmp_path / "does-not-exist.json") is None
+
+
+def test_resolve_project_precedence(tmp_path: Path) -> None:
+    adc = _write_adc(tmp_path / "adc.json", quota_project="from-adc")
+    assert art_gen.resolve_project("explicit", {"GOOGLE_CLOUD_PROJECT": "from-env"}, adc) == "explicit"
+    assert art_gen.resolve_project(None, {"GOOGLE_CLOUD_PROJECT": "from-env"}, adc) == "from-env"
+    assert art_gen.resolve_project(None, {"GCLOUD_PROJECT": "legacy-env"}, adc) == "legacy-env"
+    assert art_gen.resolve_project(None, {}, adc) == "from-adc"
+    assert art_gen.resolve_project(None, {}, None) is None
+
+
+def test_resolve_location_precedence() -> None:
+    assert art_gen.resolve_location("us-central1", {"GOOGLE_CLOUD_LOCATION": "europe-west1"}) == "us-central1"
+    assert art_gen.resolve_location(None, {"GOOGLE_CLOUD_LOCATION": "europe-west1"}) == "europe-west1"
+    assert art_gen.resolve_location(None, {"GOOGLE_CLOUD_REGION": "asia-east1"}) == "asia-east1"
+    assert art_gen.resolve_location(None, {}) == art_gen.DEFAULT_VERTEX_LOCATION
+
+
+def test_resolve_auth_rejects_unknown_mode() -> None:
+    with pytest.raises(ValueError, match="Unknown auth mode"):
+        art_gen.resolve_auth("oauth-magic", env={}, home=Path("/nonexistent"))
+
+
+def test_resolve_auth_auto_prefers_api_key(tmp_path: Path) -> None:
+    _write_adc(tmp_path / ".config" / "gcloud" / "application_default_credentials.json")
+    choice = art_gen.resolve_auth("auto", env={"GOOGLE_API_KEY": "k"}, home=tmp_path)
+    assert choice.mode == "api-key"
+    assert choice.project is None
+    assert "GOOGLE_API_KEY" in choice.describe()
+
+
+def test_resolve_auth_auto_falls_back_to_adc(tmp_path: Path) -> None:
+    _write_adc(tmp_path / ".config" / "gcloud" / "application_default_credentials.json")
+    choice = art_gen.resolve_auth("auto", env={}, home=tmp_path)
+    assert choice.mode == "adc"
+    assert choice.project == "proj-from-adc"
+    assert choice.location == art_gen.DEFAULT_VERTEX_LOCATION
+    assert "Vertex AI" in choice.describe()
+
+
+def test_resolve_auth_adc_ignores_present_api_key(tmp_path: Path) -> None:
+    _write_adc(tmp_path / ".config" / "gcloud" / "application_default_credentials.json")
+    choice = art_gen.resolve_auth("adc", env={"GOOGLE_API_KEY": "k"}, home=tmp_path, location="us-central1")
+    assert (choice.mode, choice.location) == ("adc", "us-central1")
+
+
+def test_resolve_auth_api_key_mode_requires_key(tmp_path: Path) -> None:
+    _write_adc(tmp_path / ".config" / "gcloud" / "application_default_credentials.json")
+    with pytest.raises(RuntimeError, match="GOOGLE_API_KEY"):
+        art_gen.resolve_auth("api-key", env={}, home=tmp_path)
+
+
+def test_resolve_auth_adc_mode_without_credentials(tmp_path: Path) -> None:
+    with pytest.raises(RuntimeError, match="application-default login"):
+        art_gen.resolve_auth("adc", env={}, home=tmp_path)
+
+
+def test_resolve_auth_auto_with_nothing_reports_both_options(tmp_path: Path) -> None:
+    with pytest.raises(RuntimeError, match="No usable credentials") as excinfo:
+        art_gen.resolve_auth("auto", env={}, home=tmp_path)
+    message = str(excinfo.value)
+    assert "GOOGLE_API_KEY" in message and "--auth adc" in message
+
+
+def test_resolve_auth_adc_without_resolvable_project(tmp_path: Path) -> None:
+    _write_adc(
+        tmp_path / ".config" / "gcloud" / "application_default_credentials.json",
+        quota_project=None,
+    )
+    with pytest.raises(RuntimeError, match="no GCP project could be resolved"):
+        art_gen.resolve_auth("adc", env={}, home=tmp_path)
+
+
+def test_auth_choice_holds_no_secret(tmp_path: Path) -> None:
+    """ADR-008 guard: the key must never reach a repr that a traceback could render."""
+    _write_adc(tmp_path / ".config" / "gcloud" / "application_default_credentials.json")
+    for mode in ("auto", "api-key"):
+        choice = art_gen.resolve_auth(mode, env={"GOOGLE_API_KEY": "super-secret-value"}, home=tmp_path)
+        assert "super-secret-value" not in repr(choice)
+        assert "super-secret-value" not in choice.describe()
+
+
 # ── load_prompt_file ───────────────────────────────────────────────────────
 def test_load_prompt_file_strips_comments(tmp_path: Path) -> None:
     pf = tmp_path / "p.md"
@@ -151,7 +297,13 @@ def test_model_catalogue_pins_ga_ids() -> None:
 # ── cost estimation ────────────────────────────────────────────────────────
 @pytest.mark.parametrize(
     "dims,tier",
-    [("400x400", "0.5K"), ("1024x1024", "1K"), ("2048x1024", "2K"), ("4096x4096", "4K"), ("not-a-size", "1K")],
+    [
+        ("400x400", "0.5K"),
+        ("1024x1024", "1K"),
+        ("2048x1024", "2K"),
+        ("4096x4096", "4K"),
+        ("not-a-size", "1K"),
+    ],
 )
 def test_resolution_tier(dims: str, tier: str) -> None:
     assert art_gen.resolution_tier(dims) == tier
@@ -190,16 +342,52 @@ def test_build_metadata_includes_optionals(tmp_path: Path) -> None:
     assert meta["dimensions"] == "4x4"
 
 
+def test_build_metadata_records_auth_choice() -> None:
+    auth = art_gen.AuthChoice(mode="adc", reason="ADC at /x", project="p1", location="global")
+    meta = art_gen.build_metadata(
+        prompt="p",
+        model="m",
+        backend="gemini",
+        timestamp="T",
+        index=0,
+        dimensions="4x4",
+        auth=auth,
+    )
+    assert meta["auth"] == {"mode": "adc", "project": "p1", "location": "global"}
+
+
+def test_build_metadata_omits_auth_when_absent() -> None:
+    meta = art_gen.build_metadata(
+        prompt="p",
+        model="m",
+        backend="gemini",
+        timestamp="T",
+        index=0,
+        dimensions="4x4",
+    )
+    assert "auth" not in meta
+
+
 def test_build_metadata_estimates_cost() -> None:
     meta = art_gen.build_metadata(
-        prompt="p", model="gemini-3-pro-image", backend="gemini", timestamp="T", index=0, dimensions="1024x1024"
+        prompt="p",
+        model="gemini-3-pro-image",
+        backend="gemini",
+        timestamp="T",
+        index=0,
+        dimensions="1024x1024",
     )
     assert meta["estimated_cost_usd"] == 0.134
 
 
 def test_build_metadata_unknown_model_has_no_cost() -> None:
     meta = art_gen.build_metadata(
-        prompt="p", model="mystery", backend="gemini", timestamp="T", index=0, dimensions="1024x1024"
+        prompt="p",
+        model="mystery",
+        backend="gemini",
+        timestamp="T",
+        index=0,
+        dimensions="1024x1024",
     )
     assert meta["estimated_cost_usd"] is None
 
@@ -207,7 +395,14 @@ def test_build_metadata_unknown_model_has_no_cost() -> None:
 def test_save_image_writes_png_and_sidecar(tmp_path: Path) -> None:
     img = Image.new("RGB", (8, 6), (1, 2, 3))
     path = art_gen.save_image(
-        img, tmp_path, prompt="hello", model="m", backend="gemini", timestamp="20260601_010203", index=0, aspect="1:1"
+        img,
+        tmp_path,
+        prompt="hello",
+        model="m",
+        backend="gemini",
+        timestamp="20260601_010203",
+        index=0,
+        aspect="1:1",
     )
     assert path.name == "art_20260601_010203_0.png"
     assert path.exists()
@@ -219,18 +414,37 @@ def test_save_image_writes_png_and_sidecar(tmp_path: Path) -> None:
 # ── history ────────────────────────────────────────────────────────────────
 def test_read_and_format_history(tmp_path: Path) -> None:
     (tmp_path / "art_20260601_000001_0.json").write_text(
-        json.dumps({"prompt": "first", "model": "gemini-3-pro-image", "aspect": "1:1", "estimated_cost_usd": 0.134}),
+        json.dumps(
+            {
+                "prompt": "first",
+                "model": "gemini-3-pro-image",
+                "aspect": "1:1",
+                "estimated_cost_usd": 0.134,
+            }
+        ),
         encoding="utf-8",
     )
     (tmp_path / "art_20260601_000002_0.json").write_text(
         json.dumps(
-            {"prompt": "second " * 60, "model": "gemini-3-pro-image", "aspect": "1:1", "estimated_cost_usd": 0.134}
+            {
+                "prompt": "second " * 60,
+                "model": "gemini-3-pro-image",
+                "aspect": "1:1",
+                "estimated_cost_usd": 0.134,
+            }
         ),
         encoding="utf-8",
     )
     # A generation with no price estimate (unknown model → cost null).
     (tmp_path / "art_20260601_000003_0.json").write_text(
-        json.dumps({"prompt": "third", "model": "mystery", "aspect": "1:1", "estimated_cost_usd": None}),
+        json.dumps(
+            {
+                "prompt": "third",
+                "model": "mystery",
+                "aspect": "1:1",
+                "estimated_cost_usd": None,
+            }
+        ),
         encoding="utf-8",
     )
     (tmp_path / "broken.json").write_text("{not json", encoding="utf-8")
@@ -238,7 +452,11 @@ def test_read_and_format_history(tmp_path: Path) -> None:
     # An art-edit sidecar (no "prompt") sharing the directory must be ignored.
     (tmp_path / "edit.json").write_text(json.dumps({"command": "remove-bg", "params": {}}), encoding="utf-8")
     items = art_gen.read_history(tmp_path)
-    assert [it["prompt"][:5] for it in items] == ["first", "secon", "third"]  # ordered; broken/scalar/edit skipped
+    assert [it["prompt"][:5] for it in items] == [
+        "first",
+        "secon",
+        "third",
+    ]  # ordered; broken/scalar/edit skipped
     digest = art_gen.format_history(items)
     assert "..." in digest  # second prompt got truncated
     assert "Total (3 images): $0.268" in digest  # 0.134 + 0.134, third unpriced
@@ -375,6 +593,28 @@ def test_main_history(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> Non
 def test_build_parser_generate() -> None:
     ns = art_gen.build_parser().parse_args(["generate", "--prompt", "hi", "--backend", "imagen"])
     assert ns.command == "generate" and ns.backend == "imagen"
+
+
+def test_build_parser_auth_defaults_to_auto() -> None:
+    ns = art_gen.build_parser().parse_args(["generate", "--prompt", "hi"])
+    assert (ns.auth, ns.project, ns.location) == ("auto", None, None)
+
+
+def test_build_parser_auth_adc_with_project_and_location() -> None:
+    ns = art_gen.build_parser().parse_args(
+        [
+            "generate",
+            "--prompt",
+            "hi",
+            "--auth",
+            "adc",
+            "--project",
+            "p",
+            "--location",
+            "us-central1",
+        ]
+    )
+    assert (ns.auth, ns.project, ns.location) == ("adc", "p", "us-central1")
 
 
 def test_build_parser_history_default_out_dir() -> None:

@@ -1,7 +1,7 @@
 ---
 name: art-gen
-description: "Generate images from curated prompt files via Google's GenAI image models (Gemini 'Nano Banana' + Imagen 4). Each image is written with a JSON sidecar recording the exact prompt and settings, so runs are reproducible and the next prompt can be curated from prior ones. Supports fan-out across multiple prompt files in one invocation. Use when the user wants to generate, explore, or iterate on logos, icons, illustrations, or other AI imagery from text prompts. Requires a non-empty GOOGLE_API_KEY."
-argument-hint: "generate --prompt-file <file.md> [--prompt-file <file2.md> ...] [--backend gemini|imagen] [--model flash|pro|standard|ultra|fast] [--aspect 1:1] [--size 1K|2K|4K] [--count N] [--ref <img>] [--out-dir <dir>]  |  history --out-dir <dir>"
+description: "Generate images from curated prompt files via Google's GenAI image models (Gemini 'Nano Banana' + Imagen 4). Each image is written with a JSON sidecar recording the exact prompt and settings, so runs are reproducible and the next prompt can be curated from prior ones. Supports fan-out across multiple prompt files in one invocation. Use when the user wants to generate, explore, or iterate on logos, icons, illustrations, or other AI imagery from text prompts. Requires either a non-empty GOOGLE_API_KEY or gcloud application-default credentials (Vertex AI)."
+argument-hint: "generate --prompt-file <file.md> [--prompt-file <file2.md> ...] [--backend gemini|imagen] [--model flash|pro|standard|ultra|fast] [--aspect 1:1] [--size 1K|2K|4K] [--count N] [--ref <img>] [--out-dir <dir>] [--auth auto|api-key|adc] [--project <gcp-project>] [--location <region>]  |  history --out-dir <dir>"
 allowed-tools:
   - Read
   - Glob
@@ -34,12 +34,35 @@ options (`21:9`, `4:1`, `8:1`, `1:4`, `1:8`) for gemini; imagen supports only `1
 
 # Requirements
 
-- **`GOOGLE_API_KEY`** exported and **non-empty**. This skill uses the API-key path
-  only — it does **not** use Vertex AI or application-default credentials. If the key
-  is missing or blank, generation fails fast with a clear error.
+- **Credentials — either mode works.** `--auth` selects one; the default `auto` prefers
+  the API key, falls back to ADC, and logs which it chose. If neither is usable the run
+  fails fast, naming both remedies.
+
+  | `--auth` | Needs | Endpoint |
+  |----------|-------|----------|
+  | `api-key` | non-empty `GOOGLE_API_KEY` | Gemini Developer API |
+  | `adc` | `gcloud auth application-default login` + a resolvable project | Vertex AI |
+  | `auto` (default) | either of the above | whichever it picked (announced) |
+
+  For `adc`, the project resolves `--project` → `GOOGLE_CLOUD_PROJECT` → the ADC file's
+  `quota_project_id`, and the location `--location` → `GOOGLE_CLOUD_LOCATION` → `global`.
+  `CLOUDSDK_CONFIG` is honoured when locating the ADC file, so per-project gcloud configs
+  work. The chosen mode is recorded in every sidecar under `auth`.
 - **`uv`** in `PATH`. The script declares its deps via PEP 723 inline metadata
   (`google-genai`, `Pillow`); `uv` materialises the venv on first run.
 - **Internet access** for the GenAI API call.
+
+# Before you spend: the pre-flight checklist
+
+Generation costs money and prompts fail in **recurring, learnable ways** (naming a word you
+don't want rendered makes the model draw it; "four people" yields three; generic objects grow
+real brand badges). Before sending any request, read and apply
+`.claude/skills/art-gen/resources/learned/prompt_checklist.md` — a self-curated list of real
+failures, each written as a quick check. Treat its entries as already-decided.
+
+**When a run comes back wrong, append the case to that file in the same session** (Symptom /
+Case-with-date / Why / Check). That is how the checklist accumulates — the fix for a failure
+mode is a durable entry, not a one-off reword.
 
 # The Prompt File (maximise every token)
 
@@ -85,9 +108,47 @@ uv run .claude/skills/art-gen/scripts/art_gen.py generate \
 uv run .claude/skills/art-gen/scripts/art_gen.py generate \
     --prompt "A flat-vector compass rose, charcoal on white, no text."
 
+# Force Vertex AI via application-default credentials (no API key involved)
+uv run .claude/skills/art-gen/scripts/art_gen.py generate \
+    --auth adc --project my-gcp-project --prompt-file prompt.md
+
 # Review prior prompts/metadata to curate the next one (oldest → newest)
 uv run .claude/skills/art-gen/scripts/art_gen.py history --out-dir art/gen
 ```
+
+# Video clips (`art_vid.py` — Veo)
+
+The video sibling, same contract: curated prompt file in, media out, JSON sidecar as a
+**complete revision snapshot** (exact prompt sent, model id, every parameter, keyframes,
+estimated cost) — so the next revision is a minimal delta from a known point.
+
+```bash
+# One clip pinned between two exact keyframes, with the shared story arc prepended
+uv run .claude/skills/art-gen/scripts/art_vid.py generate \
+    --prompt-file clips/01/prompt.md --story-arc clips/STORY.md \
+    --start-frame keyframes/01.png --end-frame keyframes/02.png \
+    --out-dir clips/01 --name clip01 \
+    --model fast --resolution 1080p --duration 8 --location us-central1
+
+uv run .claude/skills/art-gen/scripts/art_vid.py generate ... --dry-run   # prompt + cost, no spend
+uv run .claude/skills/art-gen/scripts/art_vid.py frames clips/01/clip01.mp4   # re-extract first/last
+uv run .claude/skills/art-gen/scripts/art_vid.py history --out-dir clips      # clips + running cost
+```
+
+| Concept | What it does |
+|---------|--------------|
+| **Story arc** (`--story-arc`) | A macro narrative prepended (labelled) to every clip prompt so an 8s fragment is generated knowing the whole film. Stored in each sidecar — changing it changes every clip. |
+| **Keyframe pair** (`--start-frame` / `--end-frame`) | Veo first-frame + `last_frame` interpolation, so consecutive clips cut together. |
+| **Frame extraction** | ffmpeg writes `<clip>.first.png` / `<clip>.last.png`. **Chain from the rendered last frame**, not the requested keyframe — the model never lands exactly on the request. |
+| **Negative prompt** | Defaults to excluding dialogue/voiceover/captions/music, so clips stay diegetic-only. |
+
+**Model ids are backend-specific** (`--backend`): Vertex/ADC serves GA `veo-3.1-*-generate-001`;
+the Gemini API serves `veo-3.1-*-generate-preview`. Using the wrong set 404s. Veo is also
+**region-restricted** — `--location us-central1`, never `global`.
+
+Cost is **per second** (audio included): standard $0.40 (720p/1080p) / $0.60 (4k);
+fast $0.10–$0.30; lite $0.05–$0.08. An 8s fast 1080p clip ≈ **$0.96**; standard ≈ **$3.20**.
+Always `--dry-run` first.
 
 # Output & Sidecars
 

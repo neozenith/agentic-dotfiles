@@ -153,6 +153,81 @@ stack in its own PEP-723 block.
 **Lens:** Don't put a heavy/external dependency's real path in a pytest whose deps exclude
 it. Keep unit tests on the injected fake; validate the real collaborator via the CLI.
 
+### ADR-011 — A registry-driven pipeline with two dynamic escape hatches
+**Status:** Accepted (2026-07-24).
+**Context:** The fixed five-command surface could not express "composite these logos onto
+that car, heal the livery underneath, and paste a face crop over a head" without new code
+per combination. The requirement was explicitly for *reach* — any OpenCV feature, any
+HuggingFace model, composed in any order, with the working-out visible.
+**Decision:** A sibling script `art_pipe.py` runs a declarative JSON spec of named ops
+against a `Frame` (RGBA image + named buffers + meta). Ops live in a decorator-built
+registry, so adding one is a single function and `ops` documents it automatically. Two ops
+are deliberately *unbounded*: `cv2` dispatches to any attribute of the OpenCV namespace, and
+`hf` to any `transformers` pipeline. `$image` / `$buf:NAME` placeholders and `"cv2.CONST"`
+strings let a JSON spec hand live data and real enums to a function nobody wrapped.
+**Consequences:** New capability usually needs a spec, not a commit. The tradeoff is that
+the dynamic ops cannot be type-checked at the spec boundary — they fail at run time with the
+underlying library's error, which is why `run_pipeline` reports the failing step index and
+`--steps` writes every intermediate.
+**Lens:** When a surface must stay open-ended, expose a *registry + placeholder grammar*
+rather than growing a wrapper per feature. Wrap something explicitly only when it needs
+non-obvious glue (as `inpaint` and `seamless-clone` do); otherwise let `cv2`/`hf` carry it.
+
+### ADR-012 — OpenCV 5 dropped Haar; face detection is an injected seam
+**Status:** Accepted (2026-07-24).
+**Context:** `face-crop` was first written against `cv2.CascadeClassifier` with the bundled
+cascade XML. On OpenCV 5.0 that attribute **does not exist** — the cascades were removed
+outright — and the tests caught it immediately. The 5.0 replacement, `FaceDetectorYN`
+(YuNet), is a DNN needing a ~350 KB ONNX file, i.e. a network fetch.
+**Decision:** Detection is a `FaceDetector` callable on `OpContext`, defaulting to YuNet with
+a one-time cached download; tests inject real stand-in detectors. `face-crop` also accepts an
+explicit `box`, which bypasses detection entirely. A missing model raises — it never
+silently reports "no faces".
+**Consequences:** The op is testable offline and usable with zero network via `box`. The
+crop maths is asserted against known boxes rather than against whatever a detector happened
+to find, which makes the test deterministic.
+**Lens:** Do not assume a 4.x OpenCV API exists in 5.x — probe before depending on it. Any
+detector/model collaborator goes behind an injected seam **and** gets a manual override, so
+the op stays usable when the model is unavailable.
+
+### ADR-013 — Perspective decals and landmark face-align as first-class ops
+**Status:** Accepted (2026-07-24).
+**Context:** Real jobs needed a logo placed on a foreshortened car door and a real face mapped
+onto a generated one. A flat `overlay` reads as stuck-on when the surface recedes, and there
+was no face-correspondence primitive at all.
+**Decision:** `perspective-overlay` warps a layer to a 4-corner quad (`cv2.getPerspectiveTransform`
++ `warpPerspective`, alpha-composited). `face-align` uses YuNet's **5-point landmarks** (free
+alongside the box) with `estimateAffinePartial2D` to map a source portrait onto a detected
+target face, blended by alpha or `seamlessClone`. Both take their detector through the same
+injected seam as `face-crop`, so they test offline against fakes.
+**Consequences:** Logos sit in-plane; faces can be swapped deterministically with no extra
+model. **Measured limit:** a 2D affine paste imports the *source portrait's* expression and
+lighting, so on a mid-action frame the native AI face looks better — face-align earns its
+place on calm frames or as a base for a re-synthesising `hf` model, not as a universal win.
+**Lens:** Prefer the free capability already in a dependency (YuNet landmarks) before adding
+a model. When a deterministic technique has a quality ceiling, measure it and record the
+ceiling next to the feature, so the next decision picks the right tool instead of assuming.
+
+### ADR-014 — Collaboration aids: labelled grid + identity annotation
+**Status:** Accepted (2026-07-24).
+**Context:** Targeted edits kept mis-landing — a logo on the wrong panel, a face swapped onto
+the wrong person — because human↔agent region/identity communication was ad-hoc (raw pixel
+coords, guessed correspondence). An embedding auto-match confidently mapped the wrong
+teammate onto the driver.
+**Decision:** Add `grid.py` (public, tested): a labelled letter×number grid overlay plus a
+`resolve` that turns a spreadsheet range (`C5:F6`) into a pixel box + TL/TR/BR/BL quad for a
+spec. Establish the ritual of a **colour-coded, named identity annotation** confirmed before
+any face op, with names assigned by stable features + fixed seating role, not by
+low-confidence recognition embeddings. Both rituals are documented in
+`resources/learned/collaboration_workflows.md` and pointed at from SKILL.md.
+**Consequences:** Regions and identities are agreed on a cheap artifact before the costly
+edit. `grid.py resolve` output feeds `perspective-overlay`/`crop` directly, so coordinates
+are never hand-typed.
+**Lens:** When an edit must "target the right thing", the first deliverable is an agreement
+artifact (labelled grid, named face map, side-by-side), not the edit. Prefer a shared
+symbolic vocabulary (cell ranges, stable per-person colours) over exchanging raw pixels or
+trusting an automatic match that can be confidently wrong.
+
 ## Extension checklist
 
 - [ ] New signal/stage → pure primitive + unit test (ADR-002), reused via `combined_matte`.

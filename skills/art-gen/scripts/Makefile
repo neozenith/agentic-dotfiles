@@ -5,8 +5,8 @@
 #   make -C .claude/skills/art-gen/scripts fix   # auto-format + lint-fix (mutates)
 #   make -C .claude/skills/art-gen/scripts ci    # the gate (no mutation)
 
-PY_SCRIPTS = art_gen
-PY_SRC = art_gen.py test_art_gen.py
+PY_SCRIPTS = art_gen art_vid
+PY_SRC = art_gen.py test_art_gen.py art_vid.py test_art_vid.py
 
 # `--no-project` stops uv walking up to the repo-root pyproject.toml.
 UV = uv run --no-project
@@ -24,9 +24,9 @@ all: format lint typecheck test-cov
 
 # ── Format ──────────────────────────────────────────────────────────────
 format: format-py
-format-py:       ; $(UV) ruff format $(PY_SRC)
+format-py:       ; $(UV) ruff format --line-length 120 $(PY_SRC)
 format-check: format-check-py
-format-check-py: ; $(UV) ruff format --check $(PY_SRC)
+format-check-py: ; $(UV) ruff format --check --line-length 120 $(PY_SRC)
 
 # ── Lint ────────────────────────────────────────────────────────────────
 lint: lint-py
@@ -36,15 +36,20 @@ lint-fix-py:     ; $(UV) ruff check --fix --line-length 120 $(PY_SRC)
 
 # ── Typecheck ──────────────────────────────────────────────────────────
 typecheck: typecheck-py
-typecheck-py:    ; $(UV) mypy $(addsuffix .py,$(PY_SCRIPTS)) --ignore-missing-imports --strict
+# `--with mypy` because --no-project means there is no environment to resolve it from.
+typecheck-py:    ; $(UV) --with mypy mypy $(addsuffix .py,$(PY_SCRIPTS)) --ignore-missing-imports --strict
 
 # ── Test ────────────────────────────────────────────────────────────────
 test: test-py
-test-py:         ; $(UV) test_art_gen.py $(PYTEST_ARGS)
+test-py:
+	$(UV) test_art_gen.py $(PYTEST_ARGS)
+	$(UV) test_art_vid.py $(PYTEST_ARGS)
 test-cov: test-cov-py
 test-cov-py:
 	$(UV) test_art_gen.py $(PYTEST_ARGS) \
 		--cov=art_gen --cov-report=term-missing --cov-fail-under=$(COV_MIN)
+	$(UV) test_art_vid.py $(PYTEST_ARGS) \
+		--cov=art_vid --cov-report=term-missing --cov-fail-under=$(COV_MIN)
 
 # ── Aggregate ──────────────────────────────────────────────────────────
 ci: format-check lint typecheck test-cov
