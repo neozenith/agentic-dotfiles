@@ -14,9 +14,17 @@ Two backends:
   imagen  — the Imagen 4 family. Best for high-fidelity standalone batches.
 
 Auth:
-  Requires a NON-EMPTY ``GOOGLE_API_KEY`` environment variable. This skill uses the
-  API-key path only — it deliberately does NOT use Vertex AI / application-default
-  credentials. If the variable is missing or blank, generation fails fast.
+  Two explicit modes, selected with ``--auth`` (default ``auto``):
+
+  ``api-key``  a NON-EMPTY ``GOOGLE_API_KEY`` → the Gemini Developer API.
+  ``adc``      application-default credentials → Vertex AI, which additionally needs a
+               project (``--project`` / ``GOOGLE_CLOUD_PROJECT`` / the ADC file's
+               ``quota_project_id``) and a location (``--location`` /
+               ``GOOGLE_CLOUD_LOCATION``, default ``global``).
+
+  ``auto`` prefers the API key and falls back to ADC, **announcing which it chose** at
+  INFO level. When neither is usable it fails fast, reporting why *each* mode was
+  rejected — it never degrades to a half-working state.
 
 Sidecars:
   Every generated ``<stem>.png`` is written with a ``<stem>.json`` sidecar recording
@@ -39,10 +47,11 @@ import logging
 import os
 import sys
 from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from PIL import Image
 
@@ -54,6 +63,17 @@ SCRIPT_NAME = SCRIPT.stem
 SCRIPT_DIR = SCRIPT.parent.resolve()
 
 API_KEY_ENV = "GOOGLE_API_KEY"
+
+# ADC (Vertex AI) auth. Ordered by precedence: an explicit service-account/credentials
+# file wins, then the gcloud config dir (CLOUDSDK_CONFIG relocates it per-project), then
+# the OS default location.
+ADC_FILE_ENV = "GOOGLE_APPLICATION_CREDENTIALS"
+CLOUDSDK_CONFIG_ENV = "CLOUDSDK_CONFIG"
+ADC_FILENAME = "application_default_credentials.json"
+PROJECT_ENVS = ("GOOGLE_CLOUD_PROJECT", "GCLOUD_PROJECT", "GCP_PROJECT")
+LOCATION_ENVS = ("GOOGLE_CLOUD_LOCATION", "GOOGLE_CLOUD_REGION")
+DEFAULT_VERTEX_LOCATION = "global"
+AUTH_MODES = ("auto", "api-key", "adc")
 
 # Marketing name → API model id. Pin GA ids, not "-preview" (see CLAUDE.md ADR-009).
 # Captured 2026-06-01 from ai.google.dev/gemini-api/docs/models — model ids churn; re-verify.
@@ -87,7 +107,12 @@ ASPECT_RATIOS = [
     "1:4",
     "1:8",
 ]
-IMAGE_SIZES = ["512", "1K", "2K", "4K"]  # 512 = Nano-Banana-2 only; 4K = gemini-only; imagen ≤ 2K.
+IMAGE_SIZES = [
+    "512",
+    "1K",
+    "2K",
+    "4K",
+]  # 512 = Nano-Banana-2 only; 4K = gemini-only; imagen ≤ 2K.
 
 # Estimated USD per generated image, by API model id. Gemini models are resolution-tiered
 # (billed per output token → a {tier: price} map); Imagen models are a flat per-image rate.
@@ -110,12 +135,34 @@ DEFAULT_OUTPUT_DIR = Path("art/gen")
 ConfigFactory = Callable[..., Any]
 
 
+# ── Auth (pure resolution; the client construction itself is the boundary) ─────────────
+@dataclass(frozen=True)
+class AuthChoice:
+    """Which credential path to use, and why — deliberately carrying **no secret**.
+
+    Keeping the key out of this object means it can be passed through testable seams,
+    logged, and stamped into a sidecar without any chance of leaking (see CLAUDE.md
+    ADR-008). ``make_client`` re-reads the key from the environment at the last moment.
+    """
+
+    mode: Literal["api-key", "adc"]
+    reason: str
+    project: str | None = None
+    location: str | None = None
+
+    def describe(self) -> str:
+        """One-line, secret-free summary for the loud announcement + the sidecar."""
+        if self.mode == "adc":
+            return f"adc → Vertex AI (project={self.project}, location={self.location}); {self.reason}"
+        return f"api-key → Gemini Developer API; {self.reason}"
+
+
 # ── Pure helpers (no network, fully unit-tested) ───────────────────────────
 def require_api_key(env: Mapping[str, str] | None = None) -> str:
     """Return a non-empty GOOGLE_API_KEY, or raise with a clear message.
 
-    The API-key path is the *only* supported auth for this skill — no Vertex AI,
-    no application-default credentials. A blank/whitespace value is treated as unset.
+    A blank/whitespace value is treated as unset. This is the credential for the
+    ``api-key`` auth mode only; ``adc`` never touches it.
     """
     environ: Mapping[str, str] = os.environ if env is None else env
     key = environ.get(API_KEY_ENV, "").strip()
@@ -125,6 +172,127 @@ def require_api_key(env: Mapping[str, str] | None = None) -> str:
             f"e.g.  export {API_KEY_ENV}='...'"
         )
     return key
+
+
+def has_api_key(env: Mapping[str, str] | None = None) -> bool:
+    """True when a non-blank ``GOOGLE_API_KEY`` is present (never returns the value)."""
+    environ: Mapping[str, str] = os.environ if env is None else env
+    return bool(environ.get(API_KEY_ENV, "").strip())
+
+
+def adc_credentials_path(env: Mapping[str, str] | None = None, home: Path | None = None) -> Path | None:
+    """Locate an application-default-credentials file, or ``None`` if there isn't one.
+
+    ``CLOUDSDK_CONFIG`` is honoured because per-project gcloud configurations relocate
+    the whole config dir — the common setup when one machine authenticates against
+    several cloud projects.
+    """
+    environ: Mapping[str, str] = os.environ if env is None else env
+    explicit = environ.get(ADC_FILE_ENV, "").strip()
+    if explicit:
+        path = Path(explicit)
+        return path if path.is_file() else None
+    roots = [environ.get(CLOUDSDK_CONFIG_ENV, "").strip(), None]
+    for root in roots:
+        base = Path(root) if root else (home or Path.home()) / ".config" / "gcloud"
+        candidate = base / ADC_FILENAME
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def adc_quota_project(path: Path) -> str | None:
+    """Read ``quota_project_id`` from an ADC file; ``None`` if absent or unreadable.
+
+    Only that one field is touched — the credential material is never parsed out.
+    """
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    project = data.get("quota_project_id")
+    return str(project) if project else None
+
+
+def resolve_project(
+    explicit: str | None,
+    env: Mapping[str, str] | None = None,
+    adc_path: Path | None = None,
+) -> str | None:
+    """Resolve the Vertex project: explicit flag → env vars → the ADC quota project."""
+    if explicit:
+        return explicit
+    environ: Mapping[str, str] = os.environ if env is None else env
+    for name in PROJECT_ENVS:
+        value = environ.get(name, "").strip()
+        if value:
+            return value
+    return adc_quota_project(adc_path) if adc_path else None
+
+
+def resolve_location(explicit: str | None, env: Mapping[str, str] | None = None) -> str:
+    """Resolve the Vertex location: explicit flag → env vars → ``global``."""
+    if explicit:
+        return explicit
+    environ: Mapping[str, str] = os.environ if env is None else env
+    for name in LOCATION_ENVS:
+        value = environ.get(name, "").strip()
+        if value:
+            return value
+    return DEFAULT_VERTEX_LOCATION
+
+
+def resolve_auth(
+    mode: str = "auto",
+    *,
+    env: Mapping[str, str] | None = None,
+    project: str | None = None,
+    location: str | None = None,
+    home: Path | None = None,
+) -> AuthChoice:
+    """Pick a credential path, or raise explaining why *every* mode was rejected.
+
+    ``auto`` prefers the API key and falls back to ADC. The choice is always reported by
+    the caller (see ``main``) so the environment-sensing decision is visible, never
+    silent — and a request that cannot be satisfied fails loudly rather than degrading.
+    """
+    if mode not in AUTH_MODES:
+        raise ValueError(f"Unknown auth mode {mode!r}; expected one of {', '.join(AUTH_MODES)}")
+
+    key_present = has_api_key(env)
+    if mode == "api-key" or (mode == "auto" and key_present):
+        if not key_present:
+            require_api_key(env)  # raises the canonical message
+        return AuthChoice(mode="api-key", reason=f"{API_KEY_ENV} is set")
+
+    adc_path = adc_credentials_path(env, home)
+    if mode == "adc" and adc_path is None:
+        raise RuntimeError(
+            "auth mode 'adc' requested but no application-default credentials were found. "
+            f"Run  gcloud auth application-default login  (checked {ADC_FILE_ENV}, "
+            f"${CLOUDSDK_CONFIG_ENV}/{ADC_FILENAME}, and ~/.config/gcloud/{ADC_FILENAME})."
+        )
+    if adc_path is None:
+        raise RuntimeError(
+            f"No usable credentials. Either export a non-empty {API_KEY_ENV}, or run "
+            "gcloud auth application-default login to use ADC/Vertex AI (--auth adc)."
+        )
+
+    resolved_project = resolve_project(project, env, adc_path)
+    if not resolved_project:
+        raise RuntimeError(
+            f"ADC found at {adc_path}, but no GCP project could be resolved. Pass --project, "
+            f"or export {PROJECT_ENVS[0]}, or set a quota project with "
+            "gcloud auth application-default set-quota-project <PROJECT>."
+        )
+    return AuthChoice(
+        mode="adc",
+        reason=f"ADC at {adc_path}",
+        project=resolved_project,
+        location=resolve_location(location, env),
+    )
 
 
 def load_prompt_file(path: Path) -> str:
@@ -203,6 +371,7 @@ def build_metadata(
     requested_size: str | None = None,
     prompt_file: Path | None = None,
     ref_images: Sequence[Path] | None = None,
+    auth: AuthChoice | None = None,
 ) -> dict[str, Any]:
     """Build the JSON sidecar payload that pairs an image with how it was generated."""
     meta: dict[str, Any] = {
@@ -220,6 +389,14 @@ def build_metadata(
         meta["prompt_file"] = str(prompt_file)
     if ref_images:
         meta["ref_images"] = [str(p) for p in ref_images]
+    if auth is not None:
+        # Which credential path produced this image — part of the recipe, since the
+        # Vertex and Developer-API endpoints are not guaranteed byte-identical.
+        meta["auth"] = {
+            "mode": auth.mode,
+            "project": auth.project,
+            "location": auth.location,
+        }
     return meta
 
 
@@ -236,6 +413,7 @@ def save_image(
     requested_size: str | None = None,
     prompt_file: Path | None = None,
     ref_images: Sequence[Path] | None = None,
+    auth: AuthChoice | None = None,
 ) -> Path:
     """Write ``art_<ts>_<index>.png`` plus its ``.json`` sidecar; return the image path."""
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -255,6 +433,7 @@ def save_image(
         requested_size=requested_size,
         prompt_file=prompt_file,
         ref_images=ref_images,
+        auth=auth,
     )
     meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
     log.info("Saved %s (%dx%d)", img_path, image.width, image.height)
@@ -323,11 +502,19 @@ def format_history(items: Sequence[Mapping[str, Any]]) -> str:
 
 
 # ── Backend boundary (import-guarded; covered by the GOOGLE_API_KEY integration test) ──
-def make_client(api_key: str) -> Any:  # pragma: no cover - requires google-genai + network
-    """Construct a GenAI client using the API-key path (no Vertex AI)."""
+def make_client(
+    auth: AuthChoice,
+) -> Any:  # pragma: no cover - requires google-genai + network
+    """Construct a GenAI client for the resolved auth mode.
+
+    The API key is read here, at the last possible moment, and never stored on
+    ``AuthChoice`` — so no seam that a test or traceback can observe ever holds it.
+    """
     from google import genai
 
-    return genai.Client(api_key=api_key)
+    if auth.mode == "adc":
+        return genai.Client(vertexai=True, project=auth.project, location=auth.location)
+    return genai.Client(api_key=require_api_key())
 
 
 def _default_gemini_config(aspect: str | None, size: str | None) -> Any:  # pragma: no cover - requires google-genai
@@ -367,6 +554,7 @@ def gemini_generate(
     ref_images: Sequence[Path] | None = None,
     timestamp: str | None = None,
     prompt_file: Path | None = None,
+    auth: AuthChoice | None = None,
     config_factory: ConfigFactory = _default_gemini_config,
 ) -> list[Path]:
     """Generate image(s) with a gemini image model (single turn) and save them."""
@@ -397,6 +585,7 @@ def gemini_generate(
                     requested_size=size,
                     prompt_file=prompt_file,
                     ref_images=ref_images,
+                    auth=auth,
                 )
             )
             idx += 1
@@ -414,6 +603,7 @@ def imagen_generate(
     size: str | None = None,
     timestamp: str | None = None,
     prompt_file: Path | None = None,
+    auth: AuthChoice | None = None,
     config_factory: ConfigFactory = _default_imagen_config,
 ) -> list[Path]:
     """Generate ``count`` variant(s) with an Imagen 4 model and save them."""
@@ -435,6 +625,7 @@ def imagen_generate(
                 aspect=aspect,
                 requested_size=size,
                 prompt_file=prompt_file,
+                auth=auth,
             )
         )
     return saved
@@ -478,24 +669,72 @@ def build_parser() -> argparse.ArgumentParser:
         help="Prompt markdown file; repeatable to fan out variants in one run",
     )
     gen.add_argument(
-        "--backend", choices=["gemini", "imagen"], default="gemini", help="Generation backend (default: gemini)"
+        "--backend",
+        choices=["gemini", "imagen"],
+        default="gemini",
+        help="Generation backend (default: gemini)",
     )
-    gen.add_argument("--model", default=None, help="Model alias (flash/pro, standard/ultra/fast) or raw model id")
-    gen.add_argument("--aspect", default="1:1", choices=ASPECT_RATIOS, help="Aspect ratio (default: 1:1)")
+    gen.add_argument(
+        "--model",
+        default=None,
+        help="Model alias (flash/pro, standard/ultra/fast) or raw model id",
+    )
+    gen.add_argument(
+        "--aspect",
+        default="1:1",
+        choices=ASPECT_RATIOS,
+        help="Aspect ratio (default: 1:1)",
+    )
     gen.add_argument(
         "--size",
         default=None,
         choices=IMAGE_SIZES,
         help="Resolution (512/1K/2K/4K; 512 is Nano-Banana-2 only, 4K is gemini-only, imagen ≤ 2K)",
     )
-    gen.add_argument("--count", type=int, default=1, help="Variants per prompt (imagen only; default: 1)")
-    gen.add_argument("--ref", action="append", default=[], type=Path, help="Reference image (repeatable; gemini only)")
     gen.add_argument(
-        "--out-dir", type=Path, default=DEFAULT_OUTPUT_DIR, help=f"Output dir (default: {DEFAULT_OUTPUT_DIR})"
+        "--count",
+        type=int,
+        default=1,
+        help="Variants per prompt (imagen only; default: 1)",
+    )
+    gen.add_argument(
+        "--ref",
+        action="append",
+        default=[],
+        type=Path,
+        help="Reference image (repeatable; gemini only)",
+    )
+    gen.add_argument(
+        "--out-dir",
+        type=Path,
+        default=DEFAULT_OUTPUT_DIR,
+        help=f"Output dir (default: {DEFAULT_OUTPUT_DIR})",
+    )
+    gen.add_argument(
+        "--auth",
+        choices=list(AUTH_MODES),
+        default="auto",
+        help="Credential path: api-key (Gemini Developer API), adc (Vertex AI), or auto "
+        "(prefer the key, fall back to ADC, and announce which). Default: auto",
+    )
+    gen.add_argument(
+        "--project",
+        default=None,
+        help="GCP project for --auth adc (default: env or ADC quota project)",
+    )
+    gen.add_argument(
+        "--location",
+        default=None,
+        help=f"Vertex location for --auth adc (default: env or {DEFAULT_VERTEX_LOCATION})",
     )
 
     hist = sub.add_parser("history", help="Print prior prompts/metadata to curate the next prompt")
-    hist.add_argument("--out-dir", type=Path, default=DEFAULT_OUTPUT_DIR, help="Directory of generated images/sidecars")
+    hist.add_argument(
+        "--out-dir",
+        type=Path,
+        default=DEFAULT_OUTPUT_DIR,
+        help="Directory of generated images/sidecars",
+    )
 
     for q in (gen, hist):
         q.add_argument("-v", "--verbose", action="store_true", help="Debug logging")
@@ -521,12 +760,27 @@ def main(
 
     # command == "generate"
     pairs = resolve_prompts(args.prompt, args.prompt_file)
-    if client is None:
-        client = make_client(require_api_key())  # pragma: no cover - live path
+    # Auth is resolved only on the live path: an injected client already carries its own
+    # credentials, and reading the ambient environment would make offline tests depend on
+    # the developer's machine.
+    auth: AuthChoice | None = None
+    if client is None:  # pragma: no cover - live path
+        auth = resolve_auth(
+            getattr(args, "auth", "auto"),
+            project=getattr(args, "project", None),
+            location=getattr(args, "location", None),
+        )
+        log.info("auth: %s", auth.describe())  # announce the environment-sensing decision
+        client = make_client(auth)
 
     for prompt, prompt_file in pairs:
         model = resolve_model(args.backend, args.model)
-        log.info("Generating (%s / %s) from %s", args.backend, model, prompt_file or "inline prompt")
+        log.info(
+            "Generating (%s / %s) from %s",
+            args.backend,
+            model,
+            prompt_file or "inline prompt",
+        )
         if args.backend == "gemini":
             saved = gemini_generate(
                 client,
@@ -537,6 +791,7 @@ def main(
                 size=args.size,
                 ref_images=args.ref or None,
                 prompt_file=prompt_file,
+                auth=auth,
                 config_factory=gemini_config_factory,
             )
         else:
@@ -549,6 +804,7 @@ def main(
                 aspect=args.aspect,
                 size=args.size,
                 prompt_file=prompt_file,
+                auth=auth,
                 config_factory=imagen_config_factory,
             )
         for path in saved:

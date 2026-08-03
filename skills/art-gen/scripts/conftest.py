@@ -12,8 +12,10 @@ import importlib
 import pytest
 
 import art_gen
+import art_vid
 
 
 @pytest.fixture(autouse=True, scope="session")
 def _reload_for_coverage() -> None:
     importlib.reload(art_gen)
+    importlib.reload(art_vid)

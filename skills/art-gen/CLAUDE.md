@@ -69,7 +69,7 @@ deterministic editing.
 deterministic belongs in `art-edit`.
 
 ### ADR-002 — API-key auth only (no Vertex AI / ADC)
-**Status:** Accepted (explicit product requirement).
+**Status:** Superseded by ADR-010.
 **Context:** The originating script defaulted to Vertex AI with a hardcoded cloud project.
 **Decision:** Read a non-empty `GOOGLE_API_KEY`; construct `genai.Client(api_key=…)`;
 fail fast on missing/blank. No ADC, no Vertex env juggling.
@@ -77,7 +77,7 @@ fail fast on missing/blank. No ADC, no Vertex env juggling.
 coupling.
 **Lens:** Do not reintroduce credential fallback chains. If another auth mode is ever
 needed, make it an explicit opt-in flag, never a silent fallback (see the global
-"no graceful degradation" rule).
+"no graceful degradation" rule). — *ADR-010 took exactly this route.*
 
 ### ADR-003 — Dependency injection as the testability seam
 **Status:** Accepted.
@@ -163,6 +163,69 @@ and per sweep without hitting a billing API.
 **Lens:** When refreshing models, re-research **both** ids and prices together, bump the
 capture date in the comments, prefer GA over `-preview`, and update `test_model_catalogue_pins_ga_ids`.
 Never present `estimated_cost_usd` as authoritative — it tracks a moving price list.
+
+### ADR-010 — Two named auth modes with an announcing `auto`, superseding ADR-002
+**Status:** Accepted (2026-07-24).
+**Context:** Many organisations forbid long-lived API keys outright, so the ADR-002
+key-only rule made the skill unusable exactly where it was most wanted. The users who
+hit this are already authenticated: a `gcloud auth application-default login` session,
+often with `CLOUDSDK_CONFIG` pointed at a per-project config dir. ADR-002's own Lens
+already licensed this — "an explicit opt-in flag, never a silent fallback."
+**Decision:** `--auth {auto,api-key,adc}`, default `auto`. `api-key` → the Gemini
+Developer API; `adc` → Vertex AI (`genai.Client(vertexai=True, project=…, location=…)`),
+with project resolved from `--project` → `GOOGLE_CLOUD_PROJECT` → the ADC file's
+`quota_project_id`, and location from `--location` → env → `global`. `auto` prefers the
+key, falls back to ADC, and **logs which it chose**; when neither works it raises a single
+error naming both remedies. The choice is stamped into the sidecar under `auth`.
+`AuthChoice` deliberately carries no secret — `make_client` re-reads the key at the last
+moment (ADR-008).
+**Consequences:** Key-less, ADC-only machines work. The credential decision is visible in
+the run log and in the provenance record, so a frame generated on Vertex is
+distinguishable from one generated on the Developer API. `resolve_auth` is pure and fully
+unit-tested against real temp-dir ADC files, so no test touches a real credential.
+**Lens:** Sensing the *environment* and announcing the result is legitimate; degrading the
+*requirement* is not. A fallback is acceptable only when (a) each mode is separately
+nameable and forceable, (b) the automatic choice is logged, and (c) exhausting all modes
+fails loudly with every remedy listed. If you cannot satisfy all three, don't add the
+fallback.
+
+### ADR-011 — A self-curated pre-flight prompt checklist (`resources/learned/`)
+**Status:** Accepted (2026-07-24).
+**Context:** A real session burned paid generations on prompt failure modes that recur across
+subjects: naming a forbidden word made the model *render* it; "four people" produced three;
+generic objects grew real manufacturer badges; `2K`+`16:9` silently billed at the 4K tier.
+These are not one-off rewrites — they are a learnable class of mistake.
+**Decision:** Keep a curated checklist at `resources/learned/prompt_checklist.md` (Pathway 2,
+`statefulness.md`). `SKILL.md` points at it as a read-before-spending resource; the contract
+is to **append a dated Symptom/Case/Why/Check entry whenever a run comes back wrong**, in the
+same session. Stable entries graduate into `SKILL.md`; invalidated ones are deleted.
+**Consequences:** The skill accumulates prompt-craft over time instead of relearning it. The
+always-loaded surface stays small — the checklist is loaded on first use, not inlined.
+**Lens:** A recurring *prompt* failure is fixed by appending to the learned checklist, not by
+a silent one-off reword. Only promote an entry into `SKILL.md` once it has proven stable
+across several sessions; keep the learned file under the 500-line invariant by curating.
+
+### ADR-012 — Video (Veo) as a sibling script, sharing auth but not the image catalogue
+**Status:** Accepted (2026-07-24).
+**Context:** The skill needed Veo clip generation with the same reproducibility contract as
+images, plus three things images never needed: a macro story arc shared by every clip, exact
+first/last **keyframe** conditioning, and real first/last frame extraction for chaining.
+**Decision:** A sibling `art_vid.py` rather than new subcommands in `art_gen.py`: the model
+catalogue, pricing shape (per-**second**, resolution-tiered), config surface and output type
+are entirely different, and mixing them would make one catalogue serve two APIs. It *reuses*
+`art_gen.resolve_auth`/`make_client` (same skill, same credentials) so auth stays in one
+place. `compose_prompt` puts the arc FIRST under an explicit label; the sidecar stores the
+composed prompt **and** the arc and clip prompt separately, so a revision can change one
+without re-deriving the other. `build_video_config_kwargs` omits unset options because the
+Veo preview config surface churns and an unsupported kwarg fails a *paid* request.
+Frame chaining uses ffmpeg on the **rendered** clip, not the requested keyframe.
+**Consequences:** Clips are revision snapshots like images; the two catalogues evolve
+independently. ffmpeg is a new host dependency (checked, warned about, never silently
+skipped for a required step).
+**Lens:** Split scripts on the **API contract**, not on the media type alone — if the model
+ids, pricing unit and config surface differ, it is a different catalogue and deserves its own
+file. Share only the cross-cutting concern (auth). When chaining generated media, always
+chain from what was *rendered*, never from what was *requested*.
 
 ## Extension checklist
 
