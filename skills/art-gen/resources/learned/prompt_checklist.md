@@ -145,6 +145,57 @@ movement across the whole duration. The two instructions compound.
 - Keep the **final shot** of the montage matching the end keyframe, so the clip still lands
   where the chain needs it.
 
+### 10. Never grant permission for geometry to leave the frame
+
+**Symptom:** the subject is wildly over-zoomed and cropped on every edge, even though the
+composition paragraph specified modest proportions.
+**Case (2026-08-09):** an app-icon prompt said the mountain range *"spans the full width,
+its bases running off the left and right edges"* and *"the tallest peak rises to about 70%
+of the square's height"*. Both light and dark renders came back zoomed so far in that only
+three of five peaks were visible and the range bled off all four edges. The percentage
+constraint was simply ignored.
+**Why:** "running off the edges" is an explicit licence to crop, and it outranks a numeric
+size hint — the model has no reliable notion of "70% of the height", but it understands
+"off the edge" perfectly. Percentages are weak; permissions are strong.
+**Check:** for any icon or emblem, write an explicit **containment** statement as its own
+labelled paragraph and call it the most important requirement: "fully zoomed-out view; the
+complete subject is small within the square and entirely visible with clear margin all
+around; nothing is cropped, nothing touches any edge." Never say a shape runs off, bleeds
+past, or extends beyond an edge unless you genuinely want the crop. Keep percentages, but
+treat them as a secondary hint, never as the primary control.
+
+### 11. A reserved empty region must be described as empty background, not as a named region
+
+**Symptom:** the area you set aside for later compositing is rendered as a visible object.
+**Case (2026-08-09):** to leave room for a wordmark added offline in `art-edit`, the prompt
+described a *"RESERVED CLEAR BAND: a horizontal band across the vertical middle … a quiet
+zone … a smooth resting surface"*. The dark variant drew an actual horizontal stripe of
+lighter colour straight across the icon.
+**Why:** this is rule #1 in a different costume — "band", "zone" and "surface" are drawable
+nouns, so naming one supplies a shape to render. Describing a *negative* space in positive
+object language produces a positive object.
+**Check:** express reserved space purely as absence plus location: "the top half of the
+square is pure, untouched background colour and nothing else; no marks of any kind reach
+into it." Never give the reserved area a noun of its own. Keeping the reserved region at an
+edge (the whole upper half) is also more reliable than a floating middle stripe, because it
+is describable as bare background rather than as a gap between things.
+
+### 12. Dark grounds invite glow and transparency — demand opacity explicitly
+
+**Symptom:** a flat-vector prompt renders with soft haloes and semi-transparent overlaps,
+but only in the dark-background variant.
+**Case (2026-08-09):** identical geometry text on `#faf8f9` produced clean flat shapes; on
+`#101010` the same prompt produced a glowing white summit marker and translucent
+overlapping mountain layers.
+**Why:** the training distribution for light-on-dark graphics is dominated by neon, HUD and
+"glow" aesthetics, so a dark ground pulls the render toward emissive treatments even when
+the style block says flat. The generic "no glow" in a trailing constraints list is too weak
+against that pull.
+**Check:** in any dark-ground variant, state opacity as a positive requirement inside the
+paragraph that describes the overlapping shapes — "both layers are completely opaque with
+hard clean edges where they overlap" — rather than relying on a "no glow" prohibition at
+the end. Then keep the prohibition as well.
+
 ## Appending to this file
 
 When a run comes back wrong, add an entry in the same shape — **Symptom / Case (dated) /
