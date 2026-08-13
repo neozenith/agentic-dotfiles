@@ -1,18 +1,18 @@
 ---
-name: ais
-description: "Attention Is Scarce. Use mid-session when two or more ambiguities have accumulated and you'd otherwise interrupt the user with several questions. Consolidates the open question set into the single highest-leverage multiple-choice question with a recommended pragmatic default, then cascades the answer across every related ambiguity before asking another."
+name: concise-decisions
+description: "Concise Decisions. Use mid-session when two or more ambiguities have accumulated and you'd otherwise interrupt the user with several questions. Consolidates the open question set into the single highest-leverage multiple-choice question with a recommended pragmatic default, then cascades the answer across every related ambiguity before asking another."
 user-invocable: true
 ---
 
-# Attention Is Scarce (AIS)
+# Concise Decisions
 
 > Every question you ask the user is a tax on their attention. Spend it like
 > it is the scarcest resource in the loop — because it is.
 
-AIS is the mid-session ambiguity resolution loop. Invoke it whenever you
+Concise Decisions is the mid-session ambiguity resolution loop. Invoke it whenever you
 notice that **two or more open decisions** are blocking your work and you are
 tempted to interrupt the user with a chain of questions. Do not dump the list.
-Run AIS first.
+Run Concise Decisions first.
 
 ## When to invoke
 
@@ -28,7 +28,7 @@ Trigger this skill when, mid-task, you find yourself in any of these states:
   than one such assumption pending.
 
 If the answer to "how many open ambiguities are blocking me?" is 1, just ask
-that question directly — AIS overhead isn't worth it. If it's ≥2, run AIS.
+that question directly — Concise Decisions overhead isn't worth it. If it's ≥2, run Concise Decisions.
 
 ## The loop
 
@@ -109,7 +109,7 @@ If any of those four is missing, ask the question.
 
 ## What counts as "done"
 
-Exit AIS when:
+Exit Concise Decisions when:
 
 - No remaining ambiguity would change the design, the API surface, the
   data shape, or the user-visible behaviour.
@@ -138,7 +138,7 @@ wrong.
 
 ## Output template
 
-When you ask the AIS question, structure the message like this:
+When you ask the Concise Decisions question, structure the message like this:
 
 ```
 **Open ambiguities (N):** brief one-line list, ordered by leverage.
@@ -160,14 +160,14 @@ After the user answers, your next message should:
 
 1. Confirm the choice in one line.
 2. State which other ambiguities cascaded resolved and how each was applied.
-3. Either proceed with the work, or ask the next AIS question — but only if
+3. Either proceed with the work, or ask the next Concise Decisions question — but only if
    step 6 of the loop says one is still needed.
 
 ## Relationship to other skills
 
-- `escalators-not-stairs` — the requirement-integrity guardrail. AIS asks
+- `escalators-not-stairs` — the requirement-integrity guardrail. Concise Decisions asks
   *which* requirement to implement; `escalators-not-stairs` ensures none of
   the options silently weaken a stated requirement.
 - `plan-gap` — uses the same iterative-question loop inside its Phase 2
-  refinement of a gap-analysis document. AIS is the same mechanism extracted
+  refinement of a gap-analysis document. Concise Decisions is the same mechanism extracted
   for general mid-session use, with no document-specific obligations.

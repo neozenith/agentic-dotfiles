@@ -2,6 +2,10 @@
 
 Skills, rules and workflows for agentic coding, installable with [`skills`](https://www.npmjs.com/package/skills).
 
+![richdocs showcase: OsakaNights typography, charts, diagrams, maps and cloud architecture](skills/richdocs/assets/richdocs-showcase.gif)
+
+The richdocs showcase demonstrates the visual surface shipped by the skill.
+
 ## Install
 
 ```sh
@@ -56,6 +60,22 @@ Researches a topic, summarises it in ≤5 bullets, then runs a Socratic one-ques
 
 ```sh
 npx skills@latest add neozenith/agentic-dotfiles -s coach -y
+```
+
+### concise-decisions
+
+Resolve multiple blocking ambiguities with one high-leverage multiple-choice question, a recommended default, and a cascade across related decisions.
+
+```sh
+npx skills@latest add neozenith/agentic-dotfiles -s concise-decisions -y
+```
+
+### librarian
+
+Organise repository documentation by checking canonical files, names, locations, and required cross-links.
+
+```sh
+npx skills@latest add neozenith/agentic-dotfiles -s librarian -y
 ```
 
 ### introspect

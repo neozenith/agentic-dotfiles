@@ -6,6 +6,10 @@ of truth; the companion adds theme-aware mermaid, data-driven cytoscape
 graphs and plotly charts, tinted cloud-provider icons from a vendored stencil
 library, and an injectable design-tokens brandpack.
 
+![richdocs showcase: OsakaNights typography, charts, diagrams, maps and cloud architecture](assets/richdocs-showcase.gif)
+
+The showcase exercises the full visual surface in one animated tour.
+
 ## Architecture
 
 ```mermaid

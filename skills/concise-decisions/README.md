@@ -1,4 +1,4 @@
-# Attention Is Scarce (AIS)
+# Concise Decisions
 
 > Every question to the user is a tax on their attention. Spend it like
 > the scarcest resource in the loop — because it is.
