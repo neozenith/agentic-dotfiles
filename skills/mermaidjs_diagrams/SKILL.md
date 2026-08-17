@@ -22,9 +22,10 @@ Not "consider," not "when time permits" — **mandatory, enforced, verifiable**.
 
 ## 1. Apply the color theory reference
 
-Every diagram that uses custom colors (via `classDef`, `style`, theme
-frontmatter, or node-level styles) MUST derive its palette from
-`resources/color_theming.md`. That file covers:
+Before authoring or revising any diagram, read `resources/color_theming.md`.
+Every diagram MUST apply custom colors derived from that reference to encode
+its meaningful categories, states, phases, or roles. Never leave an authored
+diagram on Mermaid's default unstyled palette. That file covers:
 
 - WCAG-aware palettes that work in both dark and light viewer themes.
 - HSL encoding conventions so sibling nodes stay visually coherent.
