@@ -26,10 +26,10 @@
   flowchart htmlLabels — the mindmap entity trap in
   `mermaid-syntax-gate.md` is mindmap-specific).
 - **Gate note:** the vendored parse gate
-  (`vendor/mermaidjs_diagrams/scripts/mermaid_complexity.ts`) does NOT catch
+  (`vendor/mermaidjs-diagrams/scripts/mermaid_complexity.ts`) does NOT catch
   this — the fence parses fine; only label *rendering* fails. The vendored
   copy is refreshed wholesale (ADR-007, never cherry-pick), so the check was
-  not patched locally; if the upstream `mermaidjs_diagrams` skill grows a
+  not patched locally; if the upstream `mermaidjs-diagrams` skill grows a
   list-marker label lint, it arrives here on the next re-vendor. Until then
   this file and the CLAUDE.md gotcha are the guard: grep the source fences
   for `["'\`]\s*(\d+\.|[-*+]) ` before handoff.

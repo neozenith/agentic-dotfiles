@@ -125,7 +125,7 @@ step-by-step playbook**; the steps are:
   (`playwright-cli` → `WebFetch` → mark unverified). Hallucination is a critical failure: every claim
   traces to a `file:line` or a verified URL.
 - **1d — Research synthesis.** Populate Current/Desired State as **2–3 lens diagrams each** (menu in
-  `resources/mermaidjs_diagrams.md`), seed the per-gap increment stack in `DISCOVERY.md`, draft the
+  `resources/mermaidjs-diagrams.md`), seed the per-gap increment stack in `DISCOVERY.md`, draft the
   `G<N>` gaps + stubs, the Overview, the index Gap Map + Dependencies diagrams, and any
   `<!-- UNRESOLVED -->` ADR placeholders.
 - **1e — Per-gap deep research.** One fresh-context subagent per gap to enrich `## Outputs`
@@ -161,7 +161,7 @@ step-by-step playbook**; the three checks are:
 - **3a — Diagram validation.** `DISCOVERY.md` MUST hold ≥2 Current and ≥2 Desired lens diagrams plus one
   increment diagram per gap; the index MUST hold the Gap Map (`flowchart TD`) and Dependencies
   (`flowchart LR`). Render every diagram-bearing file with mmdc (dark + light, exit 0) and pass the
-  contrast + complexity gates (`resources/mermaidjs_diagrams.md`, `resources/style.md` → Diagrams).
+  contrast + complexity gates (`resources/mermaidjs-diagrams.md`, `resources/style.md` → Diagrams).
 - **3b — Requirement integrity.** Apply `resources/escalators-not-stairs.md` across every gap and ticket:
   every Success Measure is mandatory and falsifiable, every gap names a real proof-of-execution Output,
   every Negative Measure is a concrete Type 2 failure, and no requirement is silently downgraded.
@@ -246,7 +246,7 @@ This skill bundles the following reference documents in its `resources/` directo
 | `resources/phase4-decomposition.md` | Phase 4 full playbook — Steps 4a–4e (behavior enumeration, ticket structuring, DAG, Execution Plan, validation) + loop-exit conditions |
 | `resources/escalators-not-stairs.md` | Requirement integrity + executable-evidence principles (no stubs, no mocks of the deliverable) — read at the start of planning and applied in every phase |
 | `resources/5ys.md` | 5 Whys root-cause analysis — the precheck before raising a `<!-- CHANGE-REQUEST -->`, and for retrospectives of Type 2 failures |
-| `resources/mermaidjs_diagrams.md` | Mermaid diagram reference — rendering, complexity thresholds, pitfalls |
+| `resources/mermaidjs-diagrams.md` | Mermaid diagram reference — rendering, complexity thresholds, pitfalls |
 | `resources/playwright-cli.md` | Link verification — detection, fallback chain, and unverified markers |
 | `resources/gh-cli.md` | GitHub CLI reference — detection, authentication, issue CRUD commands |
 | `resources/gh-issues.md` | GitHub issues backend — local cache, sync protocol, edit history lineage |

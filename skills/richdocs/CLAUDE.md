@@ -37,7 +37,7 @@ make -C .claude/skills/richdocs/scripts ci    # gate: must exit 0 before handoff
 | `assets/design-tokens.json` | default neutral brandpack (schema in `rich-blocks.md`) |
 | `resources/adr-log.md` | the **ADR log** (ADR-001…018) — decision lenses; split out of this file for the 500-line invariant |
 | `resources/learned/` | self-curated adjudications/facts (statefulness Pathway 2) — read before re-litigating a past failure |
-| `vendor/mermaidjs_diagrams/` | wholesale vendored mermaid toolchain (parse/complexity + contrast gates, theming references) — refresh per ADR-007, never cherry-pick |
+| `vendor/mermaidjs-diagrams/` | wholesale vendored mermaid toolchain (parse/complexity + contrast gates, theming references) — refresh per ADR-007, never cherry-pick |
 
 ## Invariants
 
@@ -45,7 +45,7 @@ make -C .claude/skills/richdocs/scripts ci    # gate: must exit 0 before handoff
 - Scripts are Tier B (stdlib-only, PEP-723, `uv run --no-project`); network
   is only consumed by the *browser* loading pinned CDN libs, never by the
   Python. Missing inputs crash loudly (escalators-not-stairs).
-  Exception: `vendor/mermaidjs_diagrams/` is Tier A (bun + frozen lockfile)
+  Exception: `vendor/mermaidjs-diagrams/` is Tier A (bun + frozen lockfile)
   — it is vendored wholesale, not authored here (ADR-007).
 - Self-contained: no file under this skill instructs the agent to run or
   read another skill's files (ADR-007).
@@ -182,5 +182,5 @@ is the same log, just split out.
 
 ## Related (maintainer provenance only — never cite from runtime surfaces)
 
-- `../mermaidjs_diagrams/` — upstream source of `vendor/mermaidjs_diagrams/`, re-vendor per ADR-007
+- `../mermaidjs-diagrams/` — upstream source of `vendor/mermaidjs-diagrams/`, re-vendor per ADR-007
 - `.claude/rules/claude_skills/index.md` — 500-line invariant, tree structure

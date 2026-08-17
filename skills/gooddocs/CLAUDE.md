@@ -8,8 +8,8 @@ apply it to the next decision instead of re-deriving the trade-off.
 Prose skill + eval suite. Doc gates before handoff, run from repo root:
 
 ```sh
-bun run .claude/skills/mermaidjs_diagrams/scripts/mermaid_contrast.ts   .claude/skills/gooddocs/README.md
-bun run .claude/skills/mermaidjs_diagrams/scripts/mermaid_complexity.ts .claude/skills/gooddocs/README.md
+bun run .claude/skills/mermaidjs-diagrams/scripts/mermaid_contrast.ts   .claude/skills/gooddocs/README.md
+bun run .claude/skills/mermaidjs-diagrams/scripts/mermaid_complexity.ts .claude/skills/gooddocs/README.md
 uvx --from md-toc md_toc --in-place --no-list-coherence github --header-levels 4 .claude/skills/gooddocs/README.md
 ```
 
@@ -115,19 +115,19 @@ Eval suite (`.claude/rules/claude_skills/evals.md`): `make -C
   restructure tempts you to fix a claim, that's a mode switch the user must
   see, not a drive-by edit.
 
-### ADR-6: visuals are curated dual-density; authoring delegates to mermaidjs_diagrams
+### ADR-6: visuals are curated dual-density; authoring delegates to mermaidjs-diagrams
 
 - **Status:** Accepted
 - **Context:** The maintainer's practice: lots of diagrams to break up text
   walls and visually encode information, with simplified diagrams shown
   top-level and ultra-detailed variants hidden in `<details><summary>` blocks
   (opt-in cascading detail). The repo already has a dedicated
-  `mermaidjs_diagrams` skill owning palette, WCAG contrast, and complexity
+  `mermaidjs-diagrams` skill owning palette, WCAG contrast, and complexity
   gates; duplicating that knowledge here would drift.
 - **Decision:** structure.md rules 16-17 encode the technique (diagram +
   one-sentence prose summary; dual-density pair with inviting `<summary>`
   labels). All diagram *authoring* is delegated to a subagent that invokes
-  the `mermaidjs_diagrams` skill; gooddocs only decides where a visual earns
+  the `mermaidjs-diagrams` skill; gooddocs only decides where a visual earns
   its place and at what density.
 - **Consequences:** gooddocs output inherits the gate guarantees without
   owning them; diagram-style changes happen in one skill and propagate.

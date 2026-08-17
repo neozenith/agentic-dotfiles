@@ -159,14 +159,14 @@ authoritative.
    **dual-density cascading detail**: simplified diagram inline, the
    ultra-detailed variant in a `<details><summary>` block beneath it, each
    with a one-sentence prose summary. Delegate the diagram authoring to a
-   subagent instructed to invoke the `mermaidjs_diagrams` skill; it owns
+   subagent instructed to invoke the `mermaidjs-diagrams` skill; it owns
    palette, contrast, and complexity gates; never hand-roll mermaid here.
 6. If `voice` was requested, layer the voice fingerprint on top; it changes
    register and signature moves, never the lens discipline.
 7. **Verify before done**: every command in the new doc executed (or `make -n`
    dry-run), every path globbed, every internal link resolved, TOC regenerated
    via the `mdtoc` skill for docs >100 lines, and any added diagrams passing
-   the mermaidjs_diagrams gate scripts.
+   the mermaidjs-diagrams gate scripts.
 
 ## Restructure mode — shape without changing claims
 
@@ -189,7 +189,7 @@ For improving the structural readability of an existing doc, spec, or plan
    looks wrong, flag it for an audit; don't silently fix it. Prose walls whose
    content is flow/structure-shaped may become diagrams (the information,
    unchanged, in visual form): dual-density per structure.md rule 17, authored
-   via a `mermaidjs_diagrams` subagent.
+   via a `mermaidjs-diagrams` subagent.
 4. For specs/plans, converge toward the canonical skeletons (status block,
    opening Summary section, numbered requirement IDs, Open Questions, phases with
    observable acceptance criteria) — preserving existing IDs/anchors that
@@ -226,8 +226,8 @@ For improving the structural readability of an existing doc, spec, or plan
 - Keep doc sources near the code they describe; hub-and-spoke (thin root
   README routing to detailed docs next to their code).
 - Diagram work is always delegated: launch a subagent that invokes the
-  `mermaidjs_diagrams` skill (via the Skill tool) for curation, palette, and
+  `mermaidjs-diagrams` skill (via the Skill tool) for curation, palette, and
   both gate scripts. gooddocs decides *where* a visual earns its place and at
-  what density; mermaidjs_diagrams decides *how* it's drawn.
+  what density; mermaidjs-diagrams decides *how* it's drawn.
 - Respect the repo's 500-line ceiling for skill/rule docs; suggest splits at
   natural seams rather than trimming substance.

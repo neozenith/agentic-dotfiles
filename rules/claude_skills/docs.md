@@ -25,7 +25,7 @@ Keep them DRY by role: don't duplicate the command reference across all three �
 owns the operating detail; `README.md` links to it; `CLAUDE.md` never restates usage, only
 rationale.
 
-> **The only skill these rules name by relative path is `mermaidjs_diagrams`** — because the
+> **The only skill these rules name by relative path is `mermaidjs-diagrams`** — because the
 > diagram gates are *executable scripts* you must run, not a prose example to imitate. Do not
 > introduce "model it on skill X" pointers to any other skill; the quality bar is the
 > distilled checklists in this file, not another skill's current state.
@@ -53,7 +53,7 @@ Required sections, in order:
    - driving the script directly (the real command(s)), **and**
    - the single most common "escape hatch" / next-most-useful snippet.
    Every snippet must be copy-pasteable and accurate — **run it before you write it.**
-4. **Architecture** — **at least one Mermaid diagram** authored per the `mermaidjs_diagrams`
+4. **Architecture** — **at least one Mermaid diagram** authored per the `mermaidjs-diagrams`
    skill (see the diagram rules below). Prefer **dual-density**: a small "at a glance" diagram
    inline, and a fuller one inside a `<details>` block for readers who want depth.
 5. **Reference** — requirements/config, command reference (or a link to `SKILL.md`), worked
@@ -83,15 +83,15 @@ the right column is the failure mode that most often replaces it.
 
 ### Architecture diagram rules (non-negotiable)
 
-Diagrams are governed by the `mermaidjs_diagrams` skill. A diagram is not done until it passes
+Diagrams are governed by the `mermaidjs-diagrams` skill. A diagram is not done until it passes
 **both** gates with a 0 exit code:
 
 ```bash
-bun run .claude/skills/mermaidjs_diagrams/scripts/mermaid_contrast.ts   .claude/skills/<name>/README.md
-bun run .claude/skills/mermaidjs_diagrams/scripts/mermaid_complexity.ts .claude/skills/<name>/README.md
+bun run .claude/skills/mermaidjs-diagrams/scripts/mermaid_contrast.ts   .claude/skills/<name>/README.md
+bun run .claude/skills/mermaidjs-diagrams/scripts/mermaid_complexity.ts .claude/skills/<name>/README.md
 ```
 
-- **Palette from [`color_theming.md`](../../skills/mermaidjs_diagrams/resources/color_theming.md).**
+- **Palette from [`color_theming.md`](../../skills/mermaidjs-diagrams/resources/color_theming.md).**
   For primary (foreground) nodes use a 600–700 Tailwind fill with **`stroke:#fff,color:#fff`** —
   white border + white text clears both the text-AA (≥ 4.5:1) and border-AA (≥ 3:1) checks. For
   secondary nodes use a 100-shade fill with a 500-shade stroke and `color:#1e293b`. **Always pair

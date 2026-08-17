@@ -88,7 +88,7 @@ mandatory in both directions.
   [resources/voice.md](resources/voice.md)
 
 Requirements: `git`; `bunx` for link checking; subagent support for audit
-fan-out and for diagram curation (delegated to the `mermaidjs_diagrams`
+fan-out and for diagram curation (delegated to the `mermaidjs-diagrams`
 skill, which owns palette and the contrast/complexity gates). Audit never
 runs mutating commands — read-only verification only.
 

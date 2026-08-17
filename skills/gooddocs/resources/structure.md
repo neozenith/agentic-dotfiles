@@ -92,7 +92,7 @@ citation — justify whitespace by chunking and scanning, never by that number.
     Every diagram gets a one-sentence prose summary directly below it (the
     diagram is scannable; the sentence is searchable and accessible).
     Authoring is delegated: diagram curation, palette, and the contrast/
-    complexity gates belong to the `mermaidjs_diagrams` skill — invoke it in
+    complexity gates belong to the `mermaidjs-diagrams` skill — invoke it in
     a subagent rather than hand-rolling mermaid.
 17. **Dual-density cascading detail:** show the visually simplified diagram
     inline at the top level, and hide the ultra-detailed variant inside a

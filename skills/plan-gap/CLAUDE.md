@@ -91,7 +91,7 @@ Resources table). Flags worth raising:
 
 Render the timeline as a gantt so load order and weight read at a glance: one **section per phase**, one
 **task per resource**, the task's start = its `Read` time and its **bar length ∝ token weight** (e.g.
-1 minute of bar per 1k tokens). Validate and render through the `/mermaidjs_diagrams` skill (it supports
+1 minute of bar per 1k tokens). Validate and render through the `/mermaidjs-diagrams` skill (it supports
 `gantt`); keep it within that skill's complexity gate.
 
 ````markdown

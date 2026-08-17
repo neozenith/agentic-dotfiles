@@ -22,7 +22,7 @@ locally, and regenerated at will.
    block *below* the mermaid original (don't replace it — the mermaid stays
    readable on GitHub). Compound nodes map to mermaid subgraphs; keep the
    node count within the complexity budget the vendored gate enforces
-   (`vendor/mermaidjs_diagrams/scripts/mermaid_complexity.ts`).
+   (`vendor/mermaidjs-diagrams/scripts/mermaid_complexity.ts`).
 3. Where the doc names concrete services, drop tinted stencils into prose or
    tables: `stencil.py extract "mxgraph.aws4/lambda" --color '#ED7100'`,
    reference the SVG with a normal markdown image. Icons render on GitHub

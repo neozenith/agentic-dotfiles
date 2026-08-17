@@ -14,7 +14,7 @@
 - **The check (deterministic, free):**
 
   ```bash
-  bun run .claude/skills/richdocs/vendor/mermaidjs_diagrams/scripts/mermaid_complexity.ts SOURCE.md
+  bun run .claude/skills/richdocs/vendor/mermaidjs-diagrams/scripts/mermaid_complexity.ts SOURCE.md
   ```
 
   `ParserFailure … yielded 0 nodes` = the fence is invalid mermaid, exit 1,

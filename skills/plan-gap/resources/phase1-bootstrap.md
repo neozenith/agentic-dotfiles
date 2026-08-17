@@ -112,7 +112,7 @@ with the appropriate marker (see `resources/playwright-cli.md`) for the user to 
 Combine the verified findings from both tracks across the file set:
 
 1. Populate **Current State** in `DISCOVERY.md` from Track A findings (with codebase citations), drawn
-   through **2–3 lenses** chosen from the menu in `resources/mermaidjs_diagrams.md` (component,
+   through **2–3 lenses** chosen from the menu in `resources/mermaidjs-diagrams.md` (component,
    data-flow, sequence, deployment, state, entity) — only the lenses that illuminate this initiative
 2. Populate **Desired State** in `DISCOVERY.md` from Track B findings (with verified URLs), through the
    **same** lenses and **same node IDs**, so each pair reads as a before/after

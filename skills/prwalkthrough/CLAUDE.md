@@ -8,8 +8,8 @@ apply it to the next decision instead of re-deriving the trade-off.
 Prose skill + eval suite. Doc gates before handoff, run from repo root:
 
 ```sh
-bun run .claude/skills/mermaidjs_diagrams/scripts/mermaid_contrast.ts   .claude/skills/prwalkthrough/README.md
-bun run .claude/skills/mermaidjs_diagrams/scripts/mermaid_complexity.ts .claude/skills/prwalkthrough/README.md
+bun run .claude/skills/mermaidjs-diagrams/scripts/mermaid_contrast.ts   .claude/skills/prwalkthrough/README.md
+bun run .claude/skills/mermaidjs-diagrams/scripts/mermaid_complexity.ts .claude/skills/prwalkthrough/README.md
 uvx --from md-toc md_toc --in-place --no-list-coherence github --header-levels 4 .claude/skills/prwalkthrough/README.md
 ```
 

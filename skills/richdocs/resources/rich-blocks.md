@@ -16,7 +16,7 @@ with `cache: no-store` + `?v=<BUILD_ID>`.
 
 Rendered by mermaid 11.x. Theme follows the document theme (`default` /
 `dark`), re-initialised and re-rendered on every theme flip. The source must
-pass the vendored gates (`vendor/mermaidjs_diagrams/scripts/
+pass the vendored gates (`vendor/mermaidjs-diagrams/scripts/
 mermaid_complexity.ts` + `mermaid_contrast.ts`) — see the "Mermaid gate"
 section in `SKILL.md`.
 

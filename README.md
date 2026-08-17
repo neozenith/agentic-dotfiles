@@ -38,12 +38,12 @@ Markdown → interactive HTML (mermaid, cytoscape, plotly, draw.io cloud stencil
 npx skills@latest add neozenith/agentic-dotfiles -s richdocs -y
 ```
 
-### mermaidjs_diagrams
+### mermaidjs-diagrams
 
 Render Mermaid diagrams in markdown with enforced complexity limits and WCAG contrast checks.
 
 ```sh
-npx skills@latest add neozenith/agentic-dotfiles -s mermaidjs_diagrams -y
+npx skills@latest add neozenith/agentic-dotfiles -s mermaidjs-diagrams -y
 ```
 
 ### gooddocs

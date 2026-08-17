@@ -404,7 +404,7 @@ Reject any ticket exhibiting these anti-patterns (see `resources/tdd/tdd.md`, `r
 
 Review/background only — not loaded during the loop. Holds the architecture that motivates the gaps,
 shown through **multiple lenses** and a **per-gap increment stack**. Current State and Desired State
-each pick **2–3 lenses** from the menu in `resources/mermaidjs_diagrams.md` (component, data-flow,
+each pick **2–3 lenses** from the menu in `resources/mermaidjs-diagrams.md` (component, data-flow,
 sequence, deployment, state, entity) — only the lenses that genuinely illuminate *this* initiative.
 Use **consistent node IDs** across Current → Desired → every increment so the reader diffs visually.
 
