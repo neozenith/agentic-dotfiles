@@ -2,8 +2,8 @@
 
 This is the **statefulness** child of the skill/rule family rooted at
 [`index.md`](index.md). Siblings: [`docs.md`](docs.md) (the CLAUDE.md ADR
-contract that implicit state feeds), [`evals.md`](evals.md) (the explicit
-regression net), [`environments.md`](environments.md) (what persists where).
+contract that implicit state feeds), [`environments.md`](environments.md)
+(what persists where).
 
 Skills are stateless prompts, but they operate inside stateful substrates.
 This rule names the three state pathways and the contract for each.

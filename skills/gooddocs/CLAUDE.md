@@ -26,12 +26,8 @@ All files ≤ 500 lines (`.claude/rules/claude_skills/index.md`).
 | `resources/voice.md` | Maintainer voice fingerprint — loaded only on `voice` |
 | `resources/slop_smells.md` | Curated AI-slop smell catalog + capture-THE-WHY guidance (lazy; maintainer-grown) |
 | `resources/prose_style.md` | Sentence-level global-audience style: no em-dash, Australian English, short coherent clauses, ESL/translator empathy, inclusive language, standardised domain language (lazy; write/restructure) |
-| `scripts/evals/` | Base eval: drifted-README fixture, golden, runner (via `_evalkit`) |
 | `CLAUDE.md` | This file — rationale and decision log |
 | `../../workflows/gooddocs-audit.js` | Reusable named **dynamic workflow** wrapping AUDIT (+ safe-fix) for loop/schedule use; reads this skill's doctrine at runtime |
-
-Eval suite (`.claude/rules/claude_skills/evals.md`): `make -C
-.claude/skills/gooddocs/scripts ci` (free), `… evals` (paid golden runs).
 
 ## Architecture principles
 

@@ -23,11 +23,7 @@ All files ≤ 500 lines (`.claude/rules/claude_skills/index.md`).
 | `README.md` | Human explainer: purpose, quickstart, architecture diagrams |
 | `resources/clustering.md` | The git-only clustering algorithm (lazy-loaded) |
 | `resources/evidence.md` | Research citations + counter-evidence (lazy-loaded) |
-| `scripts/evals/` | Base eval: needle-in-codemod fixture, golden, runner (via `_evalkit`) |
 | `CLAUDE.md` | This file — rationale and decision log |
-
-Eval suite (`.claude/rules/claude_skills/evals.md`): `make -C
-.claude/skills/prwalkthrough/scripts ci` (free) · `… evals` (paid golden runs).
 
 ## Architecture principles
 

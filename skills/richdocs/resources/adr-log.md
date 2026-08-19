@@ -365,8 +365,8 @@ labels), never the non-negotiable one (CVD distinguishability).
 ### ADR-006 — Evals deferred
 
 - **Status:** accepted (deferred work)
-- **Context:** `.claude/rules/claude_skills/evals.md` defines the golden/eval
-  contract; building the harness now would have doubled the initial scope.
+- **Context:** the repo's then-current eval contract (since retired) defined a
+  golden/eval harness; building it now would have doubled the initial scope.
 - **Decision:** ship v1 with the free deterministic gate only (`make ci`,
   ≥90% coverage). Eval goldens (render a fixture doc headlessly, assert
   blocks render) are the first follow-up.

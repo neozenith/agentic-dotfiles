@@ -212,8 +212,8 @@ All files ≤ 500 lines (`.claude/rules/claude_skills/index.md`).
 - [ ] New scale-up elements define an observable graduation trigger before
       entering `flavours.md` (ADR-7).
 - [ ] Deterministic checks (presence, naming, link resolution) are candidates
-      for a future `scripts/` helper + eval suite per the skills scripts/evals
-      contracts — added as Tier A/B scripts when audit volume justifies it.
+      for a future `scripts/` helper per the skills scripts contract — added
+      as Tier A/B scripts when audit volume justifies it.
 - [ ] Both mermaid gates + mdtoc re-run if README touched; all files ≤ 500
       lines; prose stays brand-agnostic.
 

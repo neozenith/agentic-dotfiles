@@ -37,7 +37,7 @@ independently curatable, and that is the trade the maintainer chose.
   copy. The skill then depends on nothing outside its own folder. Vendoring is
   the sanctioned way to reuse, never a runtime reference to a sibling.
 - **Rules are not skills.** Referencing project rules under `.claude/rules/**`
-  (the 500-line invariant, the docs/scripts/evals contracts) is fine and
+  (the 500-line invariant, the docs/scripts contracts) is fine and
   expected. The prohibition is on depending on a **sibling skill**.
 
 ## The 500-line invariant still applies

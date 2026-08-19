@@ -15,13 +15,6 @@ uvx --from md-toc md_toc --in-place --no-list-coherence github --header-levels 4
 
 All files ≤ 500 lines (`.claude/rules/claude_skills/index.md`).
 
-Eval suite (`.claude/rules/claude_skills/evals.md`):
-
-```sh
-make -C .claude/skills/codereview/scripts ci     # free: lint + shared-harness tests
-make -C .claude/skills/codereview/scripts evals  # paid: golden runs (claude CLI + ANTHROPIC_API_KEY)
-```
-
 ## File map
 
 | File | Role |
@@ -29,7 +22,6 @@ make -C .claude/skills/codereview/scripts evals  # paid: golden runs (claude CLI
 | `SKILL.md` | Agent operating manual: phases, rubric, denylist, output format |
 | `README.md` | Human explainer: purpose, quickstart, architecture diagram |
 | `EVIDENCE.md` | Research citations + counter-evidence behind each rule |
-| `scripts/evals/` | Base eval: planted-bug fixture, golden, generic runner (via `_evalkit`) |
 | `CLAUDE.md` | This file — rationale and decision log |
 
 ## Architecture principles
