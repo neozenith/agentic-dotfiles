@@ -1,14 +1,10 @@
 # gooddocs
 
-Keeps documentation true, well-shaped, and great. Audit mode fans out parallel
-subagents that corroborate every checkable claim in the docs against the actual
-code (commands, paths, signatures, env vars, links) and emits a severity-ranked
-drift report; write mode authors or rewrites docs under a strict lens taxonomy
-distilled from 23 of the most respected open-source documentation sets —
-optionally in the maintainer's personal voice; restructure mode reorganizes
-existing docs, specs, and plan files for scannability (heading hierarchy,
-frontloaded summaries, list/table discipline, whitespace rhythm) without
-changing their claims.
+Keeps documentation true, well-shaped, and great. 
+
+- `Audit` mode fans out parallel subagents that corroborate every checkable claim in the docs against the actual code (commands, paths, signatures, env vars, links) and emits a severity-ranked drift report.
+- `Write` mode authors or rewrites docs under a strict lens taxonomy distilled from 23 of the most respected open-source documentation sets.
+- `Restructure` mode reorganizes existing docs, specs, and plan files for scannability (heading hierarchy, frontloaded summaries, list/table discipline, whitespace rhythm) without changing their claims.
 
 ## Table of Contents
 
