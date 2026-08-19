@@ -1,11 +1,13 @@
 # librarian
 
-Keeps a repository's documentation *organised*: the canonical documents exist
-(README, CONTRIBUTING, an agent file, an ADR surface), carry the right names,
-live in the right locations, and cross-link as required — including spotting
-sections that semantically belong in a different file. It judges placement
-only, never prose quality or staleness; content moves verbatim, so
-organisation passes compose cleanly with independent content-quality tooling.
+Keeps a repository's documentation *organised*
+
+- the canonical documents exist (README, CONTRIBUTING, an agent file, an ADR surface), 
+- carry the right names,
+- live in the right locations, and 
+- cross-link as required — including spotting sections that semantically belong in a different file. 
+
+This skill is about _**curation**_ not _**content**_.
 
 ## Table of Contents
 
@@ -37,18 +39,6 @@ In Claude Code:
 /librarian apply                # execute the approved shelving plan
 ```
 
-Driving the cheapest existence checks directly — required set + link wiring:
-
-```sh
-ls README.md CONTRIBUTING.md CLAUDE.md AGENTS.md ADRs.md 2>/dev/null
-grep -rn "ADRs.md\|adrs/" CLAUDE.md      # agent file must route to the ADR surface
-```
-
-Escape hatch — find docs nothing links to (orphan candidates):
-
-```sh
-for f in $(git ls-files '*.md'); do grep -rql --include='*.md' "$(basename "$f")" . | grep -qv "^./$f$" || echo "orphan? $f"; done
-```
 
 ## Architecture
 
