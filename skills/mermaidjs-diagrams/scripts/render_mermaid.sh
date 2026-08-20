@@ -12,6 +12,14 @@ fi
 
 OUTPUT_BASE=".mmdc_cache"
 
+# Keep temporary npm packages inside the task workspace. `npx` otherwise writes
+# to the shared user npm cache, which can be owned by another process and fail
+# with EPERM before Mermaid starts. This does not choose or download a browser.
+MERMAID_RUNTIME_DIR="${MERMAID_RUNTIME_DIR:-$PWD/tmp/.mmdc_cache}"
+export MERMAID_RUNTIME_DIR
+export NPM_CONFIG_CACHE="${NPM_CONFIG_CACHE:-$MERMAID_RUNTIME_DIR/npm}"
+mkdir -p "$NPM_CONFIG_CACHE"
+
 render_variant() {
   local input="$1" theme="$2" bgcolor="$3" output_format="$4"
   local input_path input_filename variant output_target output
