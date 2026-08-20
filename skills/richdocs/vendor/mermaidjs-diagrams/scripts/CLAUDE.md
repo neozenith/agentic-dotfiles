@@ -47,7 +47,7 @@ Anything that can't be enforced by `make ci` doesn't exist.
 | `mermaid_complexity.ts` | TypeScript | Canonical-parser complexity scorer (`.mmd` + `.md`) via Langium + mermaid-core JISON. |
 | `mermaid_contrast.ts` | TypeScript | WCAG contrast audit for `classDef`/`style` directives inside diagrams. |
 | `color_contrast.ts` | TypeScript | WCAG + APCA calculator for arbitrary CSS color pairs. |
-| `render_mermaid.sh` | Bash | Renders both standard variants (dark+transparent, default+white) via `mmdc`. |
+| `render_mermaid.sh` | Bash | Renders both standard variants (dark+transparent, default+white) via `mmdc`, resolving a browser, classifying failures, self-rectifying the remediable ones, and verifying the PNGs. Modes: `--doctor`, `--verify`, `--classify`. |
 
 ### Private (NOT in `SKILL.md`)
 
@@ -68,6 +68,7 @@ Every public/private script has a sibling test:
 | `mermaid_complexity.ts` | `mermaid_complexity.test.ts` |
 | `mermaid_contrast.ts` | `mermaid_contrast.test.ts` |
 | `color_contrast.ts` | `color_contrast.test.ts` |
+| `render_mermaid.sh` | `render_mermaid.test.ts` (bun test driving the Bash CLI — see `SH_SCRIPTS` in the Makefile) |
 | `_update_examples_readme.py` | `test__update_examples_readme.py` (double underscore: `test_` + `_private`) |
 
 ### Shared configuration
@@ -374,9 +375,46 @@ controls, don't keep auditing the authored value — detect the context and audi
 actually renders, in every state the host can render (here: both themes). A gate that checks
 the wrong layer is worse than no gate: it grants false confidence.*
 
+### ADR-002 — The renderer triages its own failures instead of bailing
+
+**Status:** accepted (2026-08).
+
+**Context.** `render_mermaid.sh` used to be a thin `mmdc` wrapper: any non-zero exit
+surfaced as an undifferentiated "render failure." In a restricted macOS workspace that
+produced three *different* failures in sequence — an `EPERM` on the shared npm cache, a
+missing Puppeteer `chrome-headless-shell`, and a sandbox denial of Chromium's macOS port
+registration (`bootstrap_check_in ... Permission denied (1100)`) — all of which read
+identically to an agent. The observed consequences were the expensive ones: retrying an
+unfixable launch, "fixing" a diagram that had already passed both gates, and reporting a
+render as done when no PNG existed. A passing complexity/contrast gate says nothing about
+whether a browser started.
+
+**Decision.** The script owns the top of the triage ladder. It (a) resolves an
+already-installed Chromium — Puppeteer cache, Playwright cache, system browsers — and only
+sets `PUPPETEER_SKIP_DOWNLOAD` when it actually has one; (b) isolates the npm cache under
+the task workspace; (c) classifies stderr into `NPM_CACHE_PERMISSION` / `BROWSER_MISSING` /
+`SANDBOX_DENIED` / `NETWORK_UNREACHABLE` / `DIAGRAM_SYNTAX` / `UNKNOWN`; (d) applies each
+mechanical remedy at most once and retries; (e) verifies every output as a decodable PNG
+with non-zero IHDR dimensions; and (f) on genuine failure prints `class` + `evidence` +
+`remedy` and points at `resources/render_troubleshooting.md`. `--doctor`, `--verify`, and
+`--classify` expose the pieces for use outside a full render.
+
+**Consequences.** Classification is now load-bearing, so it is tested
+(`render_mermaid.test.ts`) against verbatim stderr fixtures from npm, Puppeteer, Chromium,
+and Mermaid — the tests are where an upstream wording change surfaces. The render path
+itself is not tested (it needs a browser; a silently-skipping test is worse than none).
+Class order encodes precedence: the earliest-failing input wins, because a run that never
+unpacked `mmdc` cannot also have a browser bug.
+
+**Lens.** *When a tool's failure has several independent causes and only one of them is the
+user's input, an undifferentiated error teaches the agent to blame the input — the one thing
+it can edit. Name the classes, prove which one fired, and make the remedy for each one
+explicit. "It failed" is an invitation to damage working work.*
+
 ## Related
 
 - `../SKILL.md` — public-facing skill surface (what this skill does).
+- `../resources/render_troubleshooting.md` — the triage procedure ADR-002 automates.
 - `../README.md` — ultra-short feature pitch for drive-by readers.
 - `.claude/rules/claude_skills/index.md` — the canonical convention doc this file
   was derived from. If it changes, consider updating this file to match (or

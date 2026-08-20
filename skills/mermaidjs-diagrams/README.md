@@ -5,7 +5,13 @@ Render and maintain Mermaid.JS diagrams with **visual-clarity enforcement**.
 ## Features
 
 - **Render** `.md` files containing ```` ```mermaid ```` fences to PNG/SVG
-  (dark+transparent and default+white variants by default).
+  (dark+transparent and default+white variants by default). Every artifact is
+  verified as a decodable PNG — a renderer exiting 0 without writing an image
+  is a failure, not a pass.
+- **Self-triaging renders** — Chromium failures are classified (npm cache /
+  missing browser / sandbox denial / network / diagram syntax), mechanically
+  remediable ones are retried, and only one class ever means "edit the
+  diagram."
 - **Complexity lint** — ruff-style findings on node count, visual-complexity
   score, and subgraph depth. Cognitive-load-calibrated thresholds (Huang
   2020, 50-node cap). Uses Mermaid's canonical parser.
@@ -88,4 +94,6 @@ make -C .claude/skills/mermaidjs-diagrams/scripts cli-demo
 ```
 
 See [`SKILL.md`](SKILL.md) for usage, [`resources/`](resources/) for deep dives,
-and [`scripts/CLAUDE.md`](scripts/CLAUDE.md) for the maintenance guide.
+[render triage](resources/render_troubleshooting.md) when a render fails for
+reasons that aren't the diagram, and [`scripts/CLAUDE.md`](scripts/CLAUDE.md)
+for the maintenance guide.

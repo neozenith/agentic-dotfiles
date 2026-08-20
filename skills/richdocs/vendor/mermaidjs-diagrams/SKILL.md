@@ -109,41 +109,50 @@ bash .claude/skills/mermaidjs-diagrams/scripts/render_mermaid.sh path/to/documen
 Output lands in `.mmdc_cache/{variant}/path/to/document-*.png`.
 
 `mmdc` reads the markdown file, extracts every mermaid fence, and renders each as a
-numbered image artefact. Exit code 0 = all fences valid. Non-zero = render failure
-(see stderr for the offending fence).
+numbered image artefact. The script exits 0 only when every expected PNG was written
+**and verified** (magic bytes + non-zero dimensions) — a renderer that exits 0 without
+producing an image is treated as a failure, not a success.
 
 ## Custom variants
 
-For formats beyond the two defaults, use `mmdc` directly. Three parameters form a
-**variant tuple** that determines the output folder name:
+For formats beyond the two defaults, drive `mmdc` directly. Three parameters form a
+**variant tuple** — theme (`-t`: `default`/`dark`), background (`-b`:
+`white`/`black`/`transparent`), format (`-e`: `png`/`svg`) — which also names the
+output folder, `{theme}_{backgroundColor}_{format}`.
 
-| Parameter | Flag | Values | Default |
-|-----------|------|--------|---------|
-| Theme | `-t` | `default`, `dark` | **`dark`** |
-| Background | `-b` | `white`, `black`, `transparent` | **`transparent`** |
-| Format | `-e` | `png`, `svg` | **`png`** |
+> Full variant documentation, with copy-paste `mmdc` invocations for every
+> combination: `resources/pattern_render_markdown.md`
 
-Output folder: `{theme}_{backgroundColor}_{format}` (e.g. `dark_transparent_png`)
+## When a render fails: triage, don't bail
+
+Rendering drives a real Chromium, so it fails for reasons that have nothing to
+do with your diagram. **Classify before you touch the source** — four
+independent inputs can break, and only one of them is the diagram:
+
+| stderr signature | Class | What to do |
+|------------------|-------|-----------|
+| `EPERM` / `EACCES` / `_cacache` | `NPM_CACHE_PERMISSION` | Task-local `NPM_CONFIG_CACHE` (script retries this itself) |
+| `Could not find Chrome`, `chrome-headless-shell` | `BROWSER_MISSING` | Point at an installed Chromium, or let Puppeteer download one — never both wrong at once |
+| `MachPortRendezvous`, `Permission denied (1100)` | `SANDBOX_DENIED` | Stop retrying; re-run **only** the render in a browser-capable execution class |
+| `ENOTFOUND` / `ETIMEDOUT` | `NETWORK_UNREACHABLE` | Ship the fences unrendered — GitHub/GitLab render them natively |
+| `Parse error`, `UnknownDiagramError` | `DIAGRAM_SYNTAX` | **The only class that means edit the diagram** |
+
+`render_mermaid.sh` does the first four steps of this itself: it resolves a
+browser, isolates the npm cache, classifies stderr, retries once per remediable
+class, and prints `class` + `evidence` + `remedy` when it genuinely cannot
+proceed. Supporting modes:
 
 ```bash
-INPUT="path/to/document.md"
-INPUT_PATH="path/to/"
-OUTPUT_FORMAT="png"
-THEME=dark
-BGCOLOR=transparent
-VARIANT="${THEME}_${BGCOLOR}_${OUTPUT_FORMAT}"
-OUTPUT_BASE=".mmdc_cache"
-OUTPUT_TARGET="${OUTPUT_BASE}/${VARIANT}/${INPUT_PATH}/"
-OUTPUT="${OUTPUT_BASE}/${VARIANT}/${INPUT}"
-
-npx -p @mermaid-js/mermaid-cli mmdc \
-  -i "${INPUT}" \
-  -a "${OUTPUT_TARGET}" \
-  -o "${OUTPUT}" \
-  --scale 4 -e "${OUTPUT_FORMAT}" -t "${THEME}" -b "${BGCOLOR}"
+bash .../render_mermaid.sh --doctor              # probe the host, render nothing
+bash .../render_mermaid.sh --verify out/*.png    # is this actually a decodable PNG?
 ```
 
-> Full variant documentation: `resources/pattern_render_markdown.md`
+Never respond to an environmental failure by simplifying, restyling, or
+deleting a diagram that passed the gates — and never report a render as done
+without a verified artifact.
+
+> Full triage procedure, escalation recipes, and field evidence:
+> `resources/render_troubleshooting.md`
 
 ## Icon packs
 
@@ -219,49 +228,17 @@ approach and naming conventions.
 # Contrast Analysis
 
 Contrast checking is **mandatory**, not optional — see "Required for every
-diagram" above. This section covers the full toolchain surface (flags,
-output formats, exit-code contract) for authors who need more than the
-recipe block at the top of the file.
+diagram" above, which carries the mandate and the two commands you need.
 
-Two complementary tools:
+Two complementary tools back it: `scripts/mermaid_contrast.ts` audits every
+`classDef`/`style` directive inside `.mmd`/`.md` files, and
+`scripts/color_contrast.ts` scores any two CSS colors ad hoc (hex, rgb, oklch,
+named). Both exit `0` when every pair passes AA, `1` on any failure, `2` on
+usage error — drop-in suitable for `make ci`-style gates. Neither needs a
+browser, so both keep working when rendering is blocked.
 
-| Script | Scope | Use when |
-|--------|-------|---------|
-| `scripts/mermaid_contrast.ts` | Audits every `classDef`/`style` directive inside `.mmd`/`.md` files — scores `fill × color` (text on fill) at AA ≥ 4.5:1 and `fill × stroke` (border on fill) at AA ≥ 3:1 | Catching low-contrast custom color palettes before they land in docs |
-| `scripts/color_contrast.ts` | Generic WCAG + APCA calculator for any two CSS colors (hex, rgb, oklch, named, etc.) | Ad-hoc pair checks — e.g. sampling colors from a screenshot or comparing theme tokens |
-
-```bash
-# Audit every diagram in a directory tree (auto-detects mkdocs vs github)
-bun run .claude/skills/mermaidjs-diagrams/scripts/mermaid_contrast.ts docs/
-bun run .claude/skills/mermaidjs-diagrams/scripts/mermaid_contrast.ts docs/ --summary
-bun run .claude/skills/mermaidjs-diagrams/scripts/mermaid_contrast.ts docs/ --json
-
-# Force a render context (see "Required for every diagram")
-bun run .claude/skills/mermaidjs-diagrams/scripts/mermaid_contrast.ts docs/ --profile mkdocs-material
-bun run .claude/skills/mermaidjs-diagrams/scripts/mermaid_contrast.ts docs/ --profile github
-
-# Ad-hoc pair
-bun run .claude/skills/mermaidjs-diagrams/scripts/color_contrast.ts "#ffffff" "#2563eb"
-bun run .claude/skills/mermaidjs-diagrams/scripts/color_contrast.ts "rgb(55 65 81)" "oklch(0.98 0 0)" --json
-
-# Translucent fill: --over composites it onto the page bg first (resolve the box)
-bun run .claude/skills/mermaidjs-diagrams/scripts/color_contrast.ts "#36464e" "#1d4ed836" --over "#ffffff"
-
-# Batch pairs via stdin
-echo '[["#fff","#777"],["red","blue"]]' | bun run .claude/skills/mermaidjs-diagrams/scripts/color_contrast.ts --stdin --json
-```
-
-**Exit semantics** (both scripts): `0` if every pair passes AA, `1` if any
-fail, `2` on usage error. The non-zero exit makes both tools dropin-suitable
-for `make ci`-style gates.
-
-Output fields (per pair / per directive):
-
-- `ratio` — WCAG 2.x contrast ratio, 1.0 – 21.0, rounded to 2dp
-- `rating` — pass tier (`AAA`, `AA`, `AA Large`, or `fail`)
-- `apca_lc` — signed APCA Lightness contrast (-108..+106), rounded to 1dp.
-  APCA is the next-gen algorithm driving WCAG 3.0 and handles dark-mode
-  colors more accurately than the ratio metric.
+> Full flag surface, output fields (`ratio` / `rating` / `apca_lc`), and
+> profile behaviour: `resources/contrast_tooling.md`
 
 ---
 
@@ -379,7 +356,9 @@ context to reason in. Loop per lens:
 
 5. **Render PNGs only if needed** for PDFs / slides / non-mermaid viewers via
    `scripts/render_mermaid.sh`. Do not re-link them from the README that
-   already holds the fences.
+   already holds the fences. If the render fails, run the triage above —
+   a browser or cache failure is never a reason to change a diagram that
+   just passed both gates.
 
 ### Why subagents + LSP over direct exploration
 
@@ -465,7 +444,14 @@ when they display in browser previews. Stick to **ASCII-only text** in node labe
 | `mermaid_complexity.ts` | No findings above threshold | Any warn or error finding | Usage error (bad flag / missing file) |
 | `mermaid_contrast.ts` | All pairs pass WCAG AA | Any pair fails | Usage error |
 | `color_contrast.ts` | All pairs pass WCAG AA (>=4.5:1) | Any pair fails | Usage error |
+| `render_mermaid.sh` | Every variant rendered **and verified** as a real PNG | Render failure — stderr carries `class` / `evidence` / `remedy` | — |
 | `mmdc` | All rendered | Render failure (see stderr) | — |
+
+## Render failure classes
+
+`NPM_CACHE_PERMISSION` · `BROWSER_MISSING` · `SANDBOX_DENIED` ·
+`NETWORK_UNREACHABLE` · `DIAGRAM_SYNTAX` · `UNKNOWN` — only `DIAGRAM_SYNTAX`
+means the diagram is at fault. See `resources/render_troubleshooting.md`.
 
 ## Resources
 
@@ -474,6 +460,8 @@ when they display in browser previews. Stick to **ASCII-only text** in node labe
 | `resources/color_theming.md` | Conceptual core: HSL encoding, dark/light mode safety, hierarchy, subgraph coloring |
 | `resources/color_palette_recipes.md` | Four palette recipes, a worked example, and the Tailwind v3 hex lookup |
 | `resources/color_host_themed_renderers.md` | Translucent dual-theme fills for host-themed renderers (MkDocs Material) |
+| `resources/contrast_tooling.md` | Full CLI surface of both contrast tools: flags, profiles, output fields, exit codes |
+| `resources/render_troubleshooting.md` | Render failure triage: signature → class → remedy, artifact verification, escalation, when to stop |
 | `resources/diagram_organization.md` | Lens naming, dual-density approach, README sync |
 | `resources/layout_algorithms.md` | `layout` + `look` config for dagre / elk / tidy-tree / cose-bilkent, ELK tuning keys, per-diagram-type support |
 | `resources/pattern_render_markdown.md` | Full render-from-markdown documentation |
@@ -484,7 +472,7 @@ when they display in browser previews. Stick to **ASCII-only text** in node labe
 | `resources/iconify/iconify_mdi.md` | Available Material Design icons |
 | `resources/iconify/iconify_cloud.md` | Cloud-provider icon catalogue |
 | `resources/iconify/iconify_saas.md` | SaaS / product icon catalogue |
-| `scripts/render_mermaid.sh` | Render both default variants for a markdown file |
+| `scripts/render_mermaid.sh` | Render both default variants for a markdown file; also `--doctor` (probe the host), `--verify` (is this a real PNG?), `--classify` (stderr → failure class) |
 | `scripts/mermaid_complexity.ts` | Complexity analyzer — canonical parser, `.mmd` + `.md`, ruff-style output |
 | `scripts/mermaid_contrast.ts` | WCAG contrast audit for `classDef` / `style` directives inside diagrams |
 | `scripts/color_contrast.ts` | WCAG + APCA contrast calculator for arbitrary CSS color pairs (ad-hoc / stdin batch) |

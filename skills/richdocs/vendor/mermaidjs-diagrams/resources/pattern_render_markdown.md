@@ -154,8 +154,18 @@ npx -p @mermaid-js/mermaid-cli mmdc \
   --scale 4 -e "${OUTPUT_FORMAT}" -t "${THEME}" -b "${BGCOLOR}"
 ```
 
-**Exit code 0** = all diagrams valid. **Non-zero** = error printed to stderr with
-the offending diagram. Fix the fence and re-run.
+**Exit code 0** = `mmdc` believes it rendered everything. That is weaker than it
+sounds: confirm the artifact exists and decodes before trusting it.
+
+```bash
+bash scripts/render_mermaid.sh --verify "${OUTPUT_TARGET}"/*.png
+```
+
+**Non-zero** = error on stderr. Classify it before editing the fence — a
+missing browser, a poisoned npm cache, and a sandbox denial all surface here and
+none of them are the diagram's fault. See `render_troubleshooting.md`; the
+`scripts/render_mermaid.sh` wrapper does that classification (and the
+verification above) for you.
 
 ## Icon Packs
 

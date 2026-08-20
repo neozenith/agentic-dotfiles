@@ -19,7 +19,17 @@ PY_SRC = $(addsuffix .py,$(PY_SCRIPTS)) $(addprefix test_,$(addsuffix .py,$(PY_S
 # TS is now the authoritative implementation for complexity + contrast.
 # See .claude/rules/typescript/ for conventions.
 TS_SCRIPTS = color_contrast mermaid_complexity mermaid_contrast
-TS_SRC = $(addsuffix .ts,$(TS_SCRIPTS)) $(addsuffix .test.ts,$(TS_SCRIPTS))
+
+# ── Bash source ────────────────────────────────────────────────────────────
+
+# Bash scripts have no formatter/typechecker here, but their behaviour is not
+# exempt from testing: each is covered by a sibling `.test.ts` that drives the
+# CLI. Listed separately so the TS format/lint/typecheck targets pick up those
+# test files even though there is no matching `.ts` source.
+SH_SCRIPTS = render_mermaid
+SH_TEST_SRC = $(addsuffix .test.ts,$(SH_SCRIPTS))
+
+TS_SRC = $(addsuffix .ts,$(TS_SCRIPTS)) $(addsuffix .test.ts,$(TS_SCRIPTS)) $(SH_TEST_SRC)
 
 # ── Paths ──────────────────────────────────────────────────────────────────
 
