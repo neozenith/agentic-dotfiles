@@ -1,0 +1,42 @@
+# This repository is not a Python package. This file exists so that uv can manage the
+# environment that runs the paid agent evals under skills/*/evals/ through the
+# pytest-xharness-eval plugin, and so that pytest's rootdir is pinned to this directory.
+
+[project]
+name = "agentic-dotfiles"
+version = "0.0.0"
+description = "Agent skills, rules, and their evals"
+requires-python = ">=3.12"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pytest-xdist>=3.8.0",
+    "pytest-xharness-eval>=0.1.1",
+]
+
+[tool.uv]
+package = false
+
+# To develop the plugin against this repository, point uv at the local checkout:
+#   uv add --dev --editable ../pytest-xharness-eval
+# and drop the [tool.uv.sources] entry it adds before committing.
+
+[tool.pytest.ini_options]
+# Pins pytest's rootdir to this directory so the plugin finds skills/ from any
+# argument path, for example `uv run pytest skills/mermaidjs-diagrams/evals`.
+# Eval cells are collected by the plugin's own hook (eval_*.py under skills/*/evals/);
+# python_files stays at its default, so unit tests elsewhere are untouched and no
+# free gate ever picks up a paid cell.
+xharness_skills_dir = "skills"
+xharness_workdir = "tmp/evals"
+# The project-scope matrix: every case sweeps these harness/model cells unless it
+# passes its own models=. Narrow a run with --harness, --model, or -k. A model with
+# no row in the plugin's bundled table needs one in ./prices.toml (gpt-5.6-terra does).
+xharness_matrix = [
+    "claude/claude-opus-5",
+    "claude/claude-sonnet-5",
+    "codex/gpt-5.6-terra",
+    "codex/gpt-5.6-sol",
+]
+addopts = "-n 2 -v"

@@ -10,3 +10,8 @@ node_modules/
 scheduled_tasks.lock
 worktrees/
 settings.local.json
+# Agent eval harness run artifacts: regenerated on every (always-live) run,
+# 200-300KB per session log, contain machine-local absolute paths. Not for git.
+**/evals/**/captured/
+tmp/
+.venv/
