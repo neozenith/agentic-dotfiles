@@ -8,7 +8,7 @@ user-invocable: true
 # Context
 
 Render and maintain Mermaid.JS diagrams with **visual clarity enforcement**.
-Works for ANY project. Cognitive load research (Huang et al., 2020) shows 50 nodes
+Works for ANY project. Cognitive load research (Huang et al., 2020, arXiv:2008.07944) shows 50 nodes
 is the difficulty threshold — this skill enforces limits via automated complexity analysis.
 
 Diagrams live as ` ```mermaid ` code fences inside `.md` files.
@@ -63,7 +63,7 @@ styling.
   both themes). See `resources/color_host_themed_renderers.md` and use:
 
   ```bash
-  bun run .../scripts/mermaid_contrast.ts docs/ --profile mkdocs-material
+  bun run .claude/skills/mermaidjs-diagrams/scripts/mermaid_contrast.ts docs/ --profile mkdocs-material
   ```
 
 For ad-hoc color-pair checks (picking from a screenshot, validating a
@@ -89,7 +89,7 @@ Wire both into any `make ci` / pre-commit pipeline that touches docs.
 
 > Deep-dive references:
 > - `resources/color_theming.md` — conceptual core: HSL encoding, dark/light mode safety, hierarchy, subgraph coloring
-> - `resources/color_palette_recipes.md` — the four palette recipes, a worked example, and the Tailwind hex lookup
+> - `resources/color_palette_recipes.md` — the four palette recipes, a worked example for each, and the Tailwind hex lookup
 > - `resources/color_host_themed_renderers.md` — translucent dual-theme fills for host-themed renderers (MkDocs Material)
 > - `scripts/mermaid_contrast.ts` — diagram-aware WCAG audit (scans `classDef`/`style` directives in `.md` / `.mmd`)
 > - `scripts/color_contrast.ts` — generic WCAG + APCA calculator for ad-hoc pairs
@@ -100,7 +100,7 @@ Wire both into any `make ci` / pre-commit pipeline that touches docs.
 
 ## Quick render (recommended)
 
-Use the bundled script to render both standard variants (dark+transparent and default+white PNGs) in one command:
+Use the bundled script to render both standard variants (dark+transparent and default+white PNGs) in one command. Two variants are the floor because the skill must work on dark and light hosts alike; one image cannot serve both:
 
 ```bash
 bash .claude/skills/mermaidjs-diagrams/scripts/render_mermaid.sh path/to/document.md
@@ -137,14 +137,14 @@ independent inputs can break, and only one of them is the diagram:
 | `ENOTFOUND` / `ETIMEDOUT` | `NETWORK_UNREACHABLE` | Ship the fences unrendered — GitHub/GitLab render them natively |
 | `Parse error`, `UnknownDiagramError` | `DIAGRAM_SYNTAX` | **The only class that means edit the diagram** |
 
-`render_mermaid.sh` does the first four steps of this itself: it resolves a
+`render_mermaid.sh` does the classification and the mechanical remedies itself: it resolves a
 browser, isolates the npm cache, classifies stderr, retries once per remediable
 class, and prints `class` + `evidence` + `remedy` when it genuinely cannot
 proceed. Supporting modes:
 
 ```bash
-bash .../render_mermaid.sh --doctor              # probe the host, render nothing
-bash .../render_mermaid.sh --verify out/*.png    # is this actually a decodable PNG?
+bash .claude/skills/mermaidjs-diagrams/scripts/render_mermaid.sh --doctor              # probe the host, render nothing
+bash .claude/skills/mermaidjs-diagrams/scripts/render_mermaid.sh --verify out/*.png    # is this actually a decodable PNG?
 ```
 
 Never respond to an environmental failure by simplifying, restyling, or
@@ -192,7 +192,6 @@ path/to/file.md:100-108: NodeCountExceedsAcceptable nodes=24 preset=high
 | Code | Severity | Meaning |
 |------|----------|---------|
 | `ParserFailure` | error | Multi-line diagram yielded 0 nodes |
-| `ParserDegraded` | warn | Regex fallback used (no canonical parser available for this diagram type) |
 | `NodeCountExceedsHardLimit` | error | Nodes above absolute cap |
 | `NodeCountExceedsCognitiveLimit` | error | Nodes > 50 (Huang 2020 threshold) |
 | `NodeCountExceedsAcceptable` | warn | Nodes above readability threshold for preset |
@@ -401,7 +400,7 @@ flowchart LR
     A["Line one<br/>Line two"]
 ```
 
-Alternative for Mermaid v10.7+: markdown strings with real newlines:
+Alternative for Mermaid v10.1+: markdown strings with real newlines:
 ```mermaid
 flowchart LR
     A["`**Phase 1**
@@ -410,7 +409,7 @@ flowchart LR
 
 | Feature | `<br/>` tags | Markdown strings |
 |---------|-------------|-----------------|
-| Mermaid version | All versions | v10.7+ |
+| Mermaid version | All versions | v10.1+ |
 | Inline formatting | No | Bold, italic |
 | Auto-wrap | No | Yes |
 
@@ -444,7 +443,7 @@ when they display in browser previews. Stick to **ASCII-only text** in node labe
 | `mermaid_complexity.ts` | No findings above threshold | Any warn or error finding | Usage error (bad flag / missing file) |
 | `mermaid_contrast.ts` | All pairs pass WCAG AA | Any pair fails | Usage error |
 | `color_contrast.ts` | All pairs pass WCAG AA (>=4.5:1) | Any pair fails | Usage error |
-| `render_mermaid.sh` | Every variant rendered **and verified** as a real PNG | Render failure — stderr carries `class` / `evidence` / `remedy` | — |
+| `render_mermaid.sh` | Every variant rendered **and verified** as a real PNG | Render failure (stderr carries `class` / `evidence` / `remedy`) or usage error | — |
 | `mmdc` | All rendered | Render failure (see stderr) | — |
 
 ## Render failure classes
@@ -458,7 +457,7 @@ means the diagram is at fault. See `resources/render_troubleshooting.md`.
 | File | Content |
 |------|---------|
 | `resources/color_theming.md` | Conceptual core: HSL encoding, dark/light mode safety, hierarchy, subgraph coloring |
-| `resources/color_palette_recipes.md` | Four palette recipes, a worked example, and the Tailwind v3 hex lookup |
+| `resources/color_palette_recipes.md` | Four palette recipes, a worked example for each, and the Tailwind v3 hex lookup |
 | `resources/color_host_themed_renderers.md` | Translucent dual-theme fills for host-themed renderers (MkDocs Material) |
 | `resources/contrast_tooling.md` | Full CLI surface of both contrast tools: flags, profiles, output fields, exit codes |
 | `resources/render_troubleshooting.md` | Render failure triage: signature → class → remedy, artifact verification, escalation, when to stop |

@@ -7,7 +7,7 @@ visual hierarchy, and subgraph coloring.
 > **This file is the conceptual core of the color-theming family.** Two
 > companions hold the depth, split out to keep each file navigable:
 > - [`color_palette_recipes.md`](color_palette_recipes.md) — the copy-paste
->   catalog: four palette recipes, a worked example, and the Tailwind hex lookup.
+>   catalog: four palette recipes, a worked example for each, and the Tailwind hex lookup.
 > - [`color_host_themed_renderers.md`](color_host_themed_renderers.md) — the
 >   translucent dual-theme technique for host-themed renderers (e.g. Material
 >   for MkDocs).

@@ -36,8 +36,6 @@ If you only remember two things:
    `typecheck-ts`, etc.) exist for **debugging** a failure — the contract is
    `ci`, not the individual pieces.
 
-Anything that can't be enforced by `make ci` doesn't exist.
-
 ## Files in this Directory
 
 ### Public (documented in `SKILL.md`)
@@ -81,7 +79,7 @@ Every public/private script has a sibling test:
 | `tsconfig.json` | Strict TS config, `types: ["bun"]`. |
 | `biome.json` | Biome formatter + linter config (spaces, 120-wide, double quotes). |
 | `bun.lock` | Committed lockfile. |
-| `.gitignore` | `node_modules/`, pycache, etc. |
+| `.gitignore` | `node_modules/`, `.coverage` |
 
 ## Target Surface
 
@@ -118,9 +116,13 @@ Convenience targets:
   `make fix`.
 - **`ci` uses the non-mutating variants.** `format-check` (not `format`),
   `lint` (not `lint-fix`).
-- **Adding a new script:** update `PY_SCRIPTS` / `TS_SCRIPTS` / `PRIVATE_PY_SCRIPTS`
-  in the Makefile variable block — that's the only source-of-truth edit
-  needed. Targets expand automatically.
+- **Adding a new script:** add it to the matching Makefile variable
+  (`PY_SCRIPTS`, `PRIVATE_PY_SCRIPTS`, `TS_SCRIPTS`, `PRIVATE_TS_SCRIPTS`, or
+  `SH_SCRIPTS` for a Bash script with a `.test.ts` driver). The format, lint and
+  typecheck targets expand from those lists. Two places do **not**: the
+  `test-py` / `test-cov-py` recipes name `test__update_examples_readme.py`
+  directly, and `conftest.py` needs an `importlib.reload()` line for each
+  Python module (see below).
 
 ## Tool Choices
 
@@ -144,10 +146,12 @@ config or deps. The Makefile pins this via `UV = uv run --no-project`.
 
 ### PEP-723 Inline Metadata
 
-Every Python script declares its deps at the top:
+Every Python script declares its deps at the top and is executable, so the
+shebang runs it through `uv` with those deps (the repo-wide convention, checked
+by `tests/scripts.test.ts` for public scripts):
 
 ```python
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
 # /// script
 # requires-python = ">=3.12"
 # dependencies = []
@@ -162,7 +166,7 @@ Tests are PEP-723 scripts — they declare pytest + pytest-cov inline and are
 invoked via `uv run test_{name}.py`, not `uv run pytest test_{name}.py`.
 
 ```python
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
 # /// script
 # requires-python = ">=3.12"
 # dependencies = ["pytest>=8.0", "pytest-cov>=4.0"]
@@ -194,15 +198,15 @@ local `conftest.py` reloads the modules after coverage activates:
 
 ```python
 from __future__ import annotations
+
 import importlib
 
-import mermaid_complexity
 import _update_examples_readme
 import pytest
 
+
 @pytest.fixture(autouse=True, scope="session")
 def _reload_for_coverage() -> None:
-    importlib.reload(mermaid_complexity)
     importlib.reload(_update_examples_readme)
 ```
 
@@ -285,8 +289,10 @@ pytest, `bun test` instruments coverage from process start — no
 
 ### Coverage Requirement
 
-**Minimum 90% line coverage.** Exclude the `if (import.meta.main)` bootstrap
-from coverage targets — the TS analogue of Python's `# pragma: no cover`.
+**Minimum 90% line coverage**, measured on the "All files" row of `bun test
+--coverage` by the `test-cov-ts` recipe. There is no per-line exclusion: the
+`if (import.meta.main)` bootstrap counts against the total, which is why it
+stays at three lines.
 
 ## Private Helper Scripts (`_name.py` / `_name.ts`)
 
@@ -404,7 +410,9 @@ with non-zero IHDR dimensions; and (f) on genuine failure prints `class` + `evid
 and Mermaid — the tests are where an upstream wording change surfaces. The render path
 itself is not tested (it needs a browser; a silently-skipping test is worse than none).
 Class order encodes precedence: the earliest-failing input wins, because a run that never
-unpacked `mmdc` cannot also have a browser bug.
+unpacked `mmdc` cannot also have a browser bug. The one exception is `SANDBOX_DENIED` before
+`BROWSER_MISSING`: Puppeteer wraps a denied launch in its generic "Failed to launch the
+browser process!" line, so the more specific sandbox signatures must be tested first.
 
 **Lens.** *When a tool's failure has several independent causes and only one of them is the
 user's input, an undifferentiated error teaches the agent to blame the input — the one thing
@@ -416,6 +424,3 @@ explicit. "It failed" is an invitation to damage working work.*
 - `../SKILL.md` — public-facing skill surface (what this skill does).
 - `../resources/render_troubleshooting.md` — the triage procedure ADR-002 automates.
 - `../README.md` — ultra-short feature pitch for drive-by readers.
-- `.claude/rules/claude_skills/index.md` — the canonical convention doc this file
-  was derived from. If it changes, consider updating this file to match (or
-  prune it if you'd rather link-only).

@@ -516,8 +516,9 @@ export async function main(argv: string[] = Bun.argv.slice(2)): Promise<number> 
 
   const files = collectFiles(positionals);
   if (files.length === 0) {
+    // Usage error, not a contrast failure: exit 1 must mean "a pair failed".
     console.error("error: no matching files");
-    return 1;
+    return 2;
   }
 
   const reports: DiagramContrastReport[] = [];

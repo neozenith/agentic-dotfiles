@@ -1,7 +1,7 @@
 # Pattern: Render Diagrams from Markdown
 
 Render mermaid fences embedded in `.md` files using `mmdc`'s native markdown input mode.
-No infrastructure setup is required.
+No project scaffolding is required; host prerequisites (npm cache, a Chromium, an execution class that may launch it) are covered in `render_troubleshooting.md`.
 
 ## How It Works
 
@@ -13,11 +13,11 @@ image artefact, and outputs a validated copy of the markdown with fences replace
 
 Rendering is parameterised by three values that form a **variant tuple**:
 
-| Parameter | Flag | Values | Default |
-|-----------|------|--------|---------|
-| Theme | `-t` / `--theme` | `default`, `dark` | `dark` |
-| Background | `-b` / `--backgroundColor` | `white`, `black`, `transparent` | `transparent` |
-| Output Format | (file extension) | `png`, `svg` | `png` |
+| Parameter | Flag | Values | Skill default (`render_mermaid.sh`) | `mmdc` default |
+|-----------|------|--------|-------------------------------------|----------------|
+| Theme | `-t` / `--theme` | `default`, `dark` | `dark` (plus a `default` pass) | `default` |
+| Background | `-b` / `--backgroundColor` | `white`, `black`, `transparent` | `transparent` (plus `white`) | `white` |
+| Output Format | `-e` / file extension | `png`, `svg` | `png` | `svg` |
 
 The variant tuple determines the **output folder name**: `{theme}_{backgroundColor}_{format}`
 
@@ -44,78 +44,45 @@ All examples use these core variables:
 
 ### Render a single variant
 
+Define the variant once as a shell function; every later example calls it.
+
 ```bash
 INPUT="path/to/document.md"
 INPUT_PATH="path/to/"
-OUTPUT_FORMAT="png"
-THEME=dark
-BGCOLOR=transparent
-VARIANT="${THEME}_${BGCOLOR}_${OUTPUT_FORMAT}"
 OUTPUT_BASE=".mmdc_cache"
-OUTPUT_TARGET="${OUTPUT_BASE}/${VARIANT}/${INPUT_PATH}/"
-OUTPUT="${OUTPUT_BASE}/${VARIANT}/${INPUT}"
 
-npx -p @mermaid-js/mermaid-cli mmdc \
-  -i "${INPUT}" \
-  -a "${OUTPUT_TARGET}" \
-  -o "${OUTPUT}" \
-  --scale 4 -e "${OUTPUT_FORMAT}" -t "${THEME}" -b "${BGCOLOR}"
+render_variant() {   # usage: render_variant THEME BGCOLOR FORMAT
+  THEME="$1"; BGCOLOR="$2"; OUTPUT_FORMAT="$3"
+  VARIANT="${THEME}_${BGCOLOR}_${OUTPUT_FORMAT}"
+  OUTPUT_TARGET="${OUTPUT_BASE}/${VARIANT}/${INPUT_PATH}/"
+  OUTPUT="${OUTPUT_BASE}/${VARIANT}/${INPUT}"
+  npx -p @mermaid-js/mermaid-cli mmdc \
+    -i "${INPUT}" \
+    -a "${OUTPUT_TARGET}" \
+    -o "${OUTPUT}" \
+    --scale 4 -e "${OUTPUT_FORMAT}" -t "${THEME}" -b "${BGCOLOR}"
+}
+
+render_variant dark transparent png
 ```
 
 ### Render multiple variants
 
-Generate both light and dark variants side by side:
+Both light and dark variants side by side, which is exactly what
+`scripts/render_mermaid.sh` does for you. Two is the floor, not a convenience:
+the skill's diagrams must read on dark and light hosts alike, and a single PNG
+cannot; `dark+transparent` sits on any dark page and `default+white` is the
+print/README artifact.
 
 ```bash
-INPUT="path/to/document.md"
-INPUT_PATH="path/to/"
-OUTPUT_BASE=".mmdc_cache"
-
-# Variant 1: dark + transparent + PNG (default)
-OUTPUT_FORMAT="png"
-THEME=dark
-BGCOLOR=transparent
-VARIANT="${THEME}_${BGCOLOR}_${OUTPUT_FORMAT}"
-OUTPUT_TARGET="${OUTPUT_BASE}/${VARIANT}/${INPUT_PATH}/"
-OUTPUT="${OUTPUT_BASE}/${VARIANT}/${INPUT}"
-npx -p @mermaid-js/mermaid-cli mmdc \
-  -i "${INPUT}" \
-  -a "${OUTPUT_TARGET}" \
-  -o "${OUTPUT}" \
-  --scale 4 -e "${OUTPUT_FORMAT}" -t "${THEME}" -b "${BGCOLOR}"
-
-# Variant 2: default + white + PNG (for README, light-mode docs)
-OUTPUT_FORMAT="png"
-THEME=default
-BGCOLOR=white
-VARIANT="${THEME}_${BGCOLOR}_${OUTPUT_FORMAT}"
-OUTPUT_TARGET="${OUTPUT_BASE}/${VARIANT}/${INPUT_PATH}/"
-OUTPUT="${OUTPUT_BASE}/${VARIANT}/${INPUT}"
-npx -p @mermaid-js/mermaid-cli mmdc \
-  -i "${INPUT}" \
-  -a "${OUTPUT_TARGET}" \
-  -o "${OUTPUT}" \
-  --scale 4 -e "${OUTPUT_FORMAT}" -t "${THEME}" -b "${BGCOLOR}"
+render_variant dark    transparent png   # dark-mode UIs, slides
+render_variant default white       png   # README, light-mode docs
 ```
 
 ### SVG variant (scalable vector output)
 
 ```bash
-INPUT="path/to/document.md"
-INPUT_PATH="path/to/"
-OUTPUT_FORMAT="svg"
-THEME=dark
-BGCOLOR=transparent
-VARIANT="${THEME}_${BGCOLOR}_${OUTPUT_FORMAT}"
-OUTPUT_BASE=".mmdc_cache"
-OUTPUT_TARGET="${OUTPUT_BASE}/${VARIANT}/${INPUT_PATH}/"
-OUTPUT="${OUTPUT_BASE}/${VARIANT}/${INPUT}"
-
-npx -p @mermaid-js/mermaid-cli mmdc \
-  -i "${INPUT}" \
-  -a "${OUTPUT_TARGET}" \
-  -o "${OUTPUT}" \
-  --scale 4 -e "${OUTPUT_FORMAT}" -t "${THEME}" -b "${BGCOLOR}"
+render_variant dark transparent svg
 ```
 
 **Output structure** (for two PNG variants):
@@ -137,31 +104,17 @@ ${OUTPUT_BASE}/
 Render from a markdown file to verify all mermaid fences are valid:
 
 ```bash
-INPUT="path/to/document.md"
-INPUT_PATH="path/to/"
-OUTPUT_FORMAT="png"
-THEME=dark
-BGCOLOR=transparent
-VARIANT="${THEME}_${BGCOLOR}_${OUTPUT_FORMAT}"
-OUTPUT_BASE=".mmdc_cache"
-OUTPUT_TARGET="${OUTPUT_BASE}/${VARIANT}/${INPUT_PATH}/"
-OUTPUT="${OUTPUT_BASE}/${VARIANT}/${INPUT}"
-
-npx -p @mermaid-js/mermaid-cli mmdc \
-  -i "${INPUT}" \
-  -a "${OUTPUT_TARGET}" \
-  -o "${OUTPUT}" \
-  --scale 4 -e "${OUTPUT_FORMAT}" -t "${THEME}" -b "${BGCOLOR}"
+render_variant dark transparent png
 ```
 
 **Exit code 0** = `mmdc` believes it rendered everything. That is weaker than it
 sounds: confirm the artifact exists and decodes before trusting it.
 
 ```bash
-bash scripts/render_mermaid.sh --verify "${OUTPUT_TARGET}"/*.png
+bash .claude/skills/mermaidjs-diagrams/scripts/render_mermaid.sh --verify "${OUTPUT_TARGET}"*.png
 ```
 
-**Non-zero** = error on stderr. Classify it before editing the fence — a
+**Non-zero** = error on stderr. Classify it before editing the fence: a
 missing browser, a poisoned npm cache, and a sandbox denial all surface here and
 none of them are the diagram's fault. See `render_troubleshooting.md`; the
 `scripts/render_mermaid.sh` wrapper does that classification (and the
@@ -169,22 +122,10 @@ verification above) for you.
 
 ## Icon Packs
 
-When using `architecture-beta` diagrams with Iconify icons, add `--iconPacks`:
+When using `architecture-beta` diagrams with Iconify icons, append
+`--iconPacks` to the `mmdc` line of `render_variant` above:
 
 ```bash
-INPUT="document.md"
-OUTPUT_FORMAT="png"
-THEME=dark
-BGCOLOR=transparent
-VARIANT="${THEME}_${BGCOLOR}_${OUTPUT_FORMAT}"
-OUTPUT_BASE=".mmdc_cache"
-OUTPUT_TARGET="${OUTPUT_BASE}/${VARIANT}/"
-OUTPUT="${OUTPUT_BASE}/${VARIANT}/${INPUT}"
-
-npx -p @mermaid-js/mermaid-cli mmdc \
-  -i "${INPUT}" \
-  -a "${OUTPUT_TARGET}" \
-  -o "${OUTPUT}" \
   --scale 4 -e "${OUTPUT_FORMAT}" -t "${THEME}" -b "${BGCOLOR}" \
   --iconPacks @iconify-json/logos @iconify-json/mdi
 ```

@@ -1460,28 +1460,38 @@ Exit codes: 0 if no findings; 1 if any finding (error OR warning); 2 for usage e
 }
 
 export async function main(argv: string[] = Bun.argv.slice(2)): Promise<number> {
-  const { values, positionals } = parseArgs({
-    args: argv,
-    options: {
-      preset: { type: "string", short: "p" },
-      json: { type: "boolean", default: false },
-      quiet: { type: "boolean", short: "q", default: false },
-      help: { type: "boolean", short: "h", default: false },
-      "node-ideal": { type: "string" },
-      "node-acceptable": { type: "string" },
-      "node-complex": { type: "string" },
-      "vcs-ideal": { type: "string" },
-      "vcs-acceptable": { type: "string" },
-      "vcs-complex": { type: "string" },
-      "node-target": { type: "string" },
-      "vcs-target": { type: "string" },
-      "edge-weight": { type: "string" },
-      "subgraph-weight": { type: "string" },
-      "depth-weight": { type: "string" },
-    },
-    allowPositionals: true,
-    strict: true,
-  });
+  // Usage errors exit 2, never 1: exit 1 is reserved for "the diagram has findings",
+  // so a CI gate can tell a mistyped flag from a real complexity failure.
+  let parsed: ReturnType<typeof parseArgs>;
+  try {
+    parsed = parseArgs({
+      args: argv,
+      options: {
+        preset: { type: "string", short: "p" },
+        json: { type: "boolean", default: false },
+        quiet: { type: "boolean", short: "q", default: false },
+        help: { type: "boolean", short: "h", default: false },
+        "node-ideal": { type: "string" },
+        "node-acceptable": { type: "string" },
+        "node-complex": { type: "string" },
+        "vcs-ideal": { type: "string" },
+        "vcs-acceptable": { type: "string" },
+        "vcs-complex": { type: "string" },
+        "node-target": { type: "string" },
+        "vcs-target": { type: "string" },
+        "edge-weight": { type: "string" },
+        "subgraph-weight": { type: "string" },
+        "depth-weight": { type: "string" },
+      },
+      allowPositionals: true,
+      strict: true,
+    });
+  } catch (err) {
+    console.error(`error: ${(err as Error).message}`);
+    printHelp();
+    return 2;
+  }
+  const { values, positionals } = parsed;
 
   if (values.help) {
     printHelp();
@@ -1493,7 +1503,13 @@ export async function main(argv: string[] = Bun.argv.slice(2)): Promise<number> 
   }
 
   // Config: CLI preset > env preset > default
-  let config = configFromPreset(values.preset ?? "high-density");
+  let config: ThresholdConfig;
+  try {
+    config = configFromPreset(String(values.preset ?? "high-density"));
+  } catch (err) {
+    console.error(`error: ${(err as Error).message}`);
+    return 2;
+  }
   config = applyEnvOverrides(config);
   const cliOverrides: Array<[string, keyof ThresholdConfig]> = [
     ["node-ideal", "node_ideal"],

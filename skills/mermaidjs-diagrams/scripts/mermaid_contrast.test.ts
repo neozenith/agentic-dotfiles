@@ -329,11 +329,11 @@ describe("main() CLI", () => {
     expect(await main(["--nonsense-flag"])).toBe(2);
   });
 
-  test("non-existent path returns 1 (no matching files)", async () => {
-    // collectFiles logs a warning via statSync catch (line 283) and returns 0
-    // files → main returns 1 via "no matching files" (lines 343-344).
+  test("non-existent path is a usage error (2), not a contrast failure (1)", async () => {
+    // collectFiles logs a warning via its statSync catch and returns 0 files;
+    // main reports "no matching files" and exits 2 so CI can tell a typo from a real failure.
     const bogus = join(tmp, `does-not-exist-${Date.now()}`);
-    expect(await main([bogus])).toBe(1);
+    expect(await main([bogus])).toBe(2);
   });
 
   test("passes a DIRECTORY — exercises collectFiles directory branch + default output", async () => {

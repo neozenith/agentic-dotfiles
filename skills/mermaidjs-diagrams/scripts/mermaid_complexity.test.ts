@@ -401,6 +401,21 @@ describe("main() CLI", () => {
     expect(code).toBe(2);
   });
 
+  test("an unknown flag is a usage error (2), not a finding (1)", async () => {
+    const code = await main(["--nonsense-flag", resolve(EXAMPLES_DIR, "flowchart_fontawesome_icons.mmd")]);
+    expect(code).toBe(2);
+  });
+
+  test("an unknown preset is a usage error (2)", async () => {
+    const code = await main(["--preset", "bogus", resolve(EXAMPLES_DIR, "flowchart_fontawesome_icons.mmd")]);
+    expect(code).toBe(2);
+  });
+
+  test("a path that matches no files is a usage error (2)", async () => {
+    const code = await main([resolve(EXAMPLES_DIR, "does-not-exist.mmd")]);
+    expect(code).toBe(2);
+  });
+
   test("running on the flowchart fixture returns 0 (ideal)", async () => {
     const code = await main(["--quiet", "--json", resolve(EXAMPLES_DIR, "flowchart_fontawesome_icons.mmd")]);
     expect(code).toBe(0);

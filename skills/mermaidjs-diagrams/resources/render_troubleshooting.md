@@ -27,14 +27,18 @@ almost certainly environmental.
 
 ## Signature → class → remedy
 
-Match the **first** recognisable line in stderr, not the last.
+Quote the **first** recognisable line in stderr as evidence, not the last. The
+classes are matched in the order below, so a more specific signature wins over
+a generic wrapper line such as Puppeteer's `Failed to launch the browser
+process!`. This table mirrors `classify_failure` in `scripts/render_mermaid.sh`;
+keep the two in sync.
 
 | stderr signature | Class | Remedy |
 |------------------|-------|--------|
 | `npm ERR! ... EPERM`, `EACCES`, `Cannot read ... /_cacache` | `NPM_CACHE_PERMISSION` | Point `NPM_CONFIG_CACHE` at a task-local dir and retry. Never `sudo`, never `--unsafe-perm`. |
-| `Could not find Chrome`, `chrome-headless-shell` not found, `Browser was not found at the configured executablePath` | `BROWSER_MISSING` | Resolve an already-installed Chromium and pass it via `PUPPETEER_EXECUTABLE_PATH`. If no browser exists anywhere, **unset** `PUPPETEER_SKIP_DOWNLOAD` and let Puppeteer fetch one. |
+| `ENOTFOUND`, `ETIMEDOUT`, `EAI_AGAIN`, `getaddrinfo`, `network is unreachable` | `NETWORK_UNREACHABLE` | No registry. Use an already-installed `mmdc`/browser, or declare the render blocked and ship the fences unrendered (GitHub/GitLab render them natively). |
 | `MachPortRendezvous`, `bootstrap_check_in`, `Permission denied (1100)`, `Operation not permitted` at spawn | `SANDBOX_DENIED` | The sandbox denied the browser a required OS facility. **Stop retrying locally** — re-run the render (only the render) in a browser-capable execution class. |
-| `ENOTFOUND`, `ETIMEDOUT`, `getaddrinfo`, `registry.npmjs.org` unreachable | `NETWORK_UNREACHABLE` | No registry. Use an already-installed `mmdc`/browser, or declare the render blocked and ship the fences unrendered (GitHub/GitLab render them natively). |
+| `Could not find Chrome`, `Could not find browser`, `chrome-headless-shell` not found, `Browser was not found at the configured executablePath`, `Failed to launch the browser process` | `BROWSER_MISSING` | Resolve an already-installed Chromium and pass it via `PUPPETEER_EXECUTABLE_PATH`. If no browser exists anywhere, **unset** `PUPPETEER_SKIP_DOWNLOAD` and let Puppeteer fetch one. |
 | `Parse error`, `Syntax error in text`, `UnknownDiagramError`, `No diagram type detected` | `DIAGRAM_SYNTAX` | The only class that means *edit the diagram*. stderr names the offending fence. |
 
 Anything unmatched is `UNKNOWN`: preserve the full stderr, report it verbatim,
@@ -54,7 +58,7 @@ and do **not** guess at a diagram edit.
 `scripts/render_mermaid.sh` implements the top of this ladder itself:
 
 1. **Sense** — resolve a Chromium from, in order: `PUPPETEER_EXECUTABLE_PATH`
-   (if it exists), Puppeteer's own cache, Playwright's `chrome-headless-shell`,
+   (if it is executable), Puppeteer's own cache, Playwright's `chrome-headless-shell`,
    Playwright's full Chromium, system Chrome / Chromium / Edge. Found ⇒ export
    the path and `PUPPETEER_SKIP_DOWNLOAD=true`. Not found ⇒ leave the download
    path open rather than pinning a broken one.
@@ -102,16 +106,20 @@ ran; they do not prove the diagram is readable.
 export NPM_CONFIG_CACHE="$PWD/tmp/.mmdc_cache/npm"
 mkdir -p "$NPM_CONFIG_CACHE"
 
-# BROWSER_MISSING — reuse a browser some other tool already installed
-export PUPPETEER_EXECUTABLE_PATH="$(bash scripts/render_mermaid.sh --doctor | awk '/^browser:/{print $2}')"
-export PUPPETEER_SKIP_DOWNLOAD=true
-# ...or, if genuinely none exists and the registry is reachable:
-unset PUPPETEER_SKIP_DOWNLOAD          # let Puppeteer fetch its own
+# BROWSER_MISSING — reuse a browser some other tool already installed.
+# `sed`, not `awk '{print $2}'`: system browser paths contain spaces.
+browser="$(bash .claude/skills/mermaidjs-diagrams/scripts/render_mermaid.sh --doctor | sed -n 's/^browser: //p')"
+if [ "$browser" != "<none resolved>" ]; then
+  export PUPPETEER_EXECUTABLE_PATH="$browser"
+  export PUPPETEER_SKIP_DOWNLOAD=true
+else
+  unset PUPPETEER_EXECUTABLE_PATH PUPPETEER_SKIP_DOWNLOAD   # let Puppeteer fetch its own (needs registry access)
+fi
 
 # SANDBOX_DENIED — re-run ONLY the render in a browser-capable class.
 # The gates below need no such permission; keep them in the restricted class.
-bun run scripts/mermaid_complexity.ts doc.md
-bun run scripts/mermaid_contrast.ts   doc.md
+bun run .claude/skills/mermaidjs-diagrams/scripts/mermaid_complexity.ts doc.md
+bun run .claude/skills/mermaidjs-diagrams/scripts/mermaid_contrast.ts   doc.md
 ```
 
 Any browser you resolve is a candidate, not a contract. Prove it with one real

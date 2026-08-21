@@ -2,9 +2,9 @@
 
 How to pick and configure Mermaid's layout engine. Upstream references:
 
-- <https://mermaid.js.org/intro/syntax-reference.html#how-to-select-a-layout-algorithm> — YAML frontmatter syntax, ELK tuning keys
-- <https://mermaid.js.org/config/layouts.html> — catalogue of all registered layout engines
-- <https://mermaid.js.org/config/tidy-tree.html> — tidy-tree engine (mindmaps)
+- <https://mermaid.js.org/intro/syntax-reference.html#how-to-select-a-layout-algorithm>: YAML frontmatter syntax, ELK tuning keys
+- <https://mermaid.js.org/config/layouts.html>: catalogue of all registered layout engines
+- <https://mermaid.js.org/config/tidy-tree.html>: tidy-tree engine (mindmaps)
 
 ## Which algorithm to use
 
@@ -15,11 +15,17 @@ Mermaid registers four layout engines out of the box:
 | **dagre** *(default)* | Ships with every Mermaid build; fast; predictable for small graphs | Edge crossings multiply quickly past ~20 nodes; hierarchical-only; limited long-edge routing | Simple flowcharts, quick docs, anything that renders well without tuning |
 | **elk** (Eclipse Layout Kernel) | Cleaner routing on dense graphs; orthogonal edges; configurable node placement; handles nested subgraphs gracefully | Not bundled in every Mermaid build; slightly slower; some looks render differently | Architecture overviews, stateful graphs with many crossings, nested subgraph-heavy diagrams |
 | **tidy-tree** | Hierarchical, non-overlapping tree with auto-adjusted spacing | Only useful when the graph really is a tree | Mindmaps and strict parent-child hierarchies |
-| **cose-bilkent** | Force-directed simulation ("Cose Bilkent layout for force-directed graphs") | Non-deterministic across runs; less predictable for docs | Organic / relationship graphs where no single node is "the root" |
+| **cose-bilkent** | Force-directed (CoSE) simulation; as an algorithm it handles cycles and graphs with no natural root | Non-deterministic across runs; less predictable for docs; **Mermaid only wires it to `mindmap`** (see below) | A `mindmap` whose branches you want fanned out organically instead of in tidy-tree's columns |
 
 `dagre` and `elk` are the two engines you will reach for ~95% of the time.
 `tidy-tree` is effectively auto-selected for `mindmap` diagrams, and
-`cose-bilkent` is a specialty pick for force-directed layouts.
+`cose-bilkent` is the alternative mindmap engine. The restriction is Mermaid's
+integration, not the algorithm: the adapter's `validateLayoutData` rejects
+layout data without a `rootNode` field, only the mindmap renderer supplies
+one, and the layout never uses it. So a `flowchart` with
+`layout: cose-bilkent` fails at render time with `Error: Root node is required`
+(Mermaid 11.17 via `mmdc` 11.16) even though CoSE itself would lay that graph
+out happily. See `examples/layout_cosebilkent_mindmap.mmd`.
 
 ### Diagram-type compatibility matrix
 
@@ -31,11 +37,11 @@ ignores `layout`.
 |--------------|------------------|----------------|-------|
 | `flowchart` | Yes | dagre | Full `dagre`/`elk` support |
 | `stateDiagram-v2` | Yes | dagre | Full `dagre`/`elk` support |
-| `mindmap` | Yes | tidy-tree | Tidy-tree is the natural fit |
-| `classDiagram` | No | built-in | — |
+| `mindmap` | Yes | tidy-tree | `tidy-tree` or `cose-bilkent`; the only type that accepts `cose-bilkent` |
+| `classDiagram` | No | built-in | none |
 | `sequenceDiagram` | No | built-in | Positions are time-ordered, not layout-driven |
-| `erDiagram` | No | built-in | — |
-| `gantt` | No | built-in | — |
+| `erDiagram` | No | built-in | none |
+| `gantt` | No | built-in | none |
 | `architecture-beta` | No | built-in | Uses its own group/service placer |
 
 **Takeaway.** If you are authoring a flowchart or state diagram, `config.layout`
@@ -49,12 +55,12 @@ Mermaid reads these top-level keys from the diagram's YAML frontmatter:
 |-----|--------|---------|
 | `layout` | `dagre` *(default)*, `elk`, `tidy-tree`, `cose-bilkent` | Which engine runs the layout pass |
 | `look` | `classic` *(default)*, `handDrawn`, `neo` | Rendering style for nodes and edges |
-| `handDrawnSeed` | integer *(default `0` = random)* | Seed for the `handDrawn` sketch jitter — pin it for reproducible renders / visual-regression tests |
+| `handDrawnSeed` | integer *(default `0` = random)* | Seed for the `handDrawn` sketch jitter; pin it for reproducible renders / visual-regression tests |
 
 > **Spelling gotcha.** The Mermaid intro / marketing page uses the hyphenated
 > form `hand-drawn`. The **actual config schema** enumerates `classic`,
 > `handDrawn`, `neo` (camelCase). Only the camelCase form is honored by the
-> renderer — `look: hand-drawn` silently falls back to `classic`.
+> renderer; `look: hand-drawn` silently falls back to `classic`.
 
 Both are expressed as a leading YAML block **before** the diagram keyword:
 
@@ -74,7 +80,7 @@ flowchart LR
 
 The frontmatter travels with the diagram source, so the same `.mmd` or
 ```` ```mermaid ```` fence renders identically in `mmdc`, GitHub, GitLab, and
-the Mermaid Live Editor — no per-renderer config needed.
+the Mermaid Live Editor, with no per-renderer config needed.
 
 ### `look` values
 
@@ -82,7 +88,7 @@ the Mermaid Live Editor — no per-renderer config needed.
 |------|-----------|---------|
 | `classic` | Crisp rectangles, clean arrows | Technical docs, architecture diagrams, print |
 | `handDrawn` | Rough-sketch strokes (rough.js under the hood) | Brainstorming boards, design-phase diagrams, informal slides |
-| `neo` | Modern aesthetic — drop shadows, gradient fills, consistent enhanced borders across all 50+ shape renderers. Added March 2026 (PR #7501, sponsored by MermaidChart). | Marketing, landing pages, polished presentations, anywhere "classic" feels too flat |
+| `neo` | Modern aesthetic: drop shadows, gradient fills, consistent enhanced borders across all 50+ shape renderers. Added March 2026 (PR #7501, sponsored by MermaidChart). | Marketing, landing pages, polished presentations, anywhere "classic" feels too flat |
 
 #### `neo` companion config
 
@@ -116,7 +122,7 @@ config:
 > themes. If you must have the full aesthetic in a CI pipeline, budget time
 > to pin a newer `mmdc` version.
 
-`look` is orthogonal to `layout` — any combination is valid
+`look` is orthogonal to `layout`; any combination is valid
 (`dagre`+`handDrawn`, `elk`+`classic`, `elk`+`neo`, etc.).
 
 ### Making `handDrawn` reproducible
@@ -133,7 +139,7 @@ config:
 ---
 ```
 
-Any non-zero integer works — pick one per diagram and keep it stable.
+Any non-zero integer works; pick one per diagram and keep it stable.
 
 ## Dagre configuration
 
@@ -154,7 +160,7 @@ flowchart LR
   B -->|2| D[Path 2]
 ```
 
-Dagre has no `layout`-scoped tuning keys — direction is set via the diagram
+Dagre has no `layout`-scoped tuning keys; direction is set via the diagram
 keyword (`flowchart TB|LR|RL|BT`), and spacing comes from the top-level
 `flowchart.nodeSpacing` / `flowchart.rankSpacing` keys.
 
@@ -202,7 +208,7 @@ flowchart LR
   version on first run.
 - **`look` value must be camelCase.** The intro docs show `look: hand-drawn`
   but the schema enum is `handDrawn`. Hyphenated spelling silently falls back
-  to `classic` — if the sketch look is missing, this is almost always the
+  to `classic`; if the sketch look is missing, this is almost always the
   culprit.
 - **`handDrawn` is non-deterministic without a seed.** Re-rendering the same
   diagram produces different pixel output each time. Set `handDrawnSeed: <int>`
@@ -212,7 +218,7 @@ flowchart LR
   (`direction TB` inside a subgraph) may be overridden. Verify visually.
 - **No `%%{init: ...}%%` directive equivalent.** Layout selection is YAML-only.
   The older `%%{init: {"flowchart": {"defaultRenderer": "elk"}} }%%` directive
-  is superseded — prefer the `config.layout` frontmatter for forward
+  is superseded; prefer the `config.layout` frontmatter for forward
   compatibility.
 - **Theme and look compose, not conflict.** `theme` (dark/default/forest/etc.)
   chooses colors; `look` chooses stroke style. Both can be set together.
@@ -220,7 +226,7 @@ flowchart LR
   [`mermaid_complexity.py`](../scripts/mermaid_complexity.py) script scores
   structural complexity (node count, edge count, VCS) regardless of which
   layout engine renders the diagram. Switching to ELK does not change the
-  score — it changes how readable the rendered image is at that score.
+  score; it changes how readable the rendered image is at that score.
 
 ## Picking defaults for this skill
 
@@ -248,5 +254,5 @@ Reasons:
    result across a wide range of graph shapes.
 
 For overview / simplified diagrams that are already well under the complexity
-threshold, **dagre is fine** — keep configuration minimal and let the default
+threshold, **dagre is fine**; keep configuration minimal and let the default
 run.

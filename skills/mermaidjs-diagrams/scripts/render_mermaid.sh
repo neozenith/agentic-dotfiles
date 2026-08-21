@@ -81,6 +81,9 @@ resolve_browser() {
 
 # Map raw stderr to a failure class. Order matters: the earliest-failing input
 # wins, because a run that never unpacked mmdc cannot also have a browser bug.
+# SANDBOX_DENIED is tested before BROWSER_MISSING even though it fails later:
+# Puppeteer wraps a denied launch in the generic "Failed to launch the browser
+# process!" line, and the sandbox signatures are strictly more specific.
 classify_failure() {
   local text="$1"
   case "$text" in
@@ -88,11 +91,11 @@ classify_failure() {
       printf 'NPM_CACHE_PERMISSION' ;;
     *ENOTFOUND*|*ETIMEDOUT*|*EAI_AGAIN*|*getaddrinfo*|*"network is unreachable"*)
       printf 'NETWORK_UNREACHABLE' ;;
+    *MachPortRendezvous*|*bootstrap_check_in*|*"Permission denied (1100)"*|*"Operation not permitted"*)
+      printf 'SANDBOX_DENIED' ;;
     *"Could not find Chrome"*|*"Could not find browser"*|*"chrome-headless-shell"*|\
     *"Browser was not found"*|*"executablePath"*|*"Failed to launch the browser process"*)
       printf 'BROWSER_MISSING' ;;
-    *MachPortRendezvous*|*bootstrap_check_in*|*"Permission denied (1100)"*|*"Operation not permitted"*)
-      printf 'SANDBOX_DENIED' ;;
     *"Parse error"*|*"Syntax error in text"*|*UnknownDiagramError*|*"No diagram type detected"*)
       printf 'DIAGRAM_SYNTAX' ;;
     *)
