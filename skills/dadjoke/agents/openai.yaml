@@ -1,0 +1,4 @@
+interface:
+  display_name: "Dad Joke Workshop"
+  short_description: "Refine groan-worthy themed dad jokes"
+  default_prompt: "Use $dadjoke to workshop three better dad jokes about product management."
