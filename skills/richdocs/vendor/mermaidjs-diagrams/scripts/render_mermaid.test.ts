@@ -64,6 +64,17 @@ describe("classify — execution class", () => {
     ].join("\n");
     expect(await classify(stderr)).toBe("SANDBOX_DENIED");
   });
+
+  test("Puppeteer's generic launch-failure wrapper does not demote a sandbox denial to BROWSER_MISSING", async () => {
+    // Real stderr: Puppeteer prints its own wrapper line first, then Chromium's reason.
+    // Classifying this as BROWSER_MISSING would trigger the one remedy the doc forbids here: a retry.
+    const stderr = [
+      "Error: Failed to launch the browser process!",
+      "[0820/101500.123456:ERROR:mach_port_rendezvous.cc(392)] MachPortRendezvousServer",
+      "bootstrap_check_in org.chromium.MachPortRendezvousServer: Permission denied (1100)",
+    ].join("\n");
+    expect(await classify(stderr)).toBe("SANDBOX_DENIED");
+  });
 });
 
 describe("classify — network", () => {

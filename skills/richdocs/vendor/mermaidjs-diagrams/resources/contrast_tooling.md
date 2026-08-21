@@ -18,6 +18,7 @@ isn't enough. The conceptual palette rules live in `color_theming.md`.
 # Audit every diagram in a directory tree (auto-detects mkdocs vs github)
 bun run .claude/skills/mermaidjs-diagrams/scripts/mermaid_contrast.ts docs/
 bun run .claude/skills/mermaidjs-diagrams/scripts/mermaid_contrast.ts docs/ --summary
+bun run .claude/skills/mermaidjs-diagrams/scripts/mermaid_contrast.ts docs/ --quiet     # failures only
 bun run .claude/skills/mermaidjs-diagrams/scripts/mermaid_contrast.ts docs/ --json
 
 # Force a render context (see SKILL.md "Required for every diagram")
@@ -37,18 +38,24 @@ echo '[["#fff","#777"],["red","blue"]]' | bun run .claude/skills/mermaidjs-diagr
 
 ## Exit semantics
 
-Both scripts: `0` if every pair passes AA, `1` if any fail, `2` on usage error.
-The non-zero exit makes both tools drop-in suitable for `make ci`-style gates.
+Both scripts: `0` if every pair passes its threshold (4.5:1 text, 3:1 border;
+advisory border pairs under the `mkdocs-material` profile never fail), `1` if
+any pair fails, `2` on usage error. The non-zero exit makes both tools drop-in
+suitable for `make ci`-style gates.
 
 Unlike the renderer, these tools need no browser, no package registry, and no
 special execution class — they keep working in the restricted environments
 described in `render_troubleshooting.md`. When a render is blocked, these gates
 are still the proof that the diagram itself is sound.
 
-## Output fields (per pair / per directive)
+## Output fields
+
+Per pair in `color_contrast.ts --json`; per directive under `assessment` in
+`mermaid_contrast.ts --json`, where the sibling `passes` (and `advisory`, when
+set) are the fields that gate the exit code:
 
 - `ratio` — WCAG 2.x contrast ratio, 1.0 – 21.0, rounded to 2dp
-- `rating` — pass tier (`AAA`, `AA`, `AA Large`, or `fail`)
+- `rating` — pass tier (`AAA`, `AA`, `AA Large`, or `Fail`)
 - `apca_lc` — signed APCA Lightness contrast (-108..+106), rounded to 1dp.
-  APCA is the next-gen algorithm driving WCAG 3.0 and handles dark-mode colors
-  more accurately than the ratio metric.
+  APCA is the candidate algorithm for the WCAG 3 draft and scores dark-mode
+  pairs more accurately than the ratio metric.

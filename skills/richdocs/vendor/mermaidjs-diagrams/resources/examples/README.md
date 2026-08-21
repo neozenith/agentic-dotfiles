@@ -15,33 +15,37 @@
     - [Code](#code-1)
     - [Mermaid](#mermaid-1)
     - [Image (PNG)](#image-png-1)
-  - [layout_dagre_classic](#layout_dagre_classic)
+  - [layout_cosebilkent_mindmap](#layout_cosebilkent_mindmap)
     - [Code](#code-2)
     - [Mermaid](#mermaid-2)
     - [Image (PNG)](#image-png-2)
-  - [layout_dagre_handdrawn](#layout_dagre_handdrawn)
+  - [layout_dagre_classic](#layout_dagre_classic)
     - [Code](#code-3)
     - [Mermaid](#mermaid-3)
     - [Image (PNG)](#image-png-3)
-  - [layout_dagre_neo](#layout_dagre_neo)
+  - [layout_dagre_handdrawn](#layout_dagre_handdrawn)
     - [Code](#code-4)
     - [Mermaid](#mermaid-4)
     - [Image (PNG)](#image-png-4)
-  - [layout_elk_default](#layout_elk_default)
+  - [layout_dagre_neo](#layout_dagre_neo)
     - [Code](#code-5)
     - [Mermaid](#mermaid-5)
     - [Image (PNG)](#image-png-5)
-  - [layout_elk_tuned](#layout_elk_tuned)
+  - [layout_elk_default](#layout_elk_default)
     - [Code](#code-6)
     - [Mermaid](#mermaid-6)
     - [Image (PNG)](#image-png-6)
-  - [layout_tidytree_mindmap](#layout_tidytree_mindmap)
+  - [layout_elk_tuned](#layout_elk_tuned)
     - [Code](#code-7)
     - [Mermaid](#mermaid-7)
     - [Image (PNG)](#image-png-7)
-  - [Mermaid Version Information Debugging](#mermaid-version-information-debugging)
+  - [layout_tidytree_mindmap](#layout_tidytree_mindmap)
     - [Code](#code-8)
     - [Mermaid](#mermaid-8)
+    - [Image (PNG)](#image-png-8)
+  - [Mermaid Version Information Debugging](#mermaid-version-information-debugging)
+    - [Code](#code-9)
+    - [Mermaid](#mermaid-9)
 
 <!--TOC-->
 </details>
@@ -193,6 +197,60 @@ flowchart LR
 ### Image (PNG)
 
 ![flowchart_fontawesome_icons](flowchart_fontawesome_icons.png)
+
+---
+
+## layout_cosebilkent_mindmap
+
+### Code
+
+```text
+---
+config:
+  layout: cose-bilkent
+  look: classic
+  theme: default
+---
+mindmap
+  root((Platform))
+    Ingress
+      CDN
+      Load Balancer
+    Compute
+      API
+      Worker
+    Data
+      Cache
+      Primary DB
+      Object Store
+```
+
+### Mermaid
+
+```mermaid
+---
+config:
+  layout: cose-bilkent
+  look: classic
+  theme: default
+---
+mindmap
+  root((Platform))
+    Ingress
+      CDN
+      Load Balancer
+    Compute
+      API
+      Worker
+    Data
+      Cache
+      Primary DB
+      Object Store
+```
+
+### Image (PNG)
+
+![layout_cosebilkent_mindmap](layout_cosebilkent_mindmap.png)
 
 ---
 
@@ -534,7 +592,6 @@ mindmap
     Data
       Cache
       Primary DB
-        Read Replica
       Object Store
 ```
 
@@ -558,7 +615,6 @@ mindmap
     Data
       Cache
       Primary DB
-        Read Replica
       Object Store
 ```
 

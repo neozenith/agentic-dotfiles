@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
 # /// script
 # requires-python = ">=3.12"
 # dependencies = ["pytest>=8.0", "pytest-cov>=4.0"]
@@ -12,8 +12,9 @@ import tempfile
 from argparse import Namespace
 from pathlib import Path
 
-import _update_examples_readme as mod
 import pytest
+
+import _update_examples_readme as mod
 
 
 @pytest.fixture

@@ -4,24 +4,26 @@ Render and maintain Mermaid.JS diagrams with **visual-clarity enforcement**.
 
 ## Features
 
-- **Render** `.md` files containing ```` ```mermaid ```` fences to PNG/SVG
-  (dark+transparent and default+white variants by default). Every artifact is
-  verified as a decodable PNG — a renderer exiting 0 without writing an image
-  is a failure, not a pass.
-- **Self-triaging renders** — Chromium failures are classified (npm cache /
-  missing browser / sandbox denial / network / diagram syntax), mechanically
-  remediable ones are retried, and only one class ever means "edit the
-  diagram."
-- **Complexity lint** — ruff-style findings on node count, visual-complexity
+- **Render** `.md` files containing ```` ```mermaid ```` fences to PNG. Two
+  variants by default, dark+transparent and default+white, because a diagram
+  has to read on a dark host and a light host and one image cannot do both.
+  Every artifact is verified as a decodable PNG: a renderer exiting 0 without
+  writing an image is a failure, not a pass.
+- **Self-triaging renders**: Chromium failures are classified (npm cache,
+  missing browser, sandbox denial, network, diagram syntax, or unknown), the
+  two mechanically remediable classes are retried once, and only one class
+  ever means "edit the diagram."
+- **Complexity lint**: ruff-style findings on node count, visual-complexity
   score, and subgraph depth. Cognitive-load-calibrated thresholds (Huang
-  2020, 50-node cap). Uses Mermaid's canonical parser.
-- **Contrast audit (required, not optional)** — every diagram with custom
+  2020; 50 nodes at the default preset). Uses Mermaid's canonical parser.
+- **Contrast audit (required, not optional)**: every diagram with custom
   colors MUST derive its palette from `resources/color_theming.md` and pass
-  `scripts/mermaid_contrast.ts` (WCAG 2.x + APCA). Ad-hoc pair checker also
-  ships for sampling (hex, rgb, oklch, named).
-- **Layout engines** — dagre / elk / tidy-tree / cose-bilkent, selectable per
-  diagram via YAML frontmatter. `look: classic | handDrawn | neo`.
-- **Icon packs** — Iconify (logos, mdi, cloud, saas) for `architecture-beta`;
+  `scripts/mermaid_contrast.ts` (WCAG 2.x gate; APCA Lc reported in `--json`).
+  `SKILL.md` "Why this is mandatory" carries the reasoning. An ad-hoc pair
+  checker also ships for sampling (hex, rgb, oklch, named).
+- **Layout engines**: dagre, elk, tidy-tree and cose-bilkent (mindmap only),
+  selectable per diagram via YAML frontmatter. `look: classic | handDrawn | neo`.
+- **Icon packs**: Iconify (logos, mdi, cloud, saas) for `architecture-beta`;
   Font Awesome for flowcharts.
 
 ## How it fits together
@@ -40,9 +42,9 @@ flowchart LR
     end
 
     subgraph optional["Optional Tooling"]
-        layout["Layout engine<br/>dagre / elk / tidy-tree"]:::dataSecondary
-        icons["Iconify packs<br/>logos / mdi / cloud"]:::dataSecondary
-        render["render_mermaid.sh<br/>PNG / SVG variants"]:::dataPrimary
+        layout["Layout engine<br/>dagre / elk / tidy-tree / cose-bilkent"]:::dataSecondary
+        icons["Iconify packs<br/>logos / mdi / cloud / saas"]:::dataSecondary
+        render["render_mermaid.sh<br/>PNG variants, verified"]:::dataPrimary
     end
 
     subgraph refs["Reference Docs"]
@@ -82,13 +84,14 @@ flowchart LR
     class refs sgSlate
 ```
 
-*Mermaid source flows left-to-right through two mandatory gates — structural
-complexity and color contrast — before rendering. Reference docs (dotted)
+*Mermaid source flows left-to-right through two mandatory gates, structural
+complexity and color contrast, before rendering. Reference docs (dotted)
 supply the rules each stage enforces.*
 
 ## Quick start
 
 ```bash
+make -C .claude/skills/mermaidjs-diagrams/scripts install-ts      # once: bun deps for the gate scripts
 bash .claude/skills/mermaidjs-diagrams/scripts/render_mermaid.sh path/to/doc.md
 make -C .claude/skills/mermaidjs-diagrams/scripts cli-demo
 ```

@@ -20,6 +20,9 @@ PY_SRC = $(addsuffix .py,$(PY_SCRIPTS)) $(addprefix test_,$(addsuffix .py,$(PY_S
 # See .claude/rules/typescript/ for conventions.
 TS_SCRIPTS = color_contrast mermaid_complexity mermaid_contrast
 
+# Private TS maintenance helpers (none today). Same quality gates, never in SKILL.md.
+PRIVATE_TS_SCRIPTS =
+
 # ── Bash source ────────────────────────────────────────────────────────────
 
 # Bash scripts have no formatter/typechecker here, but their behaviour is not
@@ -29,7 +32,7 @@ TS_SCRIPTS = color_contrast mermaid_complexity mermaid_contrast
 SH_SCRIPTS = render_mermaid
 SH_TEST_SRC = $(addsuffix .test.ts,$(SH_SCRIPTS))
 
-TS_SRC = $(addsuffix .ts,$(TS_SCRIPTS)) $(addsuffix .test.ts,$(TS_SCRIPTS)) $(SH_TEST_SRC)
+TS_SRC = $(addsuffix .ts,$(TS_SCRIPTS) $(PRIVATE_TS_SCRIPTS)) $(addsuffix .test.ts,$(TS_SCRIPTS) $(PRIVATE_TS_SCRIPTS)) $(SH_TEST_SRC)
 
 # ── Paths ──────────────────────────────────────────────────────────────────
 
@@ -257,4 +260,5 @@ help:
 	@echo ""
 	@echo "Misc:"
 	@echo "  docs         - Regenerate examples README from .mmd files"
+	@echo "  cli-demo     - Run every public TS analyzer against fixture inputs"
 	@echo "  clean        - Remove temp files and caches"
