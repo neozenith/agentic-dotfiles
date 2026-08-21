@@ -85,3 +85,17 @@ Query Claude Code session history: conversations, tool usage, event trees, costs
 ```sh
 npx skills@latest add neozenith/agentic-dotfiles -s introspect -y
 ```
+
+### dadjoke
+
+Workshop themed dad jokes in short, feedback-led waves. The theme is the invocation
+argument; add a count or "Q&A" to the same argument to shape the wave.
+
+```sh
+npx skills@latest add neozenith/agentic-dotfiles -s dadjoke -y
+```
+
+```text
+/dadjoke kubernetes                         # Claude Code
+$dadjoke five Q&A jokes about kubernetes    # Codex
+```
