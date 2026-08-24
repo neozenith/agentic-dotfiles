@@ -231,22 +231,23 @@ Examples:
 Output:
   Default: human-readable ratio + AA/AAA verdict + APCA Lc.
   --json:  machine-readable assessment object (or array for --stdin).
+  --color: ANSI colour in the human-readable output (default: plain text).
 
 Exit codes: 0 if ALL pairs pass AA (>= 4.5:1), 1 if any fail, 2 on usage error.`);
 }
 
-function formatAssessment(a: ContrastAssessment): string {
-  const tick = (ok: boolean) => (ok ? "\x1b[32m✓\x1b[0m" : "\x1b[31m✗\x1b[0m");
+// Plain output by default (agents and captured logs read this more than terminals do); `--color` opts in.
+function formatAssessment(a: ContrastAssessment, color = false): string {
+  const paint = (code: string, s: string) => (color ? `\x1b[${code}m${s}\x1b[0m` : s);
+  const tick = (ok: boolean) => (ok ? paint("32", "✓") : paint("31", "✗"));
   const r = a.ratio.toFixed(2);
   const apca = a.apca_lc.toFixed(1);
   const rating =
-    a.rating === "AAA"
-      ? `\x1b[32m${a.rating}\x1b[0m`
-      : a.rating === "AA"
-        ? `\x1b[32m${a.rating}\x1b[0m`
-        : a.rating === "AA Large"
-          ? `\x1b[33m${a.rating}\x1b[0m`
-          : `\x1b[31m${a.rating}\x1b[0m`;
+    a.rating === "AAA" || a.rating === "AA"
+      ? paint("32", a.rating)
+      : a.rating === "AA Large"
+        ? paint("33", a.rating)
+        : paint("31", a.rating);
   return [
     `${a.foreground} on ${a.background}`,
     `  ${a.foreground_hex} / ${a.background_hex}`,
@@ -272,6 +273,7 @@ export async function main(argv: string[] = Bun.argv.slice(2)): Promise<number> 
         json: { type: "boolean", default: false },
         stdin: { type: "boolean", default: false },
         over: { type: "string" },
+        color: { type: "boolean", default: false },
         help: { type: "boolean", short: "h", default: false },
       },
       allowPositionals: true,
@@ -326,7 +328,7 @@ export async function main(argv: string[] = Bun.argv.slice(2)): Promise<number> 
       console.log(JSON.stringify(results, null, 2));
     } else {
       for (const a of results) {
-        console.log(formatAssessment(a));
+        console.log(formatAssessment(a, Boolean(values.color)));
         console.log();
       }
     }
@@ -364,7 +366,7 @@ export async function main(argv: string[] = Bun.argv.slice(2)): Promise<number> 
   if (values.json) {
     console.log(JSON.stringify(assessment, null, 2));
   } else {
-    console.log(formatAssessment(assessment));
+    console.log(formatAssessment(assessment, Boolean(values.color)));
   }
   return assessment.passes_aa_normal ? 0 : 1;
 }

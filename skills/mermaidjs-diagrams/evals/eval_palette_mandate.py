@@ -51,7 +51,7 @@ def check_run_is_real(run: RunResult) -> None:
     assert run.session_id, "no session id - the run cannot prove which log is its own"
     assert Path(run.session_log).is_file(), f"session log missing: {run.session_log}"
     assert run.exit_code == 0, f"agent CLI exited {run.exit_code}"
-    assert run.usage.total_tokens > 0, "zero tokens - an empty run must never pass"
+    assert run.usage.accumulative_billed_tokens > 0, "zero tokens - an empty run must never pass"
 
 
 # -- Check 2: the run is priced ----------------------------------------------
@@ -66,7 +66,8 @@ def check_run_is_priced(run: RunResult) -> None:
     expensive sweep look free.
     """
     assert run.cost_status == "priced", f"run was not priced (status={run.cost_status})"
-    assert run.cost_usd is not None and run.cost_usd > 0, "cost must be a positive USD figure"
+    assert run.estimated_cost_usd is not None and run.estimated_cost_usd > 0, "cost must be a positive USD figure"
+    assert run.rates_applied.get("source"), "estimate carries no rate provenance (rates_applied.source)"
 
 
 # -- Check 3: the skill did its job ------------------------------------------

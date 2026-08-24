@@ -18,9 +18,13 @@ dev = [
 [tool.uv]
 package = false
 
-# To develop the plugin against this repository, point uv at the local checkout:
-#   uv add --dev --editable ../pytest-xharness-eval
-# and drop the [tool.uv.sources] entry it adds before committing.
+# Toggle between the published plugin and the local editable checkout with
+# `make xharness-local` / `make xharness-pypi` (see scripts/toggle_xharness_eval_editable.py).
+# The block between the markers is machine-managed; commit it in the pypi (commented) state.
+# --- BEGIN xharness-eval-source (managed) ---
+[tool.uv.sources]
+pytest-xharness-eval = { path = "../pytest-xharness-eval", editable = true }
+# --- END xharness-eval-source (managed) ---
 
 [tool.pytest.ini_options]
 # Pins pytest's rootdir to this directory so the plugin finds skills/ from any
@@ -32,11 +36,37 @@ xharness_skills_dir = "skills"
 xharness_workdir = "tmp/evals"
 # The project-scope matrix: every case sweeps these harness/model cells unless it
 # passes its own models=. Narrow a run with --harness, --model, or -k. A model with
-# no row in the plugin's bundled table needs one in ./prices.toml (gpt-5.6-terra does).
+# no row in the plugin's bundled table needs an xharness_prices line (gpt-5.6-terra does).
 xharness_matrix = [
     "claude/claude-opus-5",
     "claude/claude-sonnet-5",
     "codex/gpt-5.6-terra",
     "codex/gpt-5.6-sol",
+]
+# Price rows that add to or override the plugin's bundled table (ADR 0030).
+# USD per million tokens, as providers publish them.
+xharness_prices = [
+    # claude-sonnet-5: INTRODUCTORY PRICING, valid through 2026-08-31 ($2/$10 list is $3/$15,
+    # which the bundled row carries). Claude Code 2.1.239 bills at this rate (verified
+    # 2026-08-22: every sonnet modelUsage.costUSD fits to the cent). DELETE ON 2026-09-01.
+    "claude-sonnet-5: input=2.00 output=10.00 cache_read=0.20 cache_write=2.50 cache_write_1h=4.00",
+    # gpt-5.6-terra: Codex alias with no public row; assumed GPT-5-class, same as the bundled
+    # sol/luna rows. OpenAI bills no cache-write tier; both TTL rates kept equal on purpose.
+    "gpt-5.6-terra: input=1.25 output=10.00 cache_read=0.125 cache_write=1.25 cache_write_1h=1.25",
+]
+# Skill files that are not part of the skill's decision surface (ADR 0026): they stay
+# in the coverage catalogue flagged `ignored` and leave every denominator. A bare
+# pattern applies to every skill; "<skill>: <pattern>" to the skills the selector
+# matches. gitignore-style globs; `make evals-replay SKILL=<skill>` re-annotates.
+xharness_skill_ignore = [
+    "README.md",
+    "mermaidjs-diagrams: resources/examples/**",
+    "mermaidjs-diagrams: scripts/{Makefile,CLAUDE.md}",
+    "mermaidjs-diagrams: scripts/*.json",
+    "mermaidjs-diagrams: scripts/_*.py",
+    "mermaidjs-diagrams: scripts/*.test.ts",
+    "mermaidjs-diagrams: scripts/test_*.py",
+    "mermaidjs-diagrams: scripts/conftest.py",
+    "mermaidjs-diagrams: scripts/bun*",
 ]
 addopts = "-n 2 -v"

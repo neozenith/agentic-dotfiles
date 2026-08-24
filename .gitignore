@@ -15,3 +15,5 @@ settings.local.json
 **/evals/**/captured/
 tmp/
 .venv/
+.*_cache/
+.playwright*/

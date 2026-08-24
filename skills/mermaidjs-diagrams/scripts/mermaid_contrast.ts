@@ -370,7 +370,10 @@ export function auditContent(
 
 // ─── Formatting ──────────────────────────────────────────────────────────────
 
-const C = {
+// Plain output by default: the audit is read by agents and captured into logs far
+// more often than by a human at a terminal, and escape codes there are noise.
+// `--color` opts in to the ANSI palette.
+const ANSI = {
   green: "\x1b[32m",
   red: "\x1b[31m",
   yellow: "\x1b[33m",
@@ -378,6 +381,8 @@ const C = {
   bold: "\x1b[1m",
   reset: "\x1b[0m",
 };
+const PLAIN: typeof ANSI = { green: "", red: "", yellow: "", dim: "", bold: "", reset: "" };
+let C: typeof ANSI = PLAIN;
 
 function formatReport(r: DiagramContrastReport): string {
   const lines: string[] = [];
@@ -469,6 +474,7 @@ Options:
   --json        Machine-readable output (array of DiagramContrastReport)
   --summary     Print only the per-file summary, not every pair
   --quiet, -q   Suppress non-failure lines
+  --color       ANSI colour in human-readable output (default: plain text)
   -h, --help    Show this help
 
 Exit codes: 0 if all pairs pass, 1 if any fail, 2 on usage error.
@@ -486,6 +492,7 @@ export async function main(argv: string[] = Bun.argv.slice(2)): Promise<number> 
         json: { type: "boolean", default: false },
         summary: { type: "boolean", default: false },
         quiet: { type: "boolean", short: "q", default: false },
+        color: { type: "boolean", default: false },
         profile: { type: "string", default: "auto" },
         help: { type: "boolean", short: "h", default: false },
       },
@@ -498,6 +505,7 @@ export async function main(argv: string[] = Bun.argv.slice(2)): Promise<number> 
     return 2;
   }
   const { values, positionals } = parsed;
+  C = values.color ? ANSI : PLAIN;
 
   if (values.help) {
     printHelp();

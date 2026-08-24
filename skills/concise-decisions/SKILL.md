@@ -1,6 +1,6 @@
 ---
 name: concise-decisions
-description: "Concise Decisions. Use mid-session when two or more ambiguities have accumulated and you'd otherwise interrupt the user with several questions. Consolidates the open question set into the single highest-leverage multiple-choice question with a recommended pragmatic default, then cascades the answer across every related ambiguity before asking another."
+description: "Concise Decisions. Use mid-session when two or more ambiguities have accumulated and you'd otherwise interrupt the user with several questions, and whenever a design decision must be put to the user. Self-answers first from existing decision records (ADRs, CLAUDE.md lenses, plan decisions, knowledge bases), then consolidates what remains into the single highest-leverage decision question: a full briefing (decision sentence, why now and why this one first, already settled with what was checked, reversibility, complete previews on real data, pros/cons, recommendation, TBD routes explain/show/spike/defer) plus ONE answer surface that captures the choice AND the user's reasoning, then cascades the answer and its reasoning across every related ambiguity before asking another. Loads one question-shape file and one harness adapter on demand. Skip when a single trivial, reversible ambiguity is open: state a default in passing and move on."
 user-invocable: true
 ---
 
@@ -9,165 +9,261 @@ user-invocable: true
 > Every question you ask the user is a tax on their attention. Spend it like
 > it is the scarcest resource in the loop — because it is.
 
-Concise Decisions is the mid-session ambiguity resolution loop. Invoke it whenever you
-notice that **two or more open decisions** are blocking your work and you are
-tempted to interrupt the user with a chain of questions. Do not dump the list.
-Run Concise Decisions first.
+Concise Decisions is the mid-session ambiguity resolution loop. Invoke it when
+**two or more open decisions** block your work and you are tempted to
+interrupt the user with a chain of questions. Do not dump the list. Run the
+loop.
+
+## The requirement every question must meet
+
+> The user must be able to make an **informed decision** and **give their
+> reasoning** — from the answer surface alone, coming in cold.
+
+The reasoning is the product. A captured "why" becomes the decision record's
+lens (*we value X over Y*), and a codified lens is what lets later questions
+be answered without asking. A question that captures the choice but loses the
+why has failed.
 
 ## When to invoke
 
-Trigger this skill when, mid-task, you find yourself in any of these states:
-
 - You have a queue of clarifying questions about scope, naming, behaviour,
   data shape, format, or trade-offs.
-- You are about to ask the user "should I X? and also Y? and also Z?".
-- You've drafted code with multiple `TODO: confirm with user` markers.
-- You started implementing one branch and realised that three unmade
-  decisions block other branches too.
-- You're considering an `<!-- ASSUMPTION: ... -->` marker and you have more
-  than one such assumption pending.
+- You are about to ask "should I X? and also Y? and also Z?".
+- You drafted code with several `TODO: confirm with user` markers, or hold
+  more than one pending `<!-- ASSUMPTION: … -->`.
+- You started one branch and found that unmade decisions block other branches.
+- A planning skill (e.g. a gap-analysis refinement phase) needs to put an
+  architectural decision to the user.
 
-If the answer to "how many open ambiguities are blocking me?" is 1, just ask
-that question directly — Concise Decisions overhead isn't worth it. If it's ≥2, run Concise Decisions.
+If exactly one ambiguity is open **and** it passes the pragmatic-default test
+below, state the default and move on. Otherwise run the loop — even for one
+question, the question itself still follows step 4 in full.
 
 ## The loop
 
 Repeat until no material ambiguity remains:
 
-1. **Inventory the ambiguities.** Privately list every open decision point.
-   Phrase each one as "I don't know whether X, which would determine Y."
-   Include the implicit ones — assumptions you quietly made, defaults you
-   wrote without explicit permission, code paths you skipped because the
-   input shape was unclear.
+1. **Inventory the ambiguities.** Privately list every open decision as
+   "I don't know whether X, which would determine Y." Include implicit ones:
+   assumptions you quietly made, defaults written without permission, code
+   paths skipped because the input shape was unclear.
+2. **Check decision records, then rank by cross-cutting impact.** Before
+   ranking, search the *Decision records* (below) for every item in the
+   inventory. An item a recorded decision answers is **already decided**:
+   apply it, cite the record, drop it from the queue — never ask it. An item
+   a recorded *lens* answers is a pragmatic-default candidate for step 3.
+   Then pick the single remaining question whose answer resolves the *most*
+   downstream ambiguities. Knowing the data shape often resolves naming,
+   validation, and storage at once — ask that.
+3. **Resolve it yourself if you can.** See *Pragmatic default* below. If all
+   four criteria hold, pick it, state it in one line, move on. The user's
+   attention is more expensive than your deliberation.
+4. **Otherwise ask exactly one question** — composed as described in the next
+   section. Never more than one decision per turn.
+5. **Cascade the answer and the reasoning.** Apply the *choice* to every
+   related ambiguity from step 1, and apply the *reasoning* — now a lens — to
+   any ambiguity it settles, related or not. Record the decision *and the
+   user's reasoning* where decisions live for this work (ADR, plan file,
+   in-code comment), update in-flight code and the queue. See *After the
+   answer*.
+6. **Re-evaluate, then loop or exit.** Re-rank before asking anything else —
+   yesterday's #2 is rarely today's #1 after a cascade.
 
-2. **Rank by cross-cutting impact.** Find the single question whose answer
-   would resolve the *most* downstream ambiguities. Prefer questions that
-   collapse multiple branches over questions that resolve only one. Knowing
-   the data shape often resolves naming, validation, and storage in one
-   shot — that's the question to ask.
+## Decision records — check before you ask
 
-3. **Resolve it yourself if you can.** Before asking, check whether a
-   pragmatic default is obviously right given the surrounding code,
-   established conventions, prior feedback, or memory. If yes, pick it and
-   move on. The user's attention is more expensive than your own
-   deliberation. (See *What counts as a pragmatic default* below.)
+"Decision records" is a **role**, not a place. Resolve it in this order, use
+every backend that exists, and name what you checked in the question's
+`Already settled` line (`Checked: …` — "nothing bears on this" is a valid
+finding; silence is not):
 
-4. **Otherwise, ask exactly one question — multiple choice.** Structure it
-   with:
-   - **Why this question matters.** Name the cascade — list the other
-     ambiguities that fall out of the answer.
-   - **2–4 educated options.** Each option must be one you would genuinely
-     consider implementing. **Do not pad with filler options for the sake
-     of "giving choices."** Two strong options is better than three weak
-     ones.
-   - **Your recommendation.** Mark which option you'd pick by default and
-     explain why in one sentence. Make confirmation cheap: a single letter
-     reply should be enough.
-   - **An open-ended escape hatch.** End with "or describe a different
-     approach" so the user can redirect.
+| Order | Backend | What it answers |
+|---|---|---|
+| 1 | The work's ADR surface (`docs/adrs/`, `docs/adr/`, `ADRs.md`, `decisions/`) and its `CLAUDE.md`/`AGENTS.md` lenses | binding decisions and the reasoning to reuse |
+| 2 | The plan, spec, or gap-analysis file being refined: its Decisions section, `<!-- DECISION -->` / `<!-- ASSUMPTION -->` / `<!-- DEFERRED -->` markers | decisions made in-flight, and seams already cut |
+| 3 | The user's prior feedback this session, persisted memory, and [resources/learned/adjudications.md](resources/learned/adjudications.md) | how this user decides, and rulings on how to ask |
+| 4 | Knowledge bases reachable through tools (issue tracker, wiki, docs search) — search the decision's own nouns | decisions recorded outside the repo |
 
-5. **Cascade the answer.** Apply the user's answer not just to the specific
-   question asked but to every related ambiguity from step 1. Update your
-   working notes, your in-flight code, and your remaining queue. Many of
-   the ambiguities listed in step 1 should now be resolved.
+Searching is cheaper than asking. A question whose answer was sitting in a
+record is the failure this skill exists to prevent.
 
-6. **Re-evaluate, then loop or exit.** Reassess the remaining open
-   ambiguities:
-   - If none materially affect the work, exit the loop and proceed.
-   - If any remain, return to step 1. **Do not** ask a follow-up question
-     until you've re-ranked — yesterday's #2 may not be today's #1 after
-     the cascade.
+## Step 4 — composing the question
 
-## Question framing rules
+A question is **one message with a fixed anatomy** followed by **one answer
+surface**. Build it in this order:
 
-| Rule | Why |
-|------|-----|
-| One question per turn. | The whole point — don't fragment the user's attention. |
-| Multiple-choice with labelled options (A/B/C). | A single-character reply suffices. Cheaper than free-form prose. |
-| Always recommend a default. | If you have no opinion, you haven't researched enough — go research first. |
-| Options must be substantive. | "A: do it. B: don't do it. C: something else." is one option plus noise. |
-| Lead with the cascade. | The user should see *why* this question is the bottleneck before seeing the options. |
-| State reversibility. | If picking wrong creates rework, say so. If it's trivially reversible, say that too — it lowers the stakes and speeds the reply. |
+1. **Pick the shape** and load its file (one only):
 
-## What counts as a pragmatic default
+   | Shape | Recognise it when | Load |
+   |-------|-------------------|------|
+   | Exclusive choice | 2–3 mutually exclusive options | [resources/shapes/exclusive-choice.md](resources/shapes/exclusive-choice.md) |
+   | Subset as permutations | several options can be chosen together | [resources/shapes/subset-as-permutations.md](resources/shapes/subset-as-permutations.md) |
+   | Binary | exactly two real options | [resources/shapes/binary.md](resources/shapes/binary.md) |
+   | Low stakes | highly reversible, nothing downstream depends on it, yet the lens is worth recording | [resources/shapes/low-stakes.md](resources/shapes/low-stakes.md) |
+   | Resolved by cascade | a prior decision narrowed this one but left constraints competing | [resources/shapes/resolved-by-cascade.md](resources/shapes/resolved-by-cascade.md) |
 
-Pick the option yourself (skip the question entirely) when **all** of these
-hold:
+2. **Sense the harness** and load its adapter (one only). Identity is not
+   capability — the adapter decides only where the answer is typed:
 
-- An established convention in the surrounding code, framework, or
-  language ecosystem already points to one answer.
-- The user's prior feedback or memory entries point in a clear direction.
-- The decision is **easily reversible** — a rename, a flag flip, a small
-  refactor — not a schema migration, a public API commitment, or a data
-  shape that propagates through serialised storage.
-- Picking wrong cannot cause a Type 2 failure — code that looks correct
-  but silently fails to meet the requirement. (See the
-  `escalators-not-stairs` skill: never let a "graceful default" silently
-  downgrade an explicit requirement.)
+   | Signal | Load |
+   |--------|------|
+   | `CLAUDECODE` set, or a structured single-select question tool with per-option free text is available | [resources/harnesses/claude-code.md](resources/harnesses/claude-code.md) |
+   | `CODEX_SANDBOX`, `CODEX_PROXY_CERT`, or any `CODEX_ENV_*` set | [resources/harnesses/codex.md](resources/harnesses/codex.md) |
+   | anything else (chat, cloud runner, unknown) | [resources/harnesses/session-feed.md](resources/harnesses/session-feed.md) |
 
-If any of those four is missing, ask the question.
+   Announce the adapter in one clause if it is not the structured one.
 
-## What counts as "done"
+3. **Fill [resources/question-template.md](resources/question-template.md)**
+   using the shape's variant. The anatomy, in order:
 
-Exit Concise Decisions when:
+   | # | Section | One-line contract |
+   |---|---------|-------------------|
+   | 1 | Decision to make | one complete sentence: the choice and its operating constraints |
+   | 2 | Why decide this now | blocked work; downstream cascade; **why this one first** — the other open questions it outranks; what is *outside* this decision |
+   | 3 | Already settled | `Checked:` the decision records searched; the prior decisions that bear on this and *why they do not answer it* |
+   | 4 | Reversibility | low / high / asymmetric, honestly, with affected surfaces |
+   | 5 | Options | 2–3 real ones; title carries `(Recommended)`; **complete** preview on the user's real data; `Pros:` and `Cons:` on separate lines |
+   | 6 | Compare | one table with domain-specific columns |
+   | 7 | Recommendation | the option and one sentence of why |
+   | 8 | TBD routes | the answers that are not decisions: `explain`, `show`, `spike`, `defer`/`handoff` (+ `other`, `task`) — [resources/tbd-routes.md](resources/tbd-routes.md) |
+   | 9 | Answer channel | one surface that captures option **and** reasoning; says what the reasoning becomes |
 
-- No remaining ambiguity would change the design, the API surface, the
-  data shape, or the user-visible behaviour.
-- All remaining decisions are local, reversible, and within the scope of
-  conventions you can confidently apply.
-- The work can proceed without further human input until the next natural
-  review point.
+4. **Run the five-question check** as the user, seeing only the answer
+   surface, cold. All five must be yes; if any is no, fix the question — do
+   not ask it. The wording is the user's own:
 
-If you find yourself wanting to ask a tenth-priority question "just to be
-safe," that's the signal to exit. Make a conservative choice, leave an
-`<!-- ASSUMPTION: ... -->` marker (or equivalent in-code comment), and
-surface it in your end-of-turn summary so the user can correct cheaply if
-wrong.
+   1. Can I make an **informed decision** from what is presented?
+   2. Do I understand why **this** question is being asked **now** — why it is
+      the next most impactful question worthy of my attention?
+   3. Do I understand why prior decisions do **not** already answer it — were
+      existing decision records and knowledge bases checked, and does the
+      question say so?
+   4. Can I attach my reasoning to whichever option I pick? Multichoice or
+      multi-select without space for free text is a failure.
+   5. Can I give a **TBD answer** — an answer that is not a decision —
+      without aborting?
 
-## Anti-patterns
+5. **Send it.** Body first, then the answer surface, in the same turn.
+   Nothing else in the turn: no meta instructions, no second question.
+
+### Rules that do not bend
+
+- **There is no cheap question.** Low stakes shrinks the *previews*; it never
+  removes a section. A compressed briefing with pointer labels fails.
+- Previews are **complete outcomes on the user's real data** (their actual
+  command, file, path, output), never illustrative fragments. If you lack the
+  data, get it before asking.
+- Option titles are **self-describing** — they must make sense with the body
+  off-screen. `B (Recommended): each --match opens a group` passes;
+  `Confirm C` fails.
+- The recommendation is in the option **title** and in the Recommendation
+  line. Never only after the previews.
+- Conciseness never damages grammar. A decision sentence that reads as a
+  fragment fails check 1.
+- Rehearsal or meta text ("grade this", "don't answer yet") stays outside
+  the question surface.
+
+## After the answer
+
+1. Confirm the choice in one line and quote the reasoning.
+2. **Extract the reasoning.** If the reply names an option but no why, do
+   not ask again: infer the lens from the briefing (the pros the user
+   accepted, the cons they tolerated), state it in one line — "recording the
+   why as: *given X, we prefer Y over Z because …* — correct me if that is
+   wrong" — and mark the record `<!-- LENS: unconfirmed -->` until the user
+   confirms or edits it. A statement in passing, not a second question.
+3. Record decision + reasoning where decisions live for this work. The
+   reasoning is written as a **lens in four clauses**:
+
+   | Clause | Holds |
+   |---|---|
+   | **Given** | the context that makes this the right call *today* |
+   | **We prefer** | X, **over** the named alternative Y |
+   | **Because** | why the preference follows from that context |
+   | **Unless** | the condition that would invert it — or "never; unconditional" |
+
+   A lens with no `Unless` is an assertion, not a decision: nothing in it
+   says what it depended on, so a later run cannot tell when it stopped
+   applying. Name the rejected alternative — a preference with no `over` is
+   the rule restated.
+4. State which other ambiguities cascaded resolved and how each was applied
+   — by the choice, or by the lens alone.
+5. If the answer was a TBD route, act per
+   [resources/tbd-routes.md](resources/tbd-routes.md): `explain` revises the
+   unclear part and re-asks; `show` builds one real artifact per option and
+   re-asks; `spike` runs a timeboxed experiment whose outcome is a learning;
+   `defer`/`handoff` logs the **entire question and recommendation** as a
+   backlog ticket and records the scope seam; `other` renders the new option
+   and re-asks; `task` hands over the prerequisite work.
+6. Re-rank (step 6). Ask the next question only if one is still needed.
+
+## Pragmatic default — when to skip the question
+
+This is distinct from *already decided*: a decision record that answers the
+question settles it outright (step 2 — apply and cite, no criteria needed).
+The pragmatic default is for questions **no record answers**. Pick the option
+yourself when **all four** hold:
+
+- An established convention in the surrounding code, framework, or ecosystem
+  already points to one answer.
+- The user's prior feedback, memory, or a recorded lens (reasoning from a
+  *different* decision) points the same way.
+- The decision is **easily reversible** — a rename, a flag flip — not a
+  schema, a public API, or a serialised data shape.
+- Picking wrong cannot cause a Type 2 failure (code that looks correct but
+  silently misses the requirement; see `escalators-not-stairs`).
+
+If any is missing, ask. When you skip, state the default in one line in
+passing — that is a statement, not a question, and the only legitimately
+cheaper form.
+
+## What counts as done
+
+Exit when no remaining ambiguity would change the design, the API surface,
+the data shape, or user-visible behaviour, and the rest are local, reversible,
+and within conventions you can apply. Wanting to ask a tenth-priority question
+"to be safe" is the signal to exit: choose conservatively, leave an
+`<!-- ASSUMPTION: … -->` marker, surface it in the end-of-turn summary.
+
+## Never
 
 | Anti-pattern | Why it fails |
 |--------------|--------------|
-| Asking 5 questions in one message. | Defeats the entire purpose — forces the user to context-switch between unrelated decisions. |
-| Back-to-back yes/no questions. | Two yes/nos can almost always be reframed as one multiple-choice covering the combinations. |
-| "Which of these do you prefer?" with no recommendation. | Pushes cognitive load onto the user. You did the research — pick a default. |
-| Padding to three options when only two are real. | Wastes the multiple-choice frame. If only one option is real, just ask directly with the recommendation. |
-| Asking before cascading. | If the previous answer already resolved this question implicitly, asking it again is a tax for nothing. |
-| Asking about reversible details. | Pick a default, mark it as an assumption, keep moving. |
-| Treating "graceful degradation" as a third option. | A silent fallback is not a real choice — it's a Type 2 failure waiting to happen. Force the explicit decision instead. |
+| Several questions in one turn, or a multi-question wizard | answer 1 cannot cascade into 2–n |
+| Asking what a decision record already answers | the record was there to be read; check 3 fails and the user's attention was spent for nothing |
+| Multi-select | a subset can be chosen but not *why* per option — use permutations |
+| Any picker, single- or multi-select, with no free text on the chosen option | the choice is captured and the reasoning is lost — check 4 fails |
+| Picker or option list with no briefing | reasoning crammed into labels, truncated |
+| The artifact inside a preview pane | truncates; the body carries the artifact, the pane carries a card |
+| Pointer labels (`Confirm C`, `Veto → A`) | meaningless when the body is not in view |
+| A compressed "cheap" briefing | check 1 fails |
+| Only an "other" escape | no way to answer "not yet" |
+| No recommendation | you did the research — pick a default |
+| Padding to three options when two are real | wastes the frame |
+| Asking before cascading | the previous answer may already have resolved it |
+| Treating "graceful degradation" as an option | a silent fallback is a Type 2 failure, not a choice |
 
-## Output template
+## Resources
 
-When you ask the Concise Decisions question, structure the message like this:
+This file and `resources/` are the **only runtime authority**. `README.md`,
+`CLAUDE.md`, and `docs/adrs/` are development-time documents: read them when
+*editing* the skill, never cite them as authority when *running* it. The one
+exception is `resources/learned/adjudications.md`, which step 2 searches as a
+decision record.
 
-```
-**Open ambiguities (N):** brief one-line list, ordered by leverage.
-
-**Highest-leverage question:** <one sentence>.
-
-**Why now:** answering this resolves <list referenced from above>.
-
-A. <option> — <one-line description and trade-off>
-B. <option> — <one-line description and trade-off>  (default — <why>)
-C. <option> — <one-line description and trade-off>
-
-Reversibility: <one line — is this hard to change later, or trivial?>
-
-Or describe a different approach.
-```
-
-After the user answers, your next message should:
-
-1. Confirm the choice in one line.
-2. State which other ambiguities cascaded resolved and how each was applied.
-3. Either proceed with the work, or ask the next Concise Decisions question — but only if
-   step 6 of the loop says one is still needed.
+| File | Load when |
+|------|-----------|
+| [resources/question-template.md](resources/question-template.md) | composing any question |
+| [resources/tbd-routes.md](resources/tbd-routes.md) | composing section 8, or acting on a TBD answer |
+| `resources/shapes/*.md` | one per question, chosen in step 4.1 |
+| `resources/harnesses/*.md` | one per session, chosen in step 4.2 |
+| [resources/learned/adjudications.md](resources/learned/adjudications.md) | first question of a session — prior user rulings are already-decided; do not re-litigate |
+| The work's own decision records (role, resolved per *Decision records* above) | step 2, every loop — before ranking, never after asking |
 
 ## Relationship to other skills
 
-- `escalators-not-stairs` — the requirement-integrity guardrail. Concise Decisions asks
-  *which* requirement to implement; `escalators-not-stairs` ensures none of
-  the options silently weaken a stated requirement.
-- `plan-gap` — uses the same iterative-question loop inside its Phase 2
-  refinement of a gap-analysis document. Concise Decisions is the same mechanism extracted
-  for general mid-session use, with no document-specific obligations.
+- `escalators-not-stairs` — the requirement-integrity guardrail. This skill
+  asks *which* requirement to implement; that one ensures no option silently
+  weakens a stated requirement.
+- Planning skills with an iterative refinement phase use this loop verbatim
+  for their decision questions; this skill owns the question contract, they
+  own what a `defer`/`spike`/`show` answer does to their documents.
