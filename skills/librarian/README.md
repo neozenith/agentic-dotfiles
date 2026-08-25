@@ -80,6 +80,8 @@ only loss-free, history-preserving operations.
   [resources/conventions_template.md](resources/conventions_template.md)
 - Flavour presets (minimal / standard / rigorous) + graduation triggers:
   [resources/flavours.md](resources/flavours.md)
+- Preferred shape of one ADR (metadata, Lens, Problem / Decision /
+  Consequences): [resources/adr_template.md](resources/adr_template.md)
 - Research citations and counter-evidence (dated):
   [resources/evidence.md](resources/evidence.md)
 

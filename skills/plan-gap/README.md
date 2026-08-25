@@ -38,10 +38,10 @@ flowchart LR
     end
 
     subgraph P2["Phase 2: Refinement"]
-        ADR["Scan Unresolved<br/>ADRs"]
-        Q["Ask Most <b>Impactful</b><br/>Question"]
-        HITL(["Human<br/>Answer"])
-        INC["Integrate Answer<br/>Across All Relevant Questions<br/>and Resolve ADRs"]
+        ADR["Inventory Ambiguity,<br/>Self-Answer from<br/>Decision Records, Rank"]
+        Q["Ask Most <b>Impactful</b><br/>Question<br/>(vendored decision loop)"]
+        HITL(["Human Answer<br/>+ Reasoning"])
+        INC["Integrate Choice <b>and</b> Lens<br/>Across All Relevant Questions<br/>and Resolve ADRs"]
     end
 
     subgraph P3["Phase 3: Validation"]
@@ -108,8 +108,8 @@ flowchart LR
 - **Anti-hallucination** — every external URL verified via playwright-cli or WebFetch before citation
 - **Per-gap deep dive** — N agents in parallel, each with fresh context focused on one gap
 - **Quality + failure discovery** — agents scan your CI gates, agentic rules, and memory for codified standards and historical gotchas
-- **ADR-driven questions** — unresolved decisions tracked per gap; the skill picks the single question that resolves the most ADRs across all gaps simultaneously
-- **Human-in-the-loop** — you answer one focused question per iteration; the skill propagates your answer across all affected sections
+- **ADR-driven questions** — unresolved decisions tracked per gap; the skill searches existing decision records first (the spec's own ADRs, prior rulings, your project's `docs/adrs/` and `CLAUDE.md` lenses) and only then picks the single question that resolves the most ADRs across all gaps simultaneously
+- **Human-in-the-loop** — you answer one focused question per iteration, with a full briefing and one answer surface that captures your choice *and* your reasoning; the skill propagates both across all affected sections. Every answer may also be a non-decision — `explain`, `show`, `spike`, `defer`, `other`, `task` — without aborting the question. The question loop is the Concise Decisions skill, vendored wholesale into `vendor/concise-decisions/` so this skill stands alone
 - **Executable evidence — no stubs, no mocks of the deliverable** — every gap's Outputs include a *proof-of-execution* artifact produced by running the real code path on real input (the tracer bullet produces it); a ticket that can only ship a stub triggers a 5-Whys root-cause check (`resources/5ys.md`), and a `<!-- CHANGE-REQUEST -->` only if a genuine plan defect is confirmed — the `/loop` stops and returns to refinement
 
 ## Document Structure

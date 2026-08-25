@@ -139,17 +139,26 @@ step-by-step playbook**; the steps are:
 ### Phase 2: Iterative refinement loop
 
 Settle the open design decisions by asking the human **one maximally-leveraged question at a time**.
-**Read `resources/phase2-refinement.md` for the full step-by-step playbook**; the cycle is:
+The question loop is the **vendored Concise Decisions skill** at `vendor/concise-decisions/` — it owns
+the question contract (self-answering from decision records, ranking, the pragmatic-default test, the
+nine-section briefing, the five-question check, the lens grammar, the TBD routes). This skill owns what
+counts as an ambiguity in a spec and what an answer does to the file set.
+**Read `resources/phase2-refinement.md` for the full step-by-step playbook, and
+`vendor/concise-decisions/SKILL.md` once before the first iteration**; the cycle is:
 
-- **2a — Scan unresolved ADRs.** Collect every `<!-- UNRESOLVED -->` entry across all `G<n>.md` files,
-  and create placeholders for any non-ADR ambiguity (missing details, implicit assumptions).
-- **2b — Rank by cross-gap impact.** Pick the single question whose answer resolves the most ADRs
-  across the most gaps — the key lever for reducing total questions asked.
-- **2c — Ask one question.** Explain why now, which gaps/ADRs it affects, the cascade, and your
-  researched recommendations so the user can confirm a default in one word.
-- **2d — Incorporate the answer.** Settle the affected ADRs into bulleted form, update the index
-  Decisions roll-up, cascade into Outputs/Key logic/Measures and the affected `DISCOVERY.md` diagrams,
-  and restructure the Overview/Gap Map/Dependencies if gaps changed.
+- **2a — Assemble the ambiguity inventory.** Collect every `<!-- UNRESOLVED -->` entry across all
+  `G<n>.md` files, and create placeholders for any non-ADR ambiguity (missing details, implicit
+  assumptions, unpermitted defaults) so the whole open set is rankable at once.
+- **2b — Self-answer, then rank.** Search the spec's own ADRs and markers, then the target project's
+  decision surface (`docs/adrs/`, `CLAUDE.md`/`AGENTS.md` lenses) — an item a record already answers is
+  decided, and is never asked. Rank the rest by how many ADRs across how many gaps the answer resolves,
+  show that ranking, and settle anything that passes the pragmatic-default test yourself.
+- **2c — Ask one question.** Compose it with the vendored loop's shape file, harness adapter, and
+  nine-section template, verbatim — previews are complete outcomes on the spec's real content.
+- **2d — Incorporate the answer.** Settle the affected ADRs into bulleted form with the user's
+  reasoning written as the lens (`Given / We prefer … over … / Because / Unless`), update the index
+  Decisions roll-up, cascade both the choice and the lens into Outputs/Key logic/Measures and the
+  affected `DISCOVERY.md` diagrams, and restructure the Overview/Gap Map/Dependencies if gaps changed.
 - **2e — Re-evaluate.** Fold any new sub-questions into the next ranking; exit when no
   `<!-- UNRESOLVED -->` markers remain and the set is internally consistent.
 
@@ -202,17 +211,27 @@ Phase 2 to rescope. See `resources/phase4-decomposition.md` and the loop-runner 
 
 ## Questioning Principles
 
-- **One question at a time.** Never dump a list of questions. The user should focus
-  on the single most impactful question.
-- **Cascade awareness.** Before asking a question, consider whether the answer to a
-  previous question has already resolved it.
-- **Explain the "why."** Always explain why this question is the most important one
-  right now and what it unblocks.
-- **Converge, don't diverge.** Each iteration should reduce the total number of
-  ambiguities, not increase them. If a question opens up new sub-questions, fold
-  them into the ranking for next iteration — don't ask them all at once.
-- **Know when to stop.** When no ambiguities remain that materially affect the plan's
-  actionability, declare the document complete and move to validation.
+Every question this skill asks — in any phase, not only Phase 2 — is composed with the vendored loop at
+`vendor/concise-decisions/SKILL.md`. These are its principles as they bind here; the vendored surface
+is the authority on the mechanics, and no phase substitutes a cheaper form of question.
+
+- **One question at a time.** Never dump a list of questions, and never a multi-question wizard: answer
+  1 must be able to cascade into 2–n before 2 is asked.
+- **Search before you ask.** A question whose answer was already sitting in an ADR, a settled decision,
+  or a prior user ruling is the failure the loop exists to prevent. Say what you checked.
+- **Cascade awareness.** Before asking, consider whether a previous answer — its *choice* or its
+  *reasoning* — has already resolved it.
+- **Capture the reasoning, not just the choice.** The answer surface must let the user attach their
+  why; that why becomes the ADR's lens, and a codified lens is what lets later questions be
+  self-answered.
+- **Explain the "why now."** Always explain why this is the most impactful question right now, what it
+  unblocks, and which open questions it outranks.
+- **Leave room for a non-decision.** The user must be able to answer `explain`, `show`, `spike`,
+  `defer`/`handoff`, `other`, or `task` without aborting the question.
+- **Converge, don't diverge.** Each iteration should reduce the total number of ambiguities. If a
+  question opens sub-questions, fold them into the ranking for next iteration.
+- **Know when to stop.** When no ambiguities remain that materially affect the plan's actionability,
+  declare the document complete and move to validation.
 
 ## Output Conventions
 
@@ -241,12 +260,13 @@ This skill bundles the following reference documents in its `resources/` directo
 | `resources/spec-body.md` | Spec structure — the tiers, the index/gap/ticket/discovery templates, the Execution Plan + Done Criteria, and the index skeleton |
 | `resources/style.md` | Authoring style contract — the voice/format rules every file obeys; read alongside `spec-body.md` before authoring or restyling |
 | `resources/phase1-bootstrap.md` | Phase 1 full playbook — Steps 1a–1g (target setup, dual research, link verification, synthesis, per-gap + quality/failure research, assembly) |
-| `resources/phase2-refinement.md` | Phase 2 full playbook — Steps 2a–2e (scan ADRs, rank by cross-gap impact, ask one question, incorporate, re-evaluate) |
+| `resources/phase2-refinement.md` | Phase 2 full playbook — Steps 2a–2e (inventory, self-answer + rank, ask one question via the vendored loop, incorporate the answer and its lens, re-evaluate) |
 | `resources/phase3-validation.md` | Phase 3 full playbook — Steps 3a–3c (diagram lenses + increment gate, requirement integrity, cross-consistency) |
 | `resources/phase4-decomposition.md` | Phase 4 full playbook — Steps 4a–4e (behavior enumeration, ticket structuring, DAG, Execution Plan, validation) + loop-exit conditions |
 | `resources/escalators-not-stairs.md` | Requirement integrity + executable-evidence principles (no stubs, no mocks of the deliverable) — read at the start of planning and applied in every phase |
 | `resources/5ys.md` | 5 Whys root-cause analysis — the precheck before raising a `<!-- CHANGE-REQUEST -->`, and for retrospectives of Type 2 failures |
 | `resources/mermaidjs-diagrams.md` | Mermaid diagram reference — rendering, complexity thresholds, pitfalls |
+| `resources/color_theming.md` | Diagram palette source — every diagram derives its colours here, then passes the contrast gate |
 | `resources/playwright-cli.md` | Link verification — detection, fallback chain, and unverified markers |
 | `resources/gh-cli.md` | GitHub CLI reference — detection, authentication, issue CRUD commands |
 | `resources/gh-issues.md` | GitHub issues backend — local cache, sync protocol, edit history lineage |
@@ -256,6 +276,18 @@ This skill bundles the following reference documents in its `resources/` directo
 | `resources/tdd/interface-design.md` | Testable interface design — accept dependencies, return results, small surface |
 | `resources/tdd/deep-modules.md` | Deep module guidance — small interface, deep implementation |
 | `resources/tdd/refactoring.md` | Refactor candidates — populates the optional ticket `Refactor candidates` field |
+
+The skill also carries a **`vendor/`** directory of wholesale copies of capabilities it needs but does
+not author. They are operated in place and never edited; `vendor/README.md` holds the refresh procedure.
+
+| Vendored | Load when |
+|----------|-----------|
+| `vendor/concise-decisions/SKILL.md` | once before the first Phase 2 iteration — it is the question loop; its `resources/**` (one shape file, one harness adapter, the template, the TBD routes) load on demand per question |
+
+Only `SKILL.md` and `resources/**` are runtime authority — in this skill and in anything vendored.
+`README.md`, `CLAUDE.md`, and `docs/adrs/` are development-time documents for whoever *edits* the skill;
+they are never loaded to run it and never cited as authority during a run. This skill keeps no learning
+store: what it learns becomes an ADR in `CLAUDE.md` **and** a change to a loaded surface.
 
 A skill-root **`CLAUDE.md`** documents how to audit this skill's own usage — using the `introspect`
 skill to extract a timeline of which `resources/*` loaded in a session (and at what token cost) and

@@ -28,6 +28,10 @@ Resources (read on first use):
   presets (minimal / standard / rigorous) and the graduation triggers for
   scale-up elements. Load for init, and during audit to check whether the
   repo has outgrown its declared flavour.
+- [resources/adr_template.md](resources/adr_template.md) — the preferred shape
+  of one ADR (metadata table, Lens, Problem / Decision / Consequences), for
+  either layout. Load when an ADR surface is created, migrated, or found
+  structurally incomplete.
 - [resources/evidence.md](resources/evidence.md) — research citations and
   counter-evidence behind the baseline (dated; check freshness before
   extending doctrine).
@@ -87,6 +91,10 @@ Against the resolved dialect + baseline §1-§2:
 
 - Required set present? (README, CONTRIBUTING, CLAUDE.md-role, ADR surface,
   GLOSSARY.md; dialect-required extras.)
+- ADR records structurally complete? (Status, a decision statement, and the
+  reasoning present. Missing parts are a finding against
+  [resources/adr_template.md](resources/adr_template.md); the *quality* of the
+  reasoning never is.)
 - Required cross-links present? (CLAUDE.md → ADR surface with a
   check-before-you-ask line; CLAUDE.md → GLOSSARY.md with both standing
   instructions — canonical terms for all naming, new domain terms added in
@@ -145,7 +153,10 @@ Execute the plan mechanically, one numbered finding per commit-sized step:
    marker. Authoring real content is out of scope.
 5. **ADR operations keep citations resolvable**: renumbering is forbidden;
    layout migration (log ↔ file-per-decision) preserves ids and regenerates
-   the index.
+   the index. Reformatting records to
+   [resources/adr_template.md](resources/adr_template.md) is a separate,
+   opt-in operation: it moves existing text under the template's headings and
+   never rewrites a decision's substance.
 6. **Verify before done**: every moved/renamed path resolves from every
    inbound link (grep the old path returns only stubs/history), required
    cross-links exist, no file was lost (`git status` shows renames, not

@@ -26,6 +26,7 @@ All files ≤ 500 lines (`.claude/rules/claude_skills/index.md`).
 | `resources/misplacement_smells.md` | Detection catalog: M1-M10 whole-doc + P1-P6 within-file smells (lazy; audit) |
 | `resources/conventions_template.md` | docs/CONVENTIONS.md template + bootstrapping guidance (lazy; init) |
 | `resources/flavours.md` | Named presets (minimal/standard/rigorous) + graduation triggers (lazy; init + audit) |
+| `resources/adr_template.md` | Preferred shape of one ADR, for either layout (lazy; init + audit + apply) |
 | `resources/evidence.md` | Research citations + counter-evidence, dated 2026-07-23 |
 | `resources/learned/` | User adjudications on placement rulings (created on first rejection; already-decided) |
 | `CLAUDE.md` | This file — rationale and decision log |
@@ -196,6 +197,42 @@ All files ≤ 500 lines (`.claude/rules/claude_skills/index.md`).
   the starting shape, an observable trigger justifies each escalation, and
   no element is ever introduced "because bigger projects have it" — only
   because its trigger fired.
+
+### ADR-8: the preferred ADR format is a template the skill carries, not just a layout
+
+- **Status:** Accepted (2026-08-25, user instruction)
+- **Context:** The baseline covered where decision records *live* (single-file
+  log vs file-per-decision) and said nothing about what one record *looks
+  like*. So an audit could pass a repo whose ADRs were undated one-line
+  bullets, and init produced an ADR surface with no shape to fill. Meanwhile
+  the maintainer converged on a specific record format elsewhere in this
+  repo: metadata table, a `Lens` blockquote holding the reusable rule, then
+  Problem / Decision / Consequences under their own headings, with the
+  decision itself written as `Given` / `We prefer … over …` / `Because` /
+  `Unless`.
+- **Decision:** Adopt that format as the librarian's preferred one and carry a
+  **copy** at `resources/adr_template.md`, adapted to work in either layout
+  (a file, or a section with headings demoted). Format is a dialect line like
+  any other, so it sits at rung 3 of the authority ladder (ADR-2): a declared
+  or consistently observed local format wins, and an accepted record is never
+  rewritten to match. The skill uses it structurally only (ADR-1): a record
+  missing Status, a decision statement, or reasoning is a finding; weak
+  reasoning is not.
+- **Provenance:** the format originates in the `concise-decisions` skill in
+  this repo, which developed it over four layout iterations. This maintainer
+  document may name that origin; no runtime surface here points at it. The
+  copy is the skill's own, and it drifts from the origin on purpose
+  (skills are self-contained).
+- **Consequences:** Init now writes a `TEMPLATE.md` alongside the ADR surface
+  and records the format as a Dialect line. Reformatting an existing log
+  becomes an opt-in APPLY operation that preserves every id and anchor.
+  This skill's own log (above) predates the format and has not been migrated,
+  which is exactly the "never rewrite an accepted record" rule applied to
+  itself.
+- **Lens:** When the skill recommends a shape, ship the shape as a file it
+  owns, not as prose describing one. A template can be copied into a repo,
+  diffed, and vetoed; a paragraph saying "ADRs should have a status" cannot.
+  Copy it in rather than pointing at wherever it came from.
 
 ## Extension checklist
 

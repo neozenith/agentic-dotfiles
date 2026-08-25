@@ -118,3 +118,16 @@ Both compliant; the repo declares its pick in `docs/CONVENTIONS.md`:
 - Migration between layouts is a librarian APPLY operation: mechanical,
   content-preserving, index regenerated, inbound `ADR-NNNN` citations kept
   resolvable.
+
+**Layout is where records live; format is what one record looks like.** The two
+are separate dialect lines, and a repo declares each. The preferred format for a
+single record is [adr_template.md](adr_template.md): a metadata table, a `Lens`
+blockquote carrying the reusable rule, then `Problem` / `Decision` /
+`Consequences` under their own headings. It applies to both layouts, as a file
+in file-per-decision and as a section in a single-file log.
+
+Treat it as the rung-3 default, per the authority ladder: a declared or
+consistently observed local format outranks it, and an existing record is never
+rewritten to match. The audit uses it to name what a **structurally** incomplete
+record is missing (no status, no decision statement, no reasoning), never to
+judge how good the reasoning is.
