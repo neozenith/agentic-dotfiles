@@ -8,12 +8,13 @@ skill's files, so a needed capability is copied in and operated from this folder
 | Vendored | Operated by | Runtime authority |
 |----------|-------------|-------------------|
 | `concise-decisions/` | `resources/phase2-refinement.md` (Phase 2) | its `SKILL.md` + `resources/**` |
+| `discovery/` | `resources/phase1-bootstrap.md` (Phase 1, step 1b) | its `SKILL.md` + `resources/**` |
 
 ## Rules for the copies
 
 - **Read-only.** Never hand-edit a vendored file. A change you want is either a
-  plan-gap overlay (write it in `resources/phase2-refinement.md`) or an upstream
-  change followed by a re-vendor.
+  plan-gap overlay (write it in the phase file that operates the copy, per the
+  table above) or an upstream change followed by a re-vendor.
 - **Runtime authority is the vendored `SKILL.md` and the resources it names.**
   Each copy also carries its upstream `README.md`, `CLAUDE.md`, and `docs/adrs/` —
   development-time documents kept for provenance, addressed to whoever *edits* the

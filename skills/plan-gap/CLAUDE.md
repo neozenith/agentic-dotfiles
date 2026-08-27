@@ -15,6 +15,7 @@ changes: every entry below names that surface, and a decision that names none ha
 |------|------|
 | `resources/phase*.md` | one playbook per workflow phase; `SKILL.md` holds only the one-line shape of each step |
 | `vendor/concise-decisions/` | Vendored decision loop, the Phase 2 question contract. Refresh per ADR-001; never cherry-pick or hand-edit |
+| `vendor/discovery/` | Vendored discovery skill, the Step 1b Current/Desired State research contract. Refresh per ADR-003; upstream is `skills/discovery/` |
 | `vendor/README.md` | vendoring rules + the refresh command |
 
 ## ADR log
@@ -77,6 +78,38 @@ changes: every entry below names that surface, and a decision that names none ha
 - **Lens:** before writing a "the skill learns from this" file, ask whether the run loads it. If it
   does not, the learning is a maintenance task: change the surface the run *does* load, and record why
   here. A rule that lives only in an unloaded document is a documented intention, not an instruction.
+
+### ADR-003 — Extract the discovery discipline; Phase 1 operates a vendored copy
+
+- **Status:** accepted (user instruction, 2026-08-27)
+- **Context:** Phase 1's steps 1b–1d carried the Current/Desired State research discipline inline —
+  dual-track subagent research, tiered link verification, and paired lens-diagram synthesis. The
+  user asked for that discipline as a standalone `skills/discovery/` skill so it can run outside
+  gap-analysis planning. Pointing at the sibling is barred (`skills/CLAUDE.md`), and ADR-001's lens
+  already decides the shape: vendor the discipline and demote the phase file to an overlay.
+- **Decision:** `skills/discovery/` is the upstream owner of the discipline; a wholesale copy lives
+  at `vendor/discovery/`. `resources/phase1-bootstrap.md` Step 1b is the overlay, owning only the
+  caller ends the vendored skill leaves open: the target file (`<plan>/DISCOVERY.md` with its
+  plan-gap-only `## Gap Increments` section and index backlink), the brief, the extra gates
+  (`resources/style.md` → Diagrams, `resources/color_theming.md`), and what the outputs feed.
+  Phase 1 renumbered to 1a–1f (old 1b+1c+1d.1–2 → 1b; old 1d.3–7 → 1c; old 1e/1f/1g → 1d/1e/1f).
+  plan-gap's own `resources/playwright-cli.md` is deleted — the vendored copy owns link
+  verification. `resources/mermaidjs-diagrams.md` + `resources/color_theming.md` stay: the index,
+  increment, and Phase 3 diagram gates still need them, so that doctrine is duplicated with the
+  vendored copy by design.
+- **Enforced in:** `resources/phase1-bootstrap.md` (Step 1b overlay + renumbering); `SKILL.md`
+  § First principle, § Target Document, § Phase 1, § Resources; `resources/spec-body.md` step
+  references; `vendor/README.md`.
+- **Consequences:** ~700 lines duplicated; drift accepted between refreshes. The upstream's
+  section-ownership contract (it writes only `## Current State` / `## Desired State`, preserves
+  everything else) is what protects `## Gap Increments` — weakening that upstream contract breaks
+  this skill's Discovery file.
+- **Refresh procedure:** the `vendor/README.md` rsync with `<upstream>` = `skills/discovery/`,
+  then reconcile the Step 1b overlay citations in the same commit.
+- **Lens:** an extraction out of this skill is two moves in one commit — the new skill becomes the
+  caller-agnostic upstream owner, and the phase file becomes an overlay over a vendored copy that
+  binds only the caller ends. Never leave a thinned summary of the discipline behind, and never a
+  sideways pointer.
 
 ## Auditing `plan-gap` usage with the `introspect` skill
 

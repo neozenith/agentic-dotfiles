@@ -15,7 +15,7 @@ Read `resources/escalators-not-stairs.md` now; it governs **every phase**, not j
 gap analysis exists to make **real, demonstrable work** happen — so every gap and every ticket must
 have an **evidenceable real outcome**: a committed artifact produced by running the real code path on
 real input. Bake this into the gaps you draft (Phase 1), the Success Measures
-(Phase 1g), the tickets you decompose (Phase 4), and the validation gates (Phases 3–4e).
+(Phase 1f), the tickets you decompose (Phase 4), and the validation gates (Phases 3–4e).
 
 ## Target Document
 
@@ -33,7 +33,7 @@ or a **GitHub issue reference**.
    - If it has no `README.md`, treat it as a new plan: ask the user to describe the initiative in one
      sentence (the folder name is the slug — confirm or refine it with the user using `kebab-case`),
      then create `README.md` from the index skeleton in `resources/spec-body.md` and `DISCOVERY.md` from
-     the discovery template inside it. Gap and ticket files are added later (gap stubs in Phase 1e,
+     the discovery template inside it. Gap and ticket files are added later (gap stubs in Phase 1c,
      ticket files in Phase 4). Create the directory if it does not exist.
    - **Convenience:** if the directory is a plans *container* (it already holds other plan folders, e.g.
      `docs/plans/`), do not author into it directly — ask the user for the initiative, derive a
@@ -119,20 +119,19 @@ step-by-step playbook**; the steps are:
 
 - **1a — Target setup.** Create the index + Discovery skeleton, or read an existing set and assess
   completeness (local file or GitHub issue).
-- **1b — Dual deep research.** Two parallel subagents: Track A (codebase → Current State), Track B
-  (web/SOTA → Desired State), with every external URL recorded for verification.
-- **1c — Link verification.** Verify every external URL at the highest available tier
-  (`playwright-cli` → `WebFetch` → mark unverified). Hallucination is a critical failure: every claim
-  traces to a `file:line` or a verified URL.
-- **1d — Research synthesis.** Populate Current/Desired State as **2–3 lens diagrams each** (menu in
-  `resources/mermaidjs-diagrams.md`), seed the per-gap increment stack in `DISCOVERY.md`, draft the
-  `G<N>` gaps + stubs, the Overview, the index Gap Map + Dependencies diagrams, and any
-  `<!-- UNRESOLVED -->` ADR placeholders.
-- **1e — Per-gap deep research.** One fresh-context subagent per gap to enrich `## Outputs`
+- **1b — Discovery research (vendored skill).** Run the vendored discovery skill
+  (`vendor/discovery/SKILL.md`) against `<plan>/DISCOVERY.md`: dual parallel research tracks
+  (Track A codebase → Current State, Track B web/SOTA → Desired State), verification of every
+  external URL at the highest available tier, and synthesis into **2–3 paired lens diagrams** per
+  state. Hallucination is a critical failure: every claim traces to a `file:line` or a verified URL.
+- **1c — Gap synthesis.** From the Current/Desired delta, draft the `G<N>` gaps + stubs, seed the
+  per-gap increment stack in `DISCOVERY.md`, the Overview, the index Gap Map + Dependencies
+  diagrams, and any `<!-- UNRESOLVED -->` ADR placeholders.
+- **1d — Per-gap deep research.** One fresh-context subagent per gap to enrich `## Outputs`
   (including the gap's proof-of-execution artifact) and `## Key logic`.
-- **1f — Quality & failure-mode research.** Two subagents: the project's CI gates (→ Success Measures)
+- **1e — Quality & failure-mode research.** Two subagents: the project's CI gates (→ Success Measures)
   and its known gotchas/anti-patterns (→ Negative Measures).
-- **1g — Final assembly.** Populate Success/Negative Measures. Every domain-specific Success Measure is
+- **1f — Final assembly.** Populate Success/Negative Measures. Every domain-specific Success Measure is
   an **executable-evidence escalator** — satisfied only by the gap's committed proof-of-execution
   Output, never by "a test exists" or "it ran". Ensure each gap's `## Outputs` names that artifact.
 
@@ -259,7 +258,7 @@ This skill bundles the following reference documents in its `resources/` directo
 |------|---------|
 | `resources/spec-body.md` | Spec structure — the tiers, the index/gap/ticket/discovery templates, the Execution Plan + Done Criteria, and the index skeleton |
 | `resources/style.md` | Authoring style contract — the voice/format rules every file obeys; read alongside `spec-body.md` before authoring or restyling |
-| `resources/phase1-bootstrap.md` | Phase 1 full playbook — Steps 1a–1g (target setup, dual research, link verification, synthesis, per-gap + quality/failure research, assembly) |
+| `resources/phase1-bootstrap.md` | Phase 1 full playbook — Steps 1a–1f (target setup, vendored discovery research, gap synthesis, per-gap + quality/failure research, assembly) |
 | `resources/phase2-refinement.md` | Phase 2 full playbook — Steps 2a–2e (inventory, self-answer + rank, ask one question via the vendored loop, incorporate the answer and its lens, re-evaluate) |
 | `resources/phase3-validation.md` | Phase 3 full playbook — Steps 3a–3c (diagram lenses + increment gate, requirement integrity, cross-consistency) |
 | `resources/phase4-decomposition.md` | Phase 4 full playbook — Steps 4a–4e (behavior enumeration, ticket structuring, DAG, Execution Plan, validation) + loop-exit conditions |
@@ -267,7 +266,6 @@ This skill bundles the following reference documents in its `resources/` directo
 | `resources/5ys.md` | 5 Whys root-cause analysis — the precheck before raising a `<!-- CHANGE-REQUEST -->`, and for retrospectives of Type 2 failures |
 | `resources/mermaidjs-diagrams.md` | Mermaid diagram reference — rendering, complexity thresholds, pitfalls |
 | `resources/color_theming.md` | Diagram palette source — every diagram derives its colours here, then passes the contrast gate |
-| `resources/playwright-cli.md` | Link verification — detection, fallback chain, and unverified markers |
 | `resources/gh-cli.md` | GitHub CLI reference — detection, authentication, issue CRUD commands |
 | `resources/gh-issues.md` | GitHub issues backend — local cache, sync protocol, edit history lineage |
 | `resources/tdd/tdd.md` | TDD workflow — red-green-refactor, vertical slicing, anti-patterns. Read at the start of Phase 4 |
@@ -282,6 +280,7 @@ not author. They are operated in place and never edited; `vendor/README.md` hold
 
 | Vendored | Load when |
 |----------|-----------|
+| `vendor/discovery/SKILL.md` | at Step 1b — it owns the Current/Desired State research (dual tracks, link verification, lens synthesis); its `resources/**` (template, link verification, lens menu) load per its own instructions |
 | `vendor/concise-decisions/SKILL.md` | once before the first Phase 2 iteration — it is the question loop; its `resources/**` (one shape file, one harness adapter, the template, the TBD routes) load on demand per question |
 
 Only `SKILL.md` and `resources/**` are runtime authority — in this skill and in anything vendored.

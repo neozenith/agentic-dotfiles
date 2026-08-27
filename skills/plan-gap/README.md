@@ -18,21 +18,21 @@ With parallel AI research agents, verified citations (reduce hallucinated refere
 flowchart LR
     USER(["User Brief"])
 
-    subgraph P1b["Phase 1b: Broad Research"]
+    subgraph P1b["Phase 1b: Discovery Research (vendored skill)"]
         TA["Track A - Current State<br/>Codebase Explorer"]
         TB["Track B - Future State<br/>SOTA + Prior Art"]
+        LV["Link Verification<br/>(playwright-cli<br/>or WebFetch)"]
     end
 
-    LV["Phase 1c: Link Verification<br/>(playwright-cli<br/>or WebFetch)"]
-    SYN["Phase 1d: Identify<br/>Top-Level G&lt;N&gt; Gaps"]
+    SYN["Phase 1c: Identify<br/>Top-Level G&lt;N&gt; Gaps"]
 
-    subgraph P1e["Phase 1e: Per-Gap Deep Dive"]
+    subgraph P1e["Phase 1d: Per-Gap Deep Dive"]
         G1A["G1<br/>Agent"]
         G2A["G2<br/>Agent"]
         GNA["G..N<br/>Agent"]
     end
 
-    subgraph P1f["Phase 1f: Success Measures"]
+    subgraph P1f["Phase 1e: Success Measures"]
         QA["Quality<br/>Standards<br/>Agent"]
         FM["Failure<br/>Modes<br/>Agent"]
     end
@@ -104,7 +104,7 @@ flowchart LR
     style P3 fill:#04785722,stroke:#10b981,color:#6ee7b7
 ```
 
-- **Parallel broad research** — codebase explorer + SOTA web researcher run simultaneously
+- **Parallel broad research** — codebase explorer + SOTA web researcher run simultaneously. The Current/Desired State research discipline is the Discovery skill, vendored wholesale into `vendor/discovery/` so this skill stands alone
 - **Anti-hallucination** — every external URL verified via playwright-cli or WebFetch before citation
 - **Per-gap deep dive** — N agents in parallel, each with fresh context focused on one gap
 - **Quality + failure discovery** — agents scan your CI gates, agentic rules, and memory for codified standards and historical gotchas

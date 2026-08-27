@@ -183,7 +183,7 @@ the gap file (rule 13).
 Escalator criteria — each a mandatory, testable requirement, never a "nice to have". Two subsections:
 
 - **Project Quality Bar (CI Gates)** — a table of the project's existing gates (command, threshold,
-  applies-to), discovered by the Phase 1f quality subagent across `CLAUDE.md` / `AGENTS.md` /
+  applies-to), discovered by the Phase 1e quality subagent across `CLAUDE.md` / `AGENTS.md` /
   `.claude/rules/`, CI workflows, and project tooling. The project's own bar is the minimum.
 - **Domain-Specific Measures** — one bullet per gap minimum, each linking the gap
   (`**[G1](./G1.md):** …`) and stating a falsifiable check.
@@ -267,7 +267,7 @@ from their templates; the Discovery file is created alongside this one):
 ## Tier 2 — Gap (`G<n>.md`)
 
 Genre: explanation (why) + reference (what) + pointer (tickets). Created as a stub in Phase 1
-(title + lead + Context) and enriched through Phases 1e–4.
+(title + lead + Context) and enriched through Phases 1d–4.
 
 ````markdown
 # G<n>: <Title>
