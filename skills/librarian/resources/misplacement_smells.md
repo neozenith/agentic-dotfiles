@@ -1,12 +1,11 @@
 # Misplacement Smells — content in the wrong location
 
-The audit's detection catalog. Each smell names the symptom, how to detect it,
-and the shelving move that fixes it. The librarian judges **where content
-lives**, never whether it is true, current, or well written — a smell here is
-always answered by a move, extract, rename, or link, never by a rewrite.
+The audit's detection catalog.
+Each smell names the symptom, how to detect it, and the shelving move that fixes it.
+The librarian judges **where content lives**, never whether it is true, current, or well written — a smell here is always answered by a move, extract, rename, or link, never by a rewrite.
 
-Severity: 🔴 breaks discovery or platform surfacing; 🟡 misleads navigation;
-🟣 hygiene. Report in that order.
+Severity: 🔴 breaks discovery or platform surfacing; 🟡 misleads navigation; 🟣 hygiene.
+Report in that order.
 
 ## Whole-document smells
 
@@ -25,9 +24,8 @@ Severity: 🔴 breaks discovery or platform surfacing; 🟡 misleads navigation;
 
 ## Partial (within-file) smells — a *section* in the wrong file
 
-These are the librarian's hardest and highest-value findings: the file is fine,
-but part of its content semantically belongs elsewhere. Detection is by reading
-each section and asking "which document's charter does this serve?"
+These are the librarian's hardest and highest-value findings: the file is fine, but part of its content semantically belongs elsewhere.
+Detection is by reading each section and asking "which document's charter does this serve?"
 
 | # | Smell | Symptom / detection | Fix |
 |---|-------|---------------------|-----|
@@ -41,16 +39,10 @@ each section and asking "which document's charter does this serve?"
 
 ## Detection discipline
 
-- **Charter first.** Before judging any section, write one line per existing
-  document stating its charter (from the dialect's layout map, or inferred
-  from §1 baseline roles). Misplacement is always *relative to a charter* —
-  never a taste call.
-- **Read, don't grep-only.** Partial smells require reading section content;
-  filename/path checks catch only whole-document smells. Fan out subagents
-  per directory or doc cluster for large repos.
-- **Moves must be loss-free.** Every extract leaves a link stub at the old
-  location; every rename rewrites inbound links (grep the old path and old
-  anchors repo-wide). A move that breaks one inbound link is not done.
-- **Uncertain is a question, not a move.** When a section plausibly serves
-  two charters, report both candidate homes with a recommendation — APPLY
-  only executes unambiguous or user-adjudicated moves.
+- **Charter first.** Before judging any section, write one line per existing document stating its charter (from the dialect's layout map, or inferred from §1 baseline roles).
+  Misplacement is always *relative to a charter* — never a taste call.
+- **Read, don't grep-only.** Partial smells require reading section content; filename/path checks catch only whole-document smells.
+  Fan out subagents per directory or doc cluster for large repos.
+- **Moves must be loss-free.** Every extract leaves a link stub at the old location; every rename rewrites inbound links (grep the old path and old anchors repo-wide).
+  A move that breaks one inbound link is not done.
+- **Uncertain is a question, not a move.** When a section plausibly serves two charters, report both candidate homes with a recommendation — APPLY only executes unambiguous or user-adjudicated moves.

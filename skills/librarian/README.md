@@ -2,10 +2,10 @@
 
 Keeps a repository's documentation *organised*
 
-- the canonical documents exist (README, CONTRIBUTING, an agent file, an ADR surface), 
+- the canonical documents exist (README, CONTRIBUTING, an agent file, an ADR surface),
 - carry the right names,
-- live in the right locations, and 
-- cross-link as required — including spotting sections that semantically belong in a different file. 
+- live in the right locations, and
+- cross-link as required — including spotting sections that semantically belong in a different file.
 
 This skill is about _**curation**_ not _**content**_.
 
@@ -63,31 +63,20 @@ flowchart TD
     class L,S accent
 ```
 
-Every mode starts by resolving what "compliant" means for *this* repo — a
-declared `docs/CONVENTIONS.md` dialect beats observed conventions, which beat
-the researched baseline — then audits against document charters and executes
-only loss-free, history-preserving operations.
+Every mode starts by resolving what "compliant" means for *this* repo — a declared `docs/CONVENTIONS.md` dialect beats observed conventions, which beat the researched baseline — then audits against document charters and executes only loss-free, history-preserving operations.
 
 ## Reference
 
-- Operating manual (modes, authority ladder, audit steps, apply invariants):
-  [SKILL.md](SKILL.md)
-- Universal compliance baseline (required set, locations, naming, ADR and
-  agent-file rules): [resources/baseline.md](resources/baseline.md)
-- Misplacement smell catalog (M1-M10 whole-doc, P1-P6 within-file):
-  [resources/misplacement_smells.md](resources/misplacement_smells.md)
-- docs/CONVENTIONS.md template + bootstrapping guidance:
-  [resources/conventions_template.md](resources/conventions_template.md)
-- Flavour presets (minimal / standard / rigorous) + graduation triggers:
-  [resources/flavours.md](resources/flavours.md)
-- Preferred shape of one ADR (metadata, Lens, Problem / Decision /
-  Consequences): [resources/adr_template.md](resources/adr_template.md)
-- Research citations and counter-evidence (dated):
-  [resources/evidence.md](resources/evidence.md)
+- Operating manual (modes, authority ladder, audit steps, apply invariants): [SKILL.md](SKILL.md)
+- Universal compliance baseline (required set, locations, naming, ADR and agent-file rules): [resources/baseline.md](resources/baseline.md)
+- Misplacement smell catalog (M1-M10 whole-doc, P1-P6 within-file): [resources/misplacement_smells.md](resources/misplacement_smells.md)
+- docs/CONVENTIONS.md template + bootstrapping guidance: [resources/conventions_template.md](resources/conventions_template.md)
+- Flavour presets (minimal / standard / rigorous) + graduation triggers: [resources/flavours.md](resources/flavours.md)
+- Preferred shape of one ADR (metadata, Lens, Problem / Decision / Consequences): [resources/adr_template.md](resources/adr_template.md)
+- Research citations and counter-evidence (dated): [resources/evidence.md](resources/evidence.md)
 
-Requirements: `git` (history-preserving moves, inbound-link greps); subagent
-support for partial-misplacement reading on large repos. Audit and init are
-cheap; apply mutates files and should run on a branch.
+Requirements: `git` (history-preserving moves, inbound-link greps); subagent support for partial-misplacement reading on large repos.
+Audit and init are cheap; apply mutates files and should run on a branch.
 
 ### Troubleshooting
 

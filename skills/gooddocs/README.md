@@ -1,6 +1,6 @@
 # gooddocs
 
-Keeps documentation true, well-shaped, and great. 
+Keeps documentation true, well-shaped, and great.
 
 - `Audit` mode fans out parallel subagents that corroborate every checkable claim in the docs against the actual code (commands, paths, signatures, env vars, links) and emits a severity-ranked drift report.
 - `Write` mode authors or rewrites docs under a strict lens taxonomy distilled from 23 of the most respected open-source documentation sets.
@@ -68,25 +68,17 @@ flowchart TD
     class R,V accent
 ```
 
-Both modes share the same spine: classify each page's lens, then either verify
-its claims (audit) or author under that lens's rules (write) — with verification
-mandatory in both directions.
+Both modes share the same spine: classify each page's lens, then either verify its claims (audit) or author under that lens's rules (write) — with verification mandatory in both directions.
 
 ## Reference
 
-- Operating manual (modes, claim-check table, drift report format):
-  [SKILL.md](SKILL.md)
-- Lens taxonomy + 15 style principles + the OSS survey:
-  [resources/lenses.md](resources/lenses.md)
-- Markdown structure rules, structure smells, spec/plan skeletons:
-  [resources/structure.md](resources/structure.md)
-- The maintainer's voice fingerprint (opt-in via `voice`):
-  [resources/voice.md](resources/voice.md)
+- Operating manual (modes, claim-check table, drift report format): [SKILL.md](SKILL.md)
+- Lens taxonomy + 15 style principles + the OSS survey: [resources/lenses.md](resources/lenses.md)
+- Markdown structure rules, structure smells, spec/plan skeletons: [resources/structure.md](resources/structure.md)
+- The maintainer's voice fingerprint (opt-in via `voice`): [resources/voice.md](resources/voice.md)
 
-Requirements: `git`; `bunx` for link checking; subagent support for audit
-fan-out and for diagram curation (delegated to the `mermaidjs-diagrams`
-skill, which owns palette and the contrast/complexity gates). Audit never
-runs mutating commands — read-only verification only.
+Requirements: `git`; `bunx` for link checking; subagent support for audit fan-out and for diagram curation (delegated to the `mermaidjs-diagrams` skill, which owns palette and the contrast/complexity gates).
+Audit never runs mutating commands — read-only verification only.
 
 ### Troubleshooting
 
