@@ -7,7 +7,8 @@ Format is a **dialect line like any other** (SKILL.md, authority ladder).
 A repo that has declared a different ADR shape in `docs/CONVENTIONS.md`, or that consistently uses one across three or more records, keeps it: this template is the rung-3 default for repos that have not chosen, and the recommendation when a repo asks what good looks like.
 Never rewrite an accepted ADR to fit this shape.
 
-What a decision *is* (Facts, Value System, Lens, Decisional Balance, the Regulating Condition) lives in [adr_decision_theory.md](adr_decision_theory.md); this file only owns the shape.
+What a decision *is* (Facts, Value System, Lens, Decisional Balance, the Regulating Condition) lives in [adr_decision_theory.md](adr_decision_theory.md); this file only owns the shape of one record.
+The shape of a whole machine-readable *bundle* — records authored as YAML, markdown generated — is the named `okf-yaml` convention in [adr_okf_yaml.md](adr_okf_yaml.md), which carries this template's fields as its schema.
 
 ----
 

@@ -5,8 +5,15 @@ Each ADR carries a **Lens** — apply it to the next decision instead of re-deri
 
 ## Development contract
 
-Prose-only skill (no `scripts/` yet — see extension checklist).
-Doc gates before handoff, run from repo root:
+Code gates first — the skill carries `scripts/` in two languages: TypeScript (bun) for the indexer, Python (uv) for the okf-yaml generator.
+`ci` regenerates the shipped example bundle via `docs`, so a template change that stops reproducing the golden fails the gate. Run from repo root, never `cd`:
+
+```sh
+make -C .claude/skills/librarian/scripts fix   # mutates: format + lint --write, both languages
+make -C .claude/skills/librarian/scripts ci    # the gate: format-check, lint, typecheck, test-cov (≥90%), docs
+```
+
+Doc gates before handoff, also from repo root:
 
 ```sh
 bun run .claude/skills/mermaidjs-diagrams/scripts/mermaid_contrast.ts   .claude/skills/librarian/README.md
@@ -27,7 +34,18 @@ All files ≤ 500 lines (`.claude/rules/claude_skills/index.md`).
 | `resources/conventions_template.md` | docs/CONVENTIONS.md template + bootstrapping guidance (lazy; init) |
 | `resources/flavours.md` | Named presets (minimal/standard/rigorous) + graduation triggers (lazy; init + audit) |
 | `resources/adr_template.md` | Preferred shape of one ADR, for either layout (lazy; init + audit + apply) |
+| `resources/structured_siblings.md` | Machine-readable layouts in general: authored-YAML vs indexed-markdown, triggers, output shape, gotchas (lazy; index mode) |
+| `resources/adr_okf_yaml.md` | The named `okf-yaml` ADR-surface convention: record schema, relation vocabulary, OKF conformance, finding table, migration (lazy; named or observed) |
+| `resources/okf_yaml/record.schema.json` | The okf-yaml record contract, copied into an adopting repo |
+| `resources/okf_yaml/example/` | Worked two-record bundle; doubles as the golden fixture the Python suite diffs against |
+| `scripts/okf_render.py` | Reference generator: validate, then render markdown + index + graph |
+| `scripts/templates/*.j2` | Jinja templates, one per generated artifact |
+| `scripts/test_okf_render.py` | pytest suite (PEP-723 entry point) |
+| `scripts/conftest.py` | Coverage reload fixture |
 | `resources/evidence.md` | Research citations + counter-evidence, dated 2026-07-23 |
+| `scripts/md2yaml.ts` | The markdown → YAML/JSON indexer; `--check` is the byte-exact round-trip gate |
+| `scripts/md2yaml.test.ts` | `bun:test` suite: structure, tables, lists, whitespace fields, CLI via subprocess |
+| `scripts/Makefile` | `fix` / `ci` quality gates |
 | `resources/learned/` | User adjudications on placement rulings (created on first rejection; already-decided) |
 | `CLAUDE.md` | This file — rationale and decision log |
 
@@ -137,6 +155,55 @@ All files ≤ 500 lines (`.claude/rules/claude_skills/index.md`).
   A template can be copied into a repo, diffed, and vetoed; a paragraph saying "ADRs should have a status" cannot.
   Copy it in rather than pointing at wherever it came from.
 
+### ADR-9: machine-readable siblings are generated artifacts, and the index is byte-reversible
+
+- **Status:** Accepted (2026-08-30, user instruction)
+- **Context:** Repos increasingly want their documentation *queried* — by scripts, CI gates, derived diagrams, and agents — not only read.
+  Two arrangements answer that: author records as YAML and generate the markdown, or keep markdown authoritative and generate a YAML index beside it.
+  Both create a second file per document, which every existing smell would flag as duplication (M-class) and which ADR-1 forbids the librarian from judging on content.
+  The motivator is concrete: a corpus whose cross-references live in prose cannot be validated at all, so one-way references and drifted derived views survive indefinitely.
+- **Decision:** Treat the arrangement as a **dialect line** (rung 3, ADR-2), so either is compliant and neither is a finding against the other.
+  Generated files are build artifacts: exempt from naming and placement smells, never findings, never hand-edited, and always carrying a banner naming their generator.
+  Adoption requires an **observable consumer** — a script, gate, or derived view that reads the records — mirroring the graduation-trigger rule (ADR-7); absent one, plain markdown is the correct answer and more structure is not an improvement.
+  The indexer ships as a skill-owned script whose `--check` mode reconstructs the markdown and exits non-zero on any drift.
+- **Consequences:** The skill stops being prose-only and takes on the scripts contract (`make fix` / `make ci`, ≥90% coverage) and a bun toolchain.
+  Index mode mutates, but only generated paths — the first mutating mode that touches no source document.
+  Prose-to-typed-relation conversion is inherently one-way and must be reported record-by-record before it runs (ADR-5's loss-free bar applies to *meaning*, not just to files).
+- **Lens:** When the skill generates a file from another file, the generator must be able to reproduce the source **byte-for-byte** before the generated artifact is trusted.
+  A round trip that is merely "equivalent" is a reformatter wearing an indexer's clothes, and it will silently rewrite documents the skill promised never to touch.
+  Prove reversibility across the whole corpus, never a sample.
+
+### ADR-10: a convention is invocable by name, or it is only advice
+
+- **Status:** Accepted (2026-08-30, user instruction)
+- **Context:** ADR-9 landed the *general* machine-readable pattern in `structured_siblings.md` — two arrangements, adoption triggers, output shape.
+  But the concrete convention that motivated it (records authored as YAML, generating an OKF-conformant bundle with a record schema, typed relations and a derived graph) survived only as a shape sketch inside that general prose.
+  The failure mode was immediate and observable: an agent could read the general resource and still not know which fields a record carries, which relations are legal, or what a finding against the convention looks like.
+  Generalising a convention had erased the convention.
+- **Decision:** Every convention the skill can be *asked for* ships as its own resource carrying four things a shelving plan needs: the layout, the finding table (finding → smell → operation → severity), the migration operation with its loss-free invariants, and a verification gate.
+  It is selectable by name as an argument (`index okf-yaml <path>`), declarable as a dialect line, and detectable as an observed dialect — which makes it rung 1 or 2 evidence, displacing the generic template rather than competing with it.
+  The general resource keeps the *choice* between arrangements and links down to each named instance; it never holds the instance's detail.
+- **Consequences:** Adding a convention is now a known-shape task rather than an essay, and audits of a repo that follows one judge it against its own rules instead of the generic ADR template.
+  The cost is one resource per convention, and the mirror of ADR-7's discipline applies: a named convention still needs an observable trigger, or naming it is just fashion.
+- **Lens:** A convention the skill cannot be *invoked with by name* is documentation, not doctrine.
+  When distilling a worked example into the skill, ask what an agent would need to file a finding against it and to migrate a repo to it; if the answer is not in one loadable file, the distillation is incomplete no matter how well the general principle reads.
+
+### ADR-11: the convention ships its artifacts, and the skill goes mixed-language to run them
+
+- **Status:** Accepted (2026-08-30, user decision)
+- **Context:** ADR-10 made the convention invocable, but `adr_okf_yaml.md` still only *described* the schema and the bundle in fenced blocks.
+  That is the failure ADR-8's lens already names — "ship the shape as a file it owns, not as prose describing one" — applied to the record and not to the bundle.
+  Three options were weighed: schema plus golden fixtures only; a TypeScript port keeping the skill single-language; or vendoring the working Python/Jinja generator as-is.
+  The maintainer chose the last: the generator is proven over a real corpus, and a port would trade that evidence for toolchain tidiness.
+- **Decision:** Vendor the generator and its Jinja templates unchanged in substance, and accept the **mixed-language scripts contract** — one Makefile fanning out to `-py` and `-ts` sub-targets, `conftest.py`, pytest via PEP-723, ruff and mypy alongside biome and tsc, ≥90% coverage on both.
+  The schema and a two-record worked bundle ship under `resources/okf_yaml/`, and that bundle is the **golden fixture**: `ci`'s `docs` target regenerates it, and the Python suite fails if the output drifts, so a generator ported to any other language has bytes to conform to.
+  Genericisation is the price of vendoring: hardcoded group names became data (`group`, or `--group-by tag|plan_id`), and the author became `--author`.
+- **Consequences:** A contributor now needs both `uv` and `bun` to run `ci`, and the README says so under requirements rather than letting it surface as a failure.
+  Adopting repos are expected to port the generator to their own language, which is exactly what the golden fixture is for.
+  Porting found a real defect the prose could not have: a null field rendered as `plan_id: None`, which parses as the string `'None'` — present in the origin bundle too, and fixed in both.
+- **Lens:** Vendor the working implementation over a cleaner rewrite when the implementation carries evidence a rewrite would discard, and pay the toolchain cost openly in the requirements.
+  But never vendor an artifact without a **fixture that pins its output**: the generator is the part that will be replaced, and the bytes it produces are the part that must not change.
+
 ## Extension checklist
 
 - [ ] New smells enter `misplacement_smells.md` with symptom, detection, fix, and severity — and never a content-quality judgement (ADR-1).
@@ -145,7 +212,10 @@ All files ≤ 500 lines (`.claude/rules/claude_skills/index.md`).
 - [ ] Rejected findings appended to `resources/learned/adjudications.md` in the same session (statefulness rule, Pathway 2).
 - [ ] New required documents enter via the flavour table (all flavours or a graduation trigger) with their cross-link obligations stated (ADR-6/7).
 - [ ] New scale-up elements define an observable graduation trigger before entering `flavours.md` (ADR-7).
-- [ ] Deterministic checks (presence, naming, link resolution) are candidates for a future `scripts/` helper per the skills scripts contract — added as Tier A/B scripts when audit volume justifies it.
+- [ ] Deterministic checks (presence, naming, link resolution) are candidates for further `scripts/` helpers per the skills scripts contract.
+- [ ] Any change under `scripts/` leaves `make -C .claude/skills/librarian/scripts ci` at exit 0, coverage ≥ 90% (ADR-9).
+- [ ] A new generated-artifact kind states its regenerate banner and its reversibility proof before it ships (ADR-9).
+- [ ] A new **named** convention ships as its own resource with a layout, a shelving-plan finding table, a migration operation and a verification gate — never as prose inside the general resource (ADR-10).
 - [ ] Both mermaid gates + mdtoc re-run if README touched; all files ≤ 500 lines; prose stays brand-agnostic.
 
 ## Known gotchas
@@ -156,4 +226,9 @@ All files ≤ 500 lines (`.claude/rules/claude_skills/index.md`).
 - Health files moved *out* of the three GitHub-recognised locations silently lose platform surfacing — the file still exists, so nothing errors; only the audit's location check catches it.
 - Renaming a heading during an extract changes its anchor; inbound `#anchor` links break invisibly.
   Grep old anchors, not just old paths.
+- Whitespace is content: blank lines before a heading, two fences butted together, and a missing final newline are invisible in a diff viewer and all break a round trip.
+  `md2yaml.ts` models them as `gap` / `leading` / `trailing`; a new block type that ignores them reformats documents silently (ADR-9).
+- YAML resolves an unquoted `2026-08-30` to a date, not a string, so a JSON Schema `"type": "string"` rejects it — validate the JSON projection, not the raw load.
+- Flattening a heading to text (right for a slug) and *storing* that flattened text (wrong for anything reconstruction reads) are different operations; store the slice, or an inline-code heading loses its backticks.
+- Content before the first heading is normal wherever the title lives in frontmatter, and a parser that assumes a heading comes first drops the document's opening with no error.
 - The description of CLAUDE.md/AGENTS.md interchangeability rots fastest: harness support shifts (evidence.md counter-evidence) — re-verify before hardening any symlink recommendation into a finding.

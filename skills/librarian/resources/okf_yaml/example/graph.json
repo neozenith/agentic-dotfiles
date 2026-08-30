@@ -1,0 +1,61 @@
+{
+  "elements": [
+    {
+      "data": {
+        "id": "group-correctness",
+        "label": "correctness",
+        "colour": "#6366f1"
+      }
+    },
+    {
+      "data": {
+        "id": "REC-0001",
+        "label": "0001",
+        "parent": "group-correctness",
+        "colour": "#6366f1",
+        "file": "0001-validate-at-the-boundary.md",
+        "title": "Validate external payloads at the boundary, not at the point of use",
+        "description": "Data crossing a trust boundary is validated once, where it enters",
+        "status": "accepted",
+        "tags": "correctness, boundaries"
+      }
+    },
+    {
+      "data": {
+        "id": "REC-0002",
+        "label": "0002",
+        "parent": "group-correctness",
+        "colour": "#6366f1",
+        "file": "0002-one-error-taxonomy.md",
+        "title": "One error taxonomy, owned by the boundary that raises it",
+        "description": "Every failure names its boundary and its cause, in one vocabulary",
+        "status": "accepted",
+        "tags": "correctness, errors"
+      }
+    },
+    {
+      "data": {
+        "id": "REC-0001-depended_on_by-REC-0002",
+        "source": "REC-0001",
+        "target": "REC-0002",
+        "label": "depended on by",
+        "relation": "depended_on_by",
+        "note": "the error taxonomy assumes payloads are already shaped"
+      }
+    },
+    {
+      "data": {
+        "id": "REC-0002-depends_on-REC-0001",
+        "source": "REC-0002",
+        "target": "REC-0001",
+        "label": "depends on",
+        "relation": "depends_on",
+        "note": "the taxonomy assumes payloads are already shaped"
+      }
+    }
+  ],
+  "layout": {
+    "name": "cose"
+  },
+  "height": 620
+}

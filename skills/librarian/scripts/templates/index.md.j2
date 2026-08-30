@@ -1,0 +1,23 @@
+{#- OKF reserved file: a directory listing, no frontmatter. Generated. -#}
+# Decision Records
+
+{% for rec in records -%}
+* [{{ rec.id }}: {{ rec.title }}]({{ rec.id | record_link }}) - {{ rec.description }}
+{% endfor %}
+# By group
+
+{% for area, group in areas -%}
+## {{ area }}
+
+{% for rec in group -%}
+* [{{ rec.id }}]({{ rec.id | record_link }}) - {{ rec.description }}
+{% endfor %}
+{% endfor -%}
+# Relationship graph
+
+The typed edge set is rendered in [graph.md](graph.md), and generated as
+[graph.json](graph.json) for any Cytoscape viewer.
+
+{% for e in edges -%}
+* {{ e.source }} --{{ e.relation }}--> {{ e.target }}
+{% endfor %}
