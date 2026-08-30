@@ -33,7 +33,6 @@ pytest-xharness-eval = { path = "../pytest-xharness-eval", editable = true }
 # python_files stays at its default, so unit tests elsewhere are untouched and no
 # free gate ever picks up a paid cell.
 xharness_skills_dir = "skills"
-xharness_workdir = "tmp/evals"
 # The project-scope matrix: every case sweeps these harness/model cells unless it
 # passes its own models=. Narrow a run with --harness, --model, or -k. A model with
 # no row in the plugin's bundled table needs an xharness_prices line (gpt-5.6-terra does).
