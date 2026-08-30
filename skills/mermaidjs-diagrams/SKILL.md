@@ -1,6 +1,6 @@
 ---
 name: mermaidjs-diagrams
-description: "Render and analyze Mermaid.JS diagrams embedded in markdown files. Enforces visual complexity limits AND WCAG color-contrast requirements via automated analysis. Every diagram MUST derive its palette from `resources/color_theming.md` and pass `scripts/mermaid_contrast.ts` before being declared done. Use when creating or updating architecture diagrams, analyzing diagram complexity, improving documentation clarity, or exploring a codebase to produce dual-density architecture diagrams for a README."
+description: "Render and analyze Mermaid.JS diagrams embedded in markdown files, and author whole diagram-led documents from named document types. Enforces visual complexity limits AND WCAG color-contrast requirements via automated analysis. Every diagram MUST derive its palette from `resources/color_theming.md` and pass `scripts/mermaid_contrast.ts` before being declared done. Use when creating or updating architecture diagrams, analyzing diagram complexity, improving documentation clarity, or exploring a codebase to produce dual-density architecture diagrams for a README. Also use when asked for an educational document, an illustrative guide, an explainer, or a visual one-pager that distils a topic's concepts and relationships; or for a levelled architecture document that zooms through levels of detail."
 argument-hint: "[markdown-file]"
 user-invocable: true
 ---
@@ -12,6 +12,23 @@ Works for ANY project. Cognitive load research (Huang et al., 2020, arXiv:2008.0
 is the difficulty threshold — this skill enforces limits via automated complexity analysis.
 
 Diagrams live as ` ```mermaid ` code fences inside `.md` files.
+
+# Document types (route first)
+
+For a **whole document** rather than a single diagram, read the matching type
+**before drafting**: it governs the *sequence* of diagrams and the invariants
+across them. Skip when the task is one diagram, a render, or an audit.
+
+| The request says | Read |
+|---|---|
+| "educational", "illustrative guide", "explainer", "one-pager on X", "distil X", "explain X visually", "teach me X" | `resources/document-types/educational.md` |
+| "architecture doc", "system overview", "document this codebase", "map the system", "zoom into X", "add the security lens" | `resources/document-types/architectural.md` |
+| Unsure which, or adding a new type | `resources/document-types/README.md` |
+
+**Never inline a live `-beta` fence** (`architecture-beta`, `block-beta`,
+`packet-beta`, `radar-beta`, `sankey-beta`, `treemap-beta`, `xychart-beta`):
+GFM hosts pin an older Mermaid version, so they render locally but show as raw
+code blocks on GitHub. Ship a PNG/SVG plus sibling `.mmd` — see `resources/gfm_beta_diagrams.md`.
 
 ---
 
@@ -456,6 +473,10 @@ means the diagram is at fault. See `resources/render_troubleshooting.md`.
 
 | File | Content |
 |------|---------|
+| `resources/document-types/README.md` | How to pick a document type; the invariants every type shares; how to add one |
+| `resources/document-types/educational.md` | Educational / illustrative guide: concept beats, monotonic build, shared palette, one-pager contract |
+| `resources/document-types/architectural.md` | Architectural: `L{n}.{TLA}` tile addressing, IPO fence per level, boundary closure, lens registry, evidence marking |
+| `resources/gfm_beta_diagrams.md` | Why `-beta` types fail on GFM hosts; render-to-PNG/SVG with sibling `.mmd` pattern; non-beta alternatives |
 | `resources/color_theming.md` | Conceptual core: HSL encoding, dark/light mode safety, hierarchy, subgraph coloring |
 | `resources/color_palette_recipes.md` | Four palette recipes, a worked example for each, and the Tailwind v3 hex lookup |
 | `resources/color_host_themed_renderers.md` | Translucent dual-theme fills for host-themed renderers (MkDocs Material) |
