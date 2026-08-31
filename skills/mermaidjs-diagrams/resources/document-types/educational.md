@@ -18,11 +18,9 @@ Select this type when the request contains any of:
 - "explain X visually" / "teach me X" / "help me understand X"
 - an existing document plus "make this teachable" or "add diagrams"
 
-Do **not** select it for "document the architecture of *our* system" — that is
-[`architectural.md`](architectural.md), which recurses through levels of detail
-rather than advancing through concepts. The tell: an educational guide is about
-a *topic* that exists independently of the reader's codebase (OAuth 2.1, MCP,
-CRDTs, Kafka semantics); an architectural document is about *this* system.
+The tell: an educational guide is about a *topic* that exists independently of
+the reader's codebase — OAuth 2.1, MCP, CRDTs, Kafka semantics. It has a
+natural teaching order, and that order is what this type encodes.
 
 ## 2. Contract
 
@@ -224,12 +222,20 @@ stops encoding anything; above eight, the reader cannot hold the legend.
 Two mandatory mechanics:
 
 - Every fence that uses custom colour needs the `%%{init: …}%%` header setting
-  `primaryTextColor`, `textColor`, and `lineColor`, or edge labels and arrows
-  become unreadable on one of the two themes:
+  `primaryTextColor`, `textColor`, `lineColor`, **and `edgeLabelBackground`**:
 
   ```
-  %%{init: {"theme":"base","flowchart":{"htmlLabels":false},"themeVariables":{"primaryTextColor":"#ffffff","textColor":"#ffffff","lineColor":"#94a3b8"}}}%%
+  %%{init: {"theme":"base","flowchart":{"htmlLabels":false},"themeVariables":{"primaryTextColor":"#ffffff","textColor":"#ffffff","lineColor":"#94a3b8","edgeLabelBackground":"#334155"}}}%%
   ```
+
+  **`edgeLabelBackground` is not optional whenever the diagram has edge labels
+  (`-->|text|`).** `textColor:#ffffff` colours edge label text as well as node
+  text, and an edge label sits on the page background, not on a node — so in the
+  light theme it renders white on near-white and disappears completely.
+  `mermaid_contrast.ts` cannot catch this: it audits `classDef` fill×color pairs
+  and never sees edge labels. Verified by render — the gate reported 4 pass / 0
+  fail on a diagram whose every edge label was invisible. **Look at the light
+  render before declaring any diagram with edge labels done.**
 
 - `policy` is the only light-fill role in the set. That asymmetry is deliberate:
   it makes constraints visually recede from the actors and artifacts. Keep at

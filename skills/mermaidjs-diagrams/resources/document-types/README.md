@@ -23,17 +23,10 @@ be written as either type.
 | The request says | Type | File |
 |---|---|---|
 | "educational", "illustrative guide", "explain X visually", "teach me X", "one-pager on X", "distil this topic", "explainer" | Educational | [`educational.md`](educational.md) |
-| "architecture doc", "how the system fits together", "C4-ish", "document this codebase", "system overview", "zoom into subsystem X" | Architectural | [`architectural.md`](architectural.md) |
 
-When the request is ambiguous — "document our auth system" could be either —
-resolve it by asking what the reader must be able to *do* afterwards:
-
-- **explain a concept to someone else** → Educational.
-- **locate a component, trace a call, or change something** → Architectural.
-
-If the answer is genuinely both, write the Educational one-pager first and link
-it from the Architectural document's L0 orientation section. Do not interleave
-the two shapes in one file; their diagram sequences fight each other.
+Educational is currently the only type.
+Fall back to `../diagram_organization.md`, which covers per-lens dual-density
+diagrams without claiming to govern a whole document.
 
 ## What every type shares
 
@@ -63,6 +56,13 @@ siblings rather than unrelated templates.
    the budget.
 5. **ASCII-only node labels, `<br/>` for line breaks.** Not `\n`, not Unicode
    box-drawing or emoji inside labels. See `SKILL.md` → *Common Pitfalls*.
+5b. **Set `edgeLabelBackground` whenever a fence has edge labels.** With
+   `textColor:#ffffff`, edge label text is white and sits on the *page*
+   background, so it vanishes in the light theme. `mermaid_contrast.ts` audits
+   only `classDef` pairs and reports a clean pass on a diagram whose labels are
+   invisible — verified. Add `"edgeLabelBackground":"#334155"` to
+   `themeVariables`, and **look at the light render** before declaring done.
+   Neither gate substitutes for one glance at the image.
 6. **No live `-beta` fences.** `architecture-beta`, `block-beta`,
    `packet-beta`, `radar-beta`, `sankey-beta`, `treemap-beta`, and
    `xychart-beta` frequently fail to render on GFM hosts, which pin an older
@@ -73,11 +73,13 @@ siblings rather than unrelated templates.
 ## Adding a new type
 
 A new file in this directory earns its place when it has a **distinct diagram
-sequence** — not merely a different subject. `educational.md` and
-`architectural.md` differ because one advances through *concepts* and the other
-recurses through *levels of detail*. A "runbook" type would qualify (it
-advances through *failure states*); a "security architecture" type would not —
-that is the Architectural type with the security lens selected.
+sequence** — not merely a different subject. A "runbook" type would qualify: it
+advances through *failure states*, which no existing type does. A "security
+architecture" type would not — that is one lens, not a sequence.
+
+Read the section below before adding one. A type that has not been validated
+against a real corpus is a hypothesis, and this directory has already shipped
+one that made documents worse.
 
 Each type file must state, in this order:
 

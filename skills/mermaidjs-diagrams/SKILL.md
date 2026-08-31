@@ -1,6 +1,6 @@
 ---
 name: mermaidjs-diagrams
-description: "Render and analyze Mermaid.JS diagrams embedded in markdown files, and author whole diagram-led documents from named document types. Enforces visual complexity limits AND WCAG color-contrast requirements via automated analysis. Every diagram MUST derive its palette from `resources/color_theming.md` and pass `scripts/mermaid_contrast.ts` before being declared done. Use when creating or updating architecture diagrams, analyzing diagram complexity, improving documentation clarity, or exploring a codebase to produce dual-density architecture diagrams for a README. Also use when asked for an educational document, an illustrative guide, an explainer, or a visual one-pager that distils a topic's concepts and relationships; or for a levelled architecture document that zooms through levels of detail."
+description: "Render and analyze Mermaid.JS diagrams embedded in markdown files, and author whole diagram-led documents from named document types. Enforces visual complexity limits AND WCAG color-contrast requirements via automated analysis. Every diagram MUST derive its palette from `resources/color_theming.md` and pass `scripts/mermaid_contrast.ts` before being declared done. Use when creating or updating architecture diagrams, analyzing diagram complexity, improving documentation clarity, or exploring a codebase to produce dual-density architecture diagrams for a README. Also use when asked for an educational document, an illustrative guide, an explainer, or a visual one-pager that distils a topic's concepts and relationships."
 argument-hint: "[markdown-file]"
 user-invocable: true
 ---
@@ -8,8 +8,9 @@ user-invocable: true
 # Context
 
 Render and maintain Mermaid.JS diagrams with **visual clarity enforcement**.
-Works for ANY project. Cognitive load research (Huang et al., 2020, arXiv:2008.07944) shows 50 nodes
-is the difficulty threshold — this skill enforces limits via automated complexity analysis.
+Works for ANY project. Yoghourdjian et al., 2020 (arXiv:2008.07944) found difficulty
+**finding the shortest path** in dense diagrams above ~50 nodes — a path-tracing
+result, not a comprehension budget; tighter limits here rest on segmenting instead.
 
 Diagrams live as ` ```mermaid ` code fences inside `.md` files.
 
@@ -22,7 +23,6 @@ across them. Skip when the task is one diagram, a render, or an audit.
 | The request says | Read |
 |---|---|
 | "educational", "illustrative guide", "explainer", "one-pager on X", "distil X", "explain X visually", "teach me X" | `resources/document-types/educational.md` |
-| "architecture doc", "system overview", "document this codebase", "map the system", "zoom into X", "add the security lens" | `resources/document-types/architectural.md` |
 | Unsure which, or adding a new type | `resources/document-types/README.md` |
 
 **Never inline a live `-beta` fence** (`architecture-beta`, `block-beta`,
@@ -210,7 +210,7 @@ path/to/file.md:100-108: NodeCountExceedsAcceptable nodes=24 preset=high
 |------|----------|---------|
 | `ParserFailure` | error | Multi-line diagram yielded 0 nodes |
 | `NodeCountExceedsHardLimit` | error | Nodes above absolute cap |
-| `NodeCountExceedsCognitiveLimit` | error | Nodes > 50 (Huang 2020 threshold) |
+| `NodeCountExceedsCognitiveLimit` | error | Nodes > 50 (Yoghourdjian 2020, path-tracing threshold) |
 | `NodeCountExceedsAcceptable` | warn | Nodes above readability threshold for preset |
 | `VisualComplexityExceedsCritical` | error | VCS above critical threshold |
 | `VisualComplexityExceedsAcceptable` | warn | VCS above readability threshold |
@@ -475,7 +475,6 @@ means the diagram is at fault. See `resources/render_troubleshooting.md`.
 |------|---------|
 | `resources/document-types/README.md` | How to pick a document type; the invariants every type shares; how to add one |
 | `resources/document-types/educational.md` | Educational / illustrative guide: concept beats, monotonic build, shared palette, one-pager contract |
-| `resources/document-types/architectural.md` | Architectural: `L{n}.{TLA}` tile addressing, IPO fence per level, boundary closure, lens registry, evidence marking |
 | `resources/gfm_beta_diagrams.md` | Why `-beta` types fail on GFM hosts; render-to-PNG/SVG with sibling `.mmd` pattern; non-beta alternatives |
 | `resources/color_theming.md` | Conceptual core: HSL encoding, dark/light mode safety, hierarchy, subgraph coloring |
 | `resources/color_palette_recipes.md` | Four palette recipes, a worked example for each, and the Tailwind v3 hex lookup |
