@@ -1,129 +1,129 @@
 """Eval: does the discovery skill produce a grounded Current/Desired State document?
 
-The fixture is a small but real codebase (`legacy_pipeline`: a nightly CSV -> HTML
-batch job with documented pain). The agent must run the skill's whole loop - internal
-research over that code, external research, synthesis - and leave behind the one
-artifact the skill exists for: a DISCOVERY.md whose two state sections are drawn
-through the same lenses with shared node IDs, and whose claims trace to file:line
-citations or URLs. This is also the reference case for a skill that spawns research
-subagents, so the ledger is asserted to show that delegation actually happened.
+The fixture is a small but real codebase (``legacy_pipeline``: a nightly CSV -> HTML batch
+job with documented pain). The agent must run the skill's whole loop -- internal research
+over that code, external research, synthesis -- and leave behind the one artifact the
+skill exists for: a DISCOVERY.md whose two state sections are drawn through the same
+lenses with shared node ids, and whose claims trace to ``file:line`` citations or URLs.
+
+This is also the reference case for a skill that spawns research subagents, so the ledger
+is asserted to show that the delegation actually happened.
+
+## Why this case has no golden
+
+Discovery output is research: which lenses, which sources, which claims. Two correct
+DISCOVERY.md files over this fixture share almost no text (ADR 0046). What is checkable is
+the *contract* the skill declares in its own "Done when" line, so that is what this grades,
+clause by clause.
 """
 
-import re
-from pathlib import Path
+from __future__ import annotations
 
-from pytest_xharness_eval import RunResult, evalcase
+import re
+
+from pytest_xharness_eval import CaseOutput, evalcase
+from pytest_xharness_eval.verify import (
+    check_files_written,
+    check_no_files_added,
+    check_rollout,
+    check_skill_was_loaded,
+    check_subagents_spawned,
+    facets,
+)
 
 SKILL = "discovery"
 FIXTURE = "legacy_pipeline"  # evals/fixtures/legacy_pipeline/
+TARGET = "DISCOVERY.md"
 
-# The prompt pins the target (DISCOVERY.md at the workspace root), gives the one-line
-# brief the skill asks for, and keeps the run affordable: two lenses, and the
-# validation step must not fail the run when mmdc or a browser is unavailable in the
-# sandbox - the document is what is graded here, not the toolchain around it.
-PROMPT = (
-    "Use the discovery skill (its SKILL.md is in the extra allowed directory / your "
-    "skills). Target: DISCOVERY.md at the repository root (it does not exist yet). "
-    "Initiative brief: replace the in-memory nightly orders batch (pipeline/) with a "
-    "streaming, fault-tolerant, observable pipeline. Use exactly two lenses. Keep "
-    "external research brief: a handful of authoritative sources is enough; if no "
-    "browser or fetch tool is available, mark links per the skill instead of "
-    "stopping. If mmdc is unavailable, skip the render step. Write only "
-    "DISCOVERY.md; do not add other files."
+# The skill's own `argument-hint` is "<path/to/DISCOVERY.md | path/to/folder/> [one-line
+# initiative brief]", so this task is exactly the two arguments it asks for and nothing
+# else: `/discovery DISCOVERY.md replace the ...` is what a human types (ADR 0044).
+#
+# The trailing sentence is not instruction to the skill -- it is sandbox tolerance. This
+# workspace has no browser and no mmdc, and the skill's own fallbacks for both are what
+# should fire. Without it the cell grades "is a browser installed", which is not a
+# property of the skill.
+TASK = (
+    "DISCOVERY.md -- replace the in-memory nightly orders batch (pipeline/) with a "
+    "streaming, fault-tolerant, observable pipeline. Use exactly two lenses and keep the "
+    "external research brief. If no browser or fetch tool is available, or mmdc is "
+    "missing, take the skill's documented fallback rather than stopping."
 )
 
-# -- Section and diagram parsing (verifiers live beside the case, ADR 0013) --
-
-SECTION = re.compile(r"^##\s+(.+?)\s*$", re.MULTILINE)
-FENCE = re.compile(r"```mermaid\s*\n(.*?)```", re.DOTALL)
-# `flowchart` node ids at the start of an edge or definition: `Loader[...]`, `A --> B`.
-NODE_ID = re.compile(r"(?:^|\s)([A-Za-z][A-Za-z0-9_]*)\s*(?:\[|\(|\{)", re.MULTILINE)
 CITATION = re.compile(r"[\w/]+\.(?:py|md):\d+")
 
 
-def sections_of(doc: str) -> dict[str, str]:
-    """Map `## Heading` -> body text (up to the next `##`)."""
-    parts = SECTION.split(doc)
+def _sections(doc: str) -> dict[str, str]:
+    """Map ``## Heading`` -> its body, up to the next ``##``."""
+    parts = re.split(r"^##\s+(.+?)\s*$", doc, flags=re.MULTILINE)
     return {parts[i].strip(): parts[i + 1] for i in range(1, len(parts) - 1, 2)}
 
 
-def node_ids(mermaid_bodies: list[str]) -> set[str]:
-    ids: set[str] = set()
-    for body in mermaid_bodies:
-        ids.update(NODE_ID.findall(body))
-    return ids - {"classDef", "class", "subgraph", "flowchart", "graph", "sequenceDiagram", "stateDiagram"}
+def _named(sections: dict[str, str], prefix: str) -> str | None:
+    return next((body for name, body in sections.items() if name.lower().startswith(prefix)), None)
 
 
-# -- Check 1: the run is real evidence ---------------------------------------
+def check_the_two_states_are_paired(output: CaseOutput) -> None:
+    """Both sections exist, carry the same number of lens diagrams, and share node ids.
 
-
-def check_run_is_real(run: RunResult) -> None:
-    """Same gate as every eval: the verdict must be tied to a session that happened."""
-    assert run.session_id, "no session id - the run cannot prove which log is its own"
-    assert Path(run.session_log).is_file(), f"session log missing: {run.session_log}"
-    assert run.exit_code == 0, f"agent CLI exited {run.exit_code}"
-    assert run.usage.accumulative_billed_tokens > 0, "zero tokens - an empty run must never pass"
-    assert run.cost_status == "priced", f"run was not priced (status={run.cost_status})"
-
-
-# -- Check 2: the research was delegated -------------------------------------
-
-
-def check_research_was_delegated(run: RunResult) -> None:
-    """Step 2 of the skill is two parallel research subagents; the ledger must show it.
-
-    Only the Claude CLI exposes a subagent tool the ledger can name (Task/Agent);
-    Codex runs the research in its own loop, so the assertion is harness-scoped
-    rather than pretending both CLIs look alike.
+    Coarse to fine. The shared-ids clause is the one that matters: without it the skill has
+    produced two unrelated diagrams rather than a before and an after, and a reader cannot
+    read the delta -- which is the entire purpose of the document.
     """
-    if run.harness != "claude":
-        return
-    spawned = sum(count for name, count in run.tool_calls.items() if name in {"Task", "Agent"})
-    assert spawned >= 2, f"the skill mandates parallel research subagents; ledger shows {spawned} spawn(s) ({run.tool_calls})"
+    doc = output.read(TARGET)
+    sections = _sections(doc)
+    current = _named(sections, "current state")
+    desired = _named(sections, "desired state")
+    assert current is not None, f"no `## Current State` section (sections: {sorted(sections)})"
+    assert desired is not None, f"no `## Desired State` section (sections: {sorted(sections)})"
 
-
-# -- Check 3: the document is the skill's contract ---------------------------
-
-
-def check_document_contract(run: RunResult, workspace: Path) -> None:
-    """DISCOVERY.md exists with paired, citation-grounded state sections.
-
-    Coarse to fine: the file was written, both sections exist, each carries the
-    same number of lens diagrams (1-3), the pairs share node IDs so they read as a
-    before/after, Current State cites the fixture's code, Desired State points at
-    external sources (verified or explicitly marked).
-    """
-    doc_path = workspace / "DISCOVERY.md"
-    assert "DISCOVERY.md" in run.files_written, f"agent did not write DISCOVERY.md (files written: {run.files_written})"
-    doc = doc_path.read_text(encoding="utf-8")
-    sections = sections_of(doc)
-
-    current = next((body for name, body in sections.items() if name.lower().startswith("current state")), None)
-    desired = next((body for name, body in sections.items() if name.lower().startswith("desired state")), None)
-    assert current, f"no `## Current State` section (sections: {list(sections)})"
-    assert desired, f"no `## Desired State` section (sections: {list(sections)})"
-
-    current_diagrams = FENCE.findall(current)
-    desired_diagrams = FENCE.findall(desired)
-    assert 1 <= len(current_diagrams) <= 3, f"Current State has {len(current_diagrams)} mermaid diagrams; the skill wants 2-3 lenses (>=1 accepted)"
-    assert len(current_diagrams) == len(desired_diagrams), (
-        f"lens mismatch: {len(current_diagrams)} Current vs {len(desired_diagrams)} Desired diagrams - the pairs must share lenses"
+    n_current, n_desired = facets.fence_count(current), facets.fence_count(desired)
+    assert 1 <= n_current <= 3, f"Current State has {n_current} lens diagrams; the skill draws 2-3 (1 accepted)"
+    assert n_current == n_desired, (
+        f"lens mismatch: {n_current} Current vs {n_desired} Desired diagrams. "
+        "The pairs must be drawn through the same lenses or they cannot be compared."
     )
 
-    shared = node_ids(current_diagrams) & node_ids(desired_diagrams)
-    assert shared, "no node ID appears in both a Current and a Desired diagram - the before/after cannot be read as a diff"
-
-    assert CITATION.search(current), "Current State has no file:line citation into the fixture codebase"
-    has_url = "http://" in desired or "https://" in desired
-    assert has_url or "LINK_NOT_VERIFIED" in doc, "Desired State names no external source and carries no unverified-link marker"
-
-
-# -- The case ----------------------------------------------------------------
+    shared = facets.node_ids(current) & facets.node_ids(desired)
+    assert shared, (
+        "no node id appears in both a Current and a Desired diagram, so the pair cannot be "
+        f"read as a before/after. Current: {sorted(facets.node_ids(current))[:10]}; "
+        f"Desired: {sorted(facets.node_ids(desired))[:10]}"
+    )
 
 
-@evalcase(prompt=PROMPT, skill=SKILL, fixture=FIXTURE)
-def eval_discovery_document(run: RunResult, workspace: Path) -> None:
-    """Evidence first, delegation second, the document's contract last."""
-    check_run_is_real(run)
-    check_research_was_delegated(run)
-    check_document_contract(run, workspace)
+def check_the_claims_are_grounded(output: CaseOutput) -> None:
+    """Current State cites the fixture's code; Desired State points at external sources."""
+    doc = output.read(TARGET)
+    sections = _sections(doc)
+    current = _named(sections, "current state") or ""
+    desired = _named(sections, "desired state") or ""
+    assert CITATION.search(current), (
+        "Current State carries no file:line citation into the fixture codebase; the skill "
+        "requires every factual claim to trace to one"
+    )
+    assert "http://" in desired or "https://" in desired or "LINK_NOT_VERIFIED" in doc, (
+        "Desired State names no external source and carries no unverified-link marker; it "
+        "is meant to be grounded in verified external research, not invented"
+    )
+
+
+@evalcase(task=TASK, skill=SKILL, fixture=FIXTURE)
+def eval_discovery_document(output: CaseOutput) -> None:
+    """Evidence, then delegation, then the document's contract clause by clause."""
+    check_rollout(output)
+    check_files_written(output, TARGET)
+    # DISCOVERY.md is the artifact; `.playwright-cli/` is the skill's own browser tool
+    # leaving timestamped page and console dumps behind while it does external research.
+    # Both are expected side effects of following the skill -- anything else is not.
+    check_no_files_added(output, allow=[TARGET, ".playwright-cli/*"])
+    # Not SKILL.md: a native invocation injects it, so it never appears as a read
+    # (ADR 0044). These two are what SKILL.md sends the agent to -- the lens menu it must
+    # pick from and the shape the document must take -- so reaching them is the evidence
+    # that the skill's method was followed rather than improvised.
+    check_skill_was_loaded(output, "resources/mermaidjs-diagrams.md", "resources/discovery-template.md")
+    # Step 2 of the skill is parallel research subagents. Read off the captured
+    # transcripts rather than a tool name, so it means the same thing in both dialects.
+    check_subagents_spawned(output, at_least=2)
+    check_the_two_states_are_paired(output)
+    check_the_claims_are_grounded(output)

@@ -106,7 +106,7 @@ wheels = [
 
 [[package]]
 name = "pytest-xharness-eval"
-version = "0.2.0"
+version = "0.5.0"
 source = { editable = "../pytest-xharness-eval" }
 dependencies = [
     { name = "pytest" },
