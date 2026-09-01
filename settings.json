@@ -68,7 +68,19 @@
     ],
     "defaultMode": "acceptEdits"
   },
-  "hooks": {},
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Write|Edit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/scripts/guard_filesystem.py\""
+          }
+        ]
+      }
+    ]
+  },
   "disableWorkflows": false,
   "enabledPlugins": {
     "code-review@claude-code-plugins": true,
