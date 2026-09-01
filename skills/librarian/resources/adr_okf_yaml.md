@@ -10,7 +10,7 @@ Recorded in `docs/CONVENTIONS.md` as a dialect line, so it sits at rung 1 of the
 
 ```markdown
 - ADR surface: `okf-yaml` — records authored in `adrs/NNNN-slug.yml`, markdown generated
-- Generated paths: `adrs/*.md`, `adrs/index.md`, `adrs/log.md`, `adrs/graph.json`
+- Generated paths: `adrs/*.md`, `adrs/index.md`, `adrs/graph.json`, `adrs/graph.html`
 - Regenerate: `make adrs`
 ```
 
@@ -23,6 +23,7 @@ Three capabilities plain markdown records cannot offer, each with the failure it
 | Typed relations over a closed vocabulary | One-way cross-references that no reader notices and no tool can check |
 | A JSON Schema with `additionalProperties: false` | A typo in a field name silently becoming an ignored field |
 | Index and graph generated from the same fields that render the records | A derived view drifting from the records it depicts |
+| A viewer generated beside the graph data | A typed relation graph nobody can see, and therefore nobody checks |
 
 And one it borrows from OKF: the generated markdown is a **portable bundle** any OKF-aware consumer can read without bespoke parsing.
 
@@ -53,11 +54,41 @@ adrs/
 ├── templates/             source    — one template per generated artifact
 ├── okf_render.py          source    — the generator
 │
+├── tokens.json            source    — OPTIONAL design tokens for the viewer
+│
 ├── NNNN-slug.md           GENERATED — OKF-conformant, the human reading surface
 ├── index.md               GENERATED — OKF reserved directory listing
 ├── graph.md               GENERATED — companion doc holding the graph
-└── graph.json             GENERATED — the typed relation graph
+├── graph.json             GENERATED — the typed relation graph
+└── graph.html             GENERATED — the viewer for that graph
 ```
+
+### `graph.html` is always generated
+
+A typed relation graph exists to be checked, and a graph nobody can see is not
+checked. The viewer therefore ships with every bundle rather than being an
+opt-in extra, and the generator writes it unconditionally.
+
+It is a single self-contained file that works from `file://` with no server:
+
+- **Three inlined data blocks** — the Cytoscape elements, every record's
+  rendered markdown, and the design tokens. The reading pane needs no fetch,
+  so opening the file is the whole setup.
+- **Two CDN scripts**, cytoscape.js and marked.js, are the only network
+  dependency. With no network the page says so and points at `index.md`.
+- **A deterministic layout.** Groups are shelf-packed from the sorted record
+  ids, so the committed file draws the same picture on every rebuild. A force
+  layout would make every regeneration a diff.
+- **Both channels derived, not assigned.** Fill is the record's group, node
+  size is in-degree (how many records refine or supersede it), and status
+  rides on the border rather than spending a colour channel.
+- **The hash is the address**, so a pasted link opens its record and the
+  browser's back button walks the reading history.
+
+A repo with its own brandpack drops a `tokens.json` beside its records, shaped
+`{"themes": {"light": {...}, "dark": {...}}}` with CSS custom property names
+minus the `--` prefix. Absent that file the generator inlines its own defaults,
+so the viewer is never broken by a missing brandpack.
 
 ## The record
 
@@ -175,6 +206,8 @@ Once declared, the convention is the oracle. Findings are structural only — a 
 | A generated `.md` has no frontmatter `type` | — | regenerate; if it persists, fix the template | 🔴 |
 | `relates_to` names a target that does not exist | — | fix the record | 🔴 |
 | A generated file was hand-edited (differs from a fresh build) | M-class duplication | regenerate; the edit belongs in the source | 🔴 |
+| `graph.html` is absent from the bundle | M1 (missing) | regenerate; the viewer is not optional | 🔴 |
+| `graph.html` fetches its data instead of inlining it | — | regenerate; a viewer that needs a server is not usable from `file://` | 🔴 |
 | A record exists as `.md` only, with no `.yml` source | M1 (missing) | migrate the record into the bundle | 🟡 |
 | `index.md` or `log.md` carries frontmatter | — | regenerate; reserved files take none | 🟡 |
 | A relation has no inverse on the far record | — | report; the user decides whether to add it | 🟡 |
@@ -207,6 +240,7 @@ Not done until all of these pass:
 [ ] index.md and log.md carry no frontmatter; log.md headings are ISO dates.
 [ ] Each generated argument is byte-identical to the record it came from.
 [ ] graph.json ids are unique and every edge endpoint resolves to a node.
+[ ] graph.html exists, inlines all three data blocks, and contains no unrendered template markers.
 [ ] Every generated file carries a regenerate banner naming its generator.
 [ ] Regeneration is a make target, and re-running it leaves the tree clean.
 ```

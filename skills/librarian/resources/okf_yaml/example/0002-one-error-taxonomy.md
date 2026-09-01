@@ -12,6 +12,8 @@ enforced_in:
 generated: { by: human:maintainer, at: 2026-08-29T00:00:00Z }
 ---
 
+<!-- GENERATED from REC-0002 by okf_render.py. Do not edit; edit the .yml and regenerate. -->
+
 > **Lens**: An error is a message to whoever must act on it.
 > Name the responsible boundary in the error itself, or the reader guesses.
 

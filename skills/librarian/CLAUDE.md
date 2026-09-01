@@ -38,8 +38,8 @@ All files ≤ 500 lines (`.claude/rules/claude_skills/index.md`).
 | `resources/adr_okf_yaml.md` | The named `okf-yaml` ADR-surface convention: record schema, relation vocabulary, OKF conformance, finding table, migration (lazy; named or observed) |
 | `resources/okf_yaml/record.schema.json` | The okf-yaml record contract, copied into an adopting repo |
 | `resources/okf_yaml/example/` | Worked two-record bundle; doubles as the golden fixture the Python suite diffs against |
-| `scripts/okf_render.py` | Reference generator: validate, then render markdown + index + graph |
-| `scripts/templates/*.j2` | Jinja templates, one per generated artifact |
+| `scripts/okf_render.py` | Reference generator: validate, then render markdown + index + graph + viewer |
+| `scripts/templates/*.j2` | Jinja templates, one per generated artifact (including `graph.html.j2`) |
 | `scripts/test_okf_render.py` | pytest suite (PEP-723 entry point) |
 | `scripts/conftest.py` | Coverage reload fixture |
 | `resources/evidence.md` | Research citations + counter-evidence, dated 2026-07-23 |
@@ -203,6 +203,23 @@ All files ≤ 500 lines (`.claude/rules/claude_skills/index.md`).
   Porting found a real defect the prose could not have: a null field rendered as `plan_id: None`, which parses as the string `'None'` — present in the origin bundle too, and fixed in both.
 - **Lens:** Vendor the working implementation over a cleaner rewrite when the implementation carries evidence a rewrite would discard, and pay the toolchain cost openly in the requirements.
   But never vendor an artifact without a **fixture that pins its output**: the generator is the part that will be replaced, and the bytes it produces are the part that must not change.
+
+### ADR-12: the okf-yaml bundle always ships a viewer, and it is self-contained
+
+- **Status:** Accepted (2026-09-01, user instruction)
+- **Context:** The bundle emitted `graph.json` — a Cytoscape payload — and `graph.md`, whose fenced `cytoscape` block only renders inside a companion HTML pipeline the skill does not own.
+  So the typed relation graph, the whole point of ADR-10's convention, had no reader in a plain checkout.
+  A graph nobody can see is a graph nobody checks: one-way edges, orphaned records and mis-grouped decisions all survive review because reviewing them means reading JSON.
+  The maintainer supplied a working viewer from a real corpus rather than a specification.
+- **Decision:** Generate `graph.html` **unconditionally**, as one self-contained file: three inlined data blocks (elements, every record's rendered markdown, design tokens), two CDN scripts, and a graceful message when the network is absent.
+  The layout is a deterministic shelf-pack computed from sorted record ids, not a force layout, so the committed file does not redraw on every rebuild.
+  Tokens come from an optional repo-supplied `tokens.json`, falling back to defaults carried in the generator, so a missing brandpack cannot break the page.
+- **Consequences:** Every bundle grows one large generated file whose diff is dominated by inlined JSON; compact separators keep that as small as it can be.
+  The viewer's absence is now a 🔴 finding, and the verification gate checks the data blocks are inlined.
+  A record whose prose contains `</script>` would have closed the tag and spilled into the document, so the generator escapes `</` before embedding — found while writing the test, not in review.
+- **Lens:** When a convention derives a machine-readable artifact, ship the thing that makes it *legible to a human* in the same breath, and generate it unconditionally.
+  An opt-in viewer is one nobody enables, which returns the derived data to the unchecked state it was created to escape.
+  Prefer a deterministic rendering over a prettier non-deterministic one: a generated file that changes on every rebuild stops being reviewable, and review is the point.
 
 ## Extension checklist
 
