@@ -223,3 +223,51 @@ describe("main CLI", () => {
     expect(await main(["--help"])).toBe(0);
   });
 });
+
+describe("frontmatter is metadata, not prose", () => {
+  const record = `---
+type: Architecture Decision
+title: Vendor the FastAPI template as a frozen snapshot, not a tracked fork
+description: Upstream is a one-time seed; this fork diverges permanently
+tags: [vendoring, upstream, scope]
+status: accepted
+provenance: Imported at commit 486f054 — the alternative was a git subtree
+enforced_in:
+  - fullstack-template/
+generated: { by: human:maintainer, at: 2026-09-01T00:00:00Z }
+---
+
+Body prose stays audited.
+`;
+
+  test("ignores YAML frontmatter entirely", () => {
+    // Without the frontmatter extension the block parses as a thematicBreak
+    // plus a setext heading, and every text rule fires on the raw YAML.
+    expect(rules(record)).toHaveLength(0);
+  });
+
+  test("still audits the body beneath frontmatter", () => {
+    const findings = checkMarkdown(`${record}\nA sentence that wraps\nacross two lines.\n`, "doc.md");
+    expect(findings.map((f) => f.rule)).toContain("PG001");
+  });
+
+  test("reports body line numbers past the frontmatter block", () => {
+    const findings = checkMarkdown("---\ntitle: x\n---\n\nGood line.\nBad wrap starts\nhere.\n", "doc.md");
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.line).toBe(6);
+  });
+
+  test("ignores TOML frontmatter too", () => {
+    expect(rules('+++\ntitle = "a — b; c; d"\n+++\n\nBody line.\n')).toHaveLength(0);
+  });
+
+  test("a mid-document thematic break is still not frontmatter", () => {
+    // Only a block at the very start is frontmatter; `---` later in the file
+    // must keep its normal meaning.
+    expect(rules("Intro line.\n\n---\n\nA sentence that wraps\nacross lines.\n")).toContain("PG001");
+  });
+
+  test("does not swallow a setext heading", () => {
+    expect(rules("Body text first.\n\nA Real Setext Heading\n---\n\nMore body.\n")).toHaveLength(0);
+  });
+});

@@ -10,7 +10,9 @@
 import { parseArgs } from "node:util";
 import type { Code, InlineCode, Node, Paragraph, Root, Text } from "mdast";
 import { fromMarkdown } from "mdast-util-from-markdown";
+import { frontmatterFromMarkdown } from "mdast-util-frontmatter";
 import { gfmFromMarkdown } from "mdast-util-gfm";
+import { frontmatter } from "micromark-extension-frontmatter";
 import { gfm } from "micromark-extension-gfm";
 import { visitParents } from "unist-util-visit-parents";
 
@@ -102,9 +104,15 @@ interface DocModel {
 }
 
 const buildDocModel = (src: string): DocModel => {
+  // Frontmatter is metadata, not prose. Without this extension a leading
+  // `---` block parses as a thematicBreak followed by a setext heading whose
+  // text is the raw YAML, so every text rule fires on it (an OKF decision
+  // record reports as one 60-word "sentence"). With it, the block becomes a
+  // `yaml` node carrying no text children, and the rules skip it by
+  // construction, exactly as code and tables are already skipped.
   const tree: Root = fromMarkdown(src, {
-    extensions: [gfm()],
-    mdastExtensions: [gfmFromMarkdown()],
+    extensions: [frontmatter(["yaml", "toml"]), gfm()],
+    mdastExtensions: [frontmatterFromMarkdown(["yaml", "toml"]), gfmFromMarkdown()],
   });
   const paragraphs: ParagraphView[] = [];
   const texts: TextView[] = [];
