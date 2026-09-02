@@ -13,6 +13,8 @@ enforced_in:
 generated: { by: human:maintainer, at: 2026-08-28T00:00:00Z }
 ---
 
+<!-- GENERATED from REC-0001 by okf_render.py. Do not edit; edit the .yml and regenerate. -->
+
 > **Lens**: A value from outside the process is untyped until something checks it.
 > Check it where it enters, once, or every later reader re-checks it differently.
 

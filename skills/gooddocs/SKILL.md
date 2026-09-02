@@ -65,7 +65,8 @@ Rules:
 
 PG006/PG007/PG008 findings are disguised flat lists; promote them to dot points.
 A PG009 finding is a two-level structure; promote it to a nested list (one parent per stacked line).
-Code blocks, inline code, and tables are exempt by construction (it parses to mdast).
+Code blocks, inline code, tables, and YAML/TOML frontmatter are exempt by construction (it parses to mdast).
+Frontmatter is metadata rather than prose, so a document whose frontmatter carries long field values (an OKF decision record, a Jekyll or Astro page) is judged on its body alone.
 The exception: a fence tagged markdown/md is a template, and its body is audited recursively (check-only). `--fix` performs only the sentence-per-line reflow, never inside a fence; every other finding is report-only for the structure pass below.
 
 ### 1c. Structure pass — restructuring is part of the audit

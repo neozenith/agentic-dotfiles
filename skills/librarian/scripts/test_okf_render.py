@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -196,9 +197,84 @@ def test_render_emits_every_artifact(bundle: Path) -> None:
         "asymmetries": [],
         "elements": 5,
     }
-    for name in ("index.md", "graph.md", "graph.json"):
+    for name in ("index.md", "graph.md", "graph.json", "graph.html"):
         assert (bundle / name).exists()
     assert (bundle / "0001-validate-at-the-boundary.md").exists()
+
+
+def test_graph_html_inlines_every_data_block(bundle: Path) -> None:
+    """The viewer must work from file:// with no server, so it fetches nothing."""
+    okf_render.render(bundle)
+    html = (bundle / "graph.html").read_text(encoding="utf-8")
+    for block in ("graph-data", "record-data", "token-data"):
+        assert f'<script id="{block}" type="application/json">' in html
+    assert "{{" not in html and "{%" not in html  # nothing left unrendered
+
+
+def test_graph_html_data_blocks_are_valid_json(bundle: Path) -> None:
+    okf_render.render(bundle)
+    html = (bundle / "graph.html").read_text(encoding="utf-8")
+    for block, expected in (("graph-data", "elements"), ("record-data", "REC-0001")):
+        match = re.search(rf'<script id="{block}" type="application/json">(.*?)</script>', html, re.DOTALL)
+        assert match, f"{block} missing"
+        # The generator escapes "</" so a record cannot close the tag; undo that
+        # before parsing, exactly as a browser's JSON.parse would not need to.
+        data = json.loads(match.group(1).replace("<\\/", "</"))
+        assert expected in data
+
+
+def test_graph_html_escapes_a_script_close_in_record_prose(bundle: Path) -> None:
+    """A record mentioning </script> must not break out of the data block."""
+    # Injected into the body, not the frontmatter: the frontmatter is stripped
+    # before inlining, so a field there would never reach the data block.
+    rec = first_record(bundle)
+    rec["problem"]["symptom"] = "A payload containing </script> reaches the renderer intact."
+    write(bundle, "0001-validate-at-the-boundary.yml", rec)
+    okf_render.render(bundle)
+    html = (bundle / "graph.html").read_text(encoding="utf-8")
+    _, _, tail = html.partition('<script id="record-data" type="application/json">')
+    payload = tail.split("</script>")[0]
+    # The literal sequence never appears inside the block, so the first "</script>"
+    # after the opening tag really is the closing one.
+    assert "</script>" not in payload
+    assert "<\\/script>" in payload
+    assert json.loads(payload.replace("<\\/", "</"))
+
+
+def test_the_pane_markdown_carries_no_frontmatter(bundle: Path) -> None:
+    """A renderer shows frontmatter as a setext heading, so it is stripped."""
+    okf_render.render(bundle)
+    html = (bundle / "graph.html").read_text(encoding="utf-8")
+    match = re.search(r'<script id="record-data" type="application/json">(.*?)</script>', html, re.DOTALL)
+    assert match
+    records = json.loads(match.group(1).replace("<\\/", "</"))
+    body = records["REC-0001"]["markdown"]
+    assert not body.startswith("---")
+    assert "type: Architecture Decision" not in body
+    assert body.lstrip().startswith("<!-- GENERATED") or body.lstrip().startswith(">")
+    # The title is carried separately, so the pane can render it as a heading.
+    assert records["REC-0001"]["title"]
+
+
+def test_strip_frontmatter_leaves_a_body_without_one_alone() -> None:
+    assert okf_render.strip_frontmatter("# Heading\n\nbody\n") == "# Heading\n\nbody\n"
+
+
+def test_strip_frontmatter_leaves_an_unterminated_block_alone() -> None:
+    """A truncated record is returned as-is rather than silently emptied."""
+    text = "---\ntype: Architecture Decision\nno closing delimiter\n"
+    assert okf_render.strip_frontmatter(text) == text
+
+
+def test_repo_tokens_override_the_defaults(bundle: Path) -> None:
+    (bundle / "tokens.json").write_text(
+        json.dumps({"themes": {"light": {"accent": "#ff0000"}}}), encoding="utf-8"
+    )
+    okf_render.render(bundle)
+    html = (bundle / "graph.html").read_text(encoding="utf-8")
+    match = re.search(r'<script id="token-data" type="application/json">(.*?)</script>', html, re.DOTALL)
+    assert match
+    assert json.loads(match.group(1))["themes"]["light"]["accent"] == "#ff0000"
 
 
 def test_generated_markdown_is_okf_conformant(bundle: Path) -> None:

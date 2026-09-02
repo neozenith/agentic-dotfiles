@@ -1,8 +1,11 @@
+<!-- GENERATED from the bundle's *.yml by okf_render.py. Do not edit; regenerate. -->
+
 # Decision relationship graph
 
-2 decision records, 2 typed edges, grouped into
-1 groups. Every edge comes from a record's `relates_to`
-block, so this view cannot drift from the records.
+2 decision records, 2 typed edges, in 1 groups.
+Every edge comes from a record's `relates_to` block, so this view cannot drift from the records.
+
+For an interactive view of the same graph, open [graph.html](graph.html).
 
 ```cytoscape
 { "data": "graph.json", "height": 620 }
@@ -21,7 +24,7 @@ block, so this view cannot drift from the records.
 
 ## Asymmetries
 
-An edge whose inverse is missing on the far record. These are gaps in the
-record set, not rendering artifacts.
+An edge whose inverse is missing on the far record.
+These are gaps in the record set, not rendering artifacts.
 
 None: every edge has its inverse.

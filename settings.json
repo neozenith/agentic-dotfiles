@@ -68,7 +68,21 @@
     ],
     "defaultMode": "acceptEdits"
   },
-  "hooks": {},
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Write|Edit|NotebookEdit|Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/tool_coach.py\"",
+            "timeout": 10,
+            "statusMessage": "Checking the call against this project's working agreements…"
+          }
+        ]
+      }
+    ]
+  },
   "disableWorkflows": false,
   "enabledPlugins": {
     "code-review@claude-code-plugins": true,

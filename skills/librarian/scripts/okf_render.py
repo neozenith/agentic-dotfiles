@@ -87,6 +87,37 @@ GROUP_COLOURS = [
 ]
 UNGROUPED_COLOUR = "#64748b"
 
+#: Design tokens the generated graph.html writes as CSS custom properties, one
+#: set per theme. A repo with its own brandpack overrides these by dropping a
+#: tokens.json beside its records; the shape is {"themes": {"light": {...},
+#: "dark": {...}}} and the keys are CSS custom property names without the "--".
+DEFAULT_TOKENS: dict[str, Any] = {
+    "themes": {
+        "light": {
+            "bg": "#f7f7fa",
+            "panel": "#ffffff",
+            "ink": "#1b1d23",
+            "muted": "#5b6070",
+            "line": "#e2e4ea",
+            "accent": "#4f46e5",
+            "good": "#047857",
+            "bad": "#b91c1c",
+            "code": "#f1f2f6",
+        },
+        "dark": {
+            "bg": "#0f1117",
+            "panel": "#171a23",
+            "ink": "#e6e8ef",
+            "muted": "#9aa0b0",
+            "line": "#2a2e3a",
+            "accent": "#a5b4fc",
+            "good": "#34d399",
+            "bad": "#f87171",
+            "code": "#1f2330",
+        },
+    }
+}
+
 # ── Core ─────────────────────────────────────────────────────────────────
 
 
@@ -238,6 +269,35 @@ def cytoscape(records: list[Record], group_by: str) -> Record:
     return {"elements": elements, "layout": {"name": "cose"}, "height": 620}
 
 
+def strip_frontmatter(markdown: str) -> str:
+    """Drop a leading YAML frontmatter block, returning the body.
+
+    Markdown renderers have no concept of frontmatter: the opening "---" reads
+    as a thematic break and the YAML beneath it as a setext heading, so a
+    renderer shows the whole metadata block as a title. Anything that feeds a
+    record to a renderer wants the body alone.
+    """
+    if not markdown.startswith("---\n"):
+        return markdown
+    closing = markdown.find("\n---\n", 3)
+    if closing == -1:
+        return markdown
+    return markdown[closing + len("\n---\n") :].lstrip("\n")
+
+
+def script_json(value: Any) -> str:
+    """Serialise for embedding inside a <script> tag.
+
+    A record whose prose contains "</script>" would otherwise close the tag and
+    spill its remainder into the document. Escaping the slash keeps the JSON
+    valid ("\\/" is a legal escape) while making the sequence inert to the HTML
+    parser. The paragraph and line separators are escaped for the same class of
+    reason: they are literal line terminators to a JavaScript parser.
+    """
+    text = json.dumps(value, separators=(",", ":"))
+    return text.replace("</", "<\\/").replace(" ", "\\u2028").replace(" ", "\\u2029")
+
+
 def environment(by_id: dict[str, Record]) -> Environment:
     """Jinja environment. StrictUndefined so a missing field fails loudly."""
     env = Environment(
@@ -274,12 +334,26 @@ def render(
     by_id = {r["id"]: r for r in records}
     env = environment(by_id)
 
+    # The rendered markdown is kept as it is written, so graph.html can inline it
+    # and its reading pane needs no fetch. That is what makes the viewer work from
+    # file:// with no server.
+    #
+    # The frontmatter is stripped before inlining. A markdown renderer has no
+    # concept of frontmatter: it reads the leading "---" as a thematic break and
+    # the YAML beneath it as a setext heading, so the pane would open with the
+    # whole metadata block styled as a title. The viewer shows those fields as
+    # chips instead.
+    rendered: dict[str, Record] = {}
     for record in records:
         name = f"{record['id'].split('-')[-1]}-{record['slug']}.md"
-        (source_dir / name).write_text(
-            env.get_template("record.md.j2").render(rec=record, author=author),
-            encoding="utf-8",
-        )
+        markdown = env.get_template("record.md.j2").render(rec=record, author=author)
+        (source_dir / name).write_text(markdown, encoding="utf-8")
+        rendered[record["id"]] = {
+            "file": name,
+            "status": record["status"],
+            "title": record["title"],
+            "markdown": strip_frontmatter(markdown),
+        }
 
     edges = [
         {"source": r["id"], "relation": e["relation"], "target": e["target"]}
@@ -304,6 +378,23 @@ def render(
             edge_count=len(edges),
             group_count=len(groups),
             asymmetries=skew,
+        ),
+        encoding="utf-8",
+    )
+
+    # graph.json is the data; graph.html is the way a human reads it. The viewer
+    # is always generated, because a typed relation graph nobody can see is a
+    # graph nobody checks. A repo's own tokens.json overrides the defaults.
+    tokens_path = source_dir / "tokens.json"
+    tokens = json.loads(tokens_path.read_text(encoding="utf-8")) if tokens_path.is_file() else DEFAULT_TOKENS
+    (source_dir / "graph.html").write_text(
+        env.get_template("graph.html.j2").render(
+            bundle_name=source_dir.name,
+            node_count=len(records),
+            edge_count=len(edges),
+            graph_json=script_json(graph),
+            records_json=script_json(rendered),
+            tokens_json=script_json(tokens),
         ),
         encoding="utf-8",
     )
