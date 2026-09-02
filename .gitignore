@@ -17,3 +17,6 @@ tmp/
 .venv/
 .*_cache/
 .playwright*/
+
+docs/plans/
+docs/retros/
