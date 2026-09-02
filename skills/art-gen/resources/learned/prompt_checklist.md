@@ -145,6 +145,130 @@ movement across the whole duration. The two instructions compound.
 - Keep the **final shot** of the montage matching the end keyframe, so the clip still lands
   where the chain needs it.
 
+### 10. "Overlap the middle of the letters" destroys the word when it wraps
+
+**Symptom:** the poster's headline word is unreadable — the subject occludes letters the
+reader needed.
+**Case (2026-08-05):** a value poster asked for the subject to be drawn *"in front of the big
+violet word, overlapping and hiding the middle of those letters so the word reads as if it is
+behind him"*. On one of four frames the model set `ENGINEERING` on **two** lines and then
+faithfully occluded the middle of **both**, yielding `ENG?NE / ER?NG`. The three frames that
+kept the word on one line were fine.
+**Why:** the occlusion instruction and the line-breaking decision are independent. The model
+honours the overlap literally, so any wrap doubles the damage — and nothing in the prompt
+pinned the line count.
+**Check:** when a headline is meant to sit behind the subject, constrain **both** halves:
+- pin the line count explicitly ("the word ENGINEERING is set on a single unbroken line").
+- occlude a *named edge*, not "the middle" — "the subject overlaps only the lower third of
+  the letters; every letter remains individually readable".
+The source posters this style was distilled from do exactly that: one line, bottom edge only.
+
+### 11. Reference-image POSE drives character likeness more than the prompt text
+
+**Symptom:** a carefully described mascot comes back as a generic version of its species.
+**Case (2026-08-05):** the same mascot prompt was run against two reference stills of the same
+toy. The three-quarter, open-mouthed, one-arm-raised still produced a recognisable character;
+the flatter arms-up, closed-mouth still produced a generic gremlin with human hands, pointy
+ears and none of the toy's googly-eye stalks — even though the prompt named every one of those
+features.
+**Why:** with a `--ref`, the image dominates the text for *shape*; prose feature lists only
+nudge it. A reference frame that hides the character's distinguishing silhouette gives the
+model nothing to hold on to, and it falls back to the category prior.
+**Check:** choose the reference frame that shows the **most distinguishing silhouette**
+(expression open, limbs separated from the body, signature features unoccluded) rather than the
+most neutral one. When unsure, run both poses — it is one extra frame, and it is the cheapest
+A/B available.
+
+### 12. A hard text inventory beats trusting the style reference not to bleed
+
+**Symptom (avoided):** words from a style-reference image appear in the output.
+**Case (2026-08-05):** a poster style-reference containing the rendered words `MISSION PILOT`
+was passed as `--ref` alongside a subject reference. All four frames rendered *only* the three
+intended strings, with no bleed.
+**Why:** the prompt opened its typography block with *"there are exactly three pieces of text
+in this poster and nothing else"*, numbered each one, and closed with *"apart from the three
+pieces of text named above, every surface in the picture is blank and unmarked"* — a positive
+restatement (rule 5) rather than a prohibition naming the unwanted strings (rule 1).
+**Check:** when conditioning on a style reference that itself contains lettering, state a hard
+**count** of text elements, enumerate them, and describe every other surface as blank. Do not
+name the reference's words in order to forbid them.
+
+### 13. Plan multi-image sets around a project RATE WINDOW, not around a per-run count
+
+**Symptom:** `google.genai.errors.ClientError: 429 RESOURCE_EXHAUSTED` partway through a
+fan-out, killing every remaining prompt file in that batch. `art_gen.py` does not catch it, so
+the traceback aborts the run and the un-generated prompts are simply lost.
+**Case (2026-08-05):** an eight-panel comic page. First attempt split the panels across two
+concurrent four-prompt `generate` jobs; one 429'd after a single image. Serialising did **not**
+fix it — a later single-process four-prompt top-up 429'd on its *first* call, with no
+concurrency involved at all. Roughly five `gemini-3-pro-image` renders in a few minutes
+exhausted the window on this project.
+**Why:** the limit is a **project-level rate window**, not a per-process or per-invocation
+budget. Concurrency makes you hit it sooner but is not the cause, so serialising alone does not
+avoid it. Sequential fan-out inside one invocation has no inter-request delay either.
+**Check, for any set of more than ~4 paid images:**
+- Expect to generate in **waves with a cooling gap between them**, and plan the wall clock for
+  that. A set of 8 is two or three sittings, not one command.
+- Treat a 429 as a **scheduling** result, never a prompt failure — do not reword anything, and
+  do not re-roll panels that already succeeded.
+- Re-run only the prompts whose PNGs are missing. Derive that list from the **sidecars**
+  (`prompt_file`), not from memory of what you launched.
+- Make the composing step resolve order from the sidecar too, so a partial batch plus later
+  top-ups still assemble in the right order and a re-roll keeps its slot despite a newer
+  timestamp.
+- Related failure in the same session: one call returned **no parts at all**, surfacing as
+  `TypeError: 'NoneType' object is not iterable` rather than an API error. Same response —
+  re-run that prompt, don't rewrite it.
+
+### 14. Write constraints as imperatives to the artist, never as statements about the picture
+
+**Symptom:** a sentence from the prompt's own constraints block appears *inside the image* as
+rendered lettering.
+**Case (2026-08-05):** a comic panel prompt ended with the constraint *"Apart from the one
+caption box described above, every surface, screen, page, banner and garment in the picture is
+blank and unmarked."* The panel came back with a caption box reading `IT COMPILES! SHIP IT!`
+followed, in smaller type on the next line, by `All screens and garments are blank.`
+**Why:** two things compounded. (a) The constraint was a **declarative sentence describing the
+picture** — grammatically identical to the scene description, so it was treated as content to
+depict rather than a rule to obey. (b) It sat immediately after the caption instruction, so it
+read as a continuation of the caption. This is rule #1's failure mode wearing a different hat:
+the prohibition supplied the very words it forbade.
+**Check:**
+- Phrase every constraint as an **imperative to the artist** — "Leave every surface free of
+  lettering", not "every surface is blank". Imperatives cannot be mistaken for scene content.
+- **Close the text inventory explicitly**: "The caption box contains these words and no others,
+  and no further words appear inside it: X". An open-ended "the caption reads: X" invites
+  continuation.
+- Never place a constraints block adjacent to a lettering instruction. Put scene description
+  between them, or the model reads them as one clause.
+- This is cheap to catch: read the rendered lettering back word-for-word against the intended
+  string before accepting a panel.
+
+### 15. A self-contradicting prompt returns NO image, and it looks like a script crash
+
+**Symptom:** `TypeError: 'NoneType' object is not iterable` from `art_gen.py`, with no API error
+and no image. Re-running reproduces it exactly.
+**Case (2026-08-05):** a comic panel's scene asked for a wall poster bearing *"one short bold
+line at the top and three short bullet lines under it"*, while the same prompt's constraints
+block said to *leave every surface free of lettering*. Two runs of that prompt both returned a
+response with no image parts. Rewording the poster as **shapes** — "one short thick horizontal
+black bar near its top and three short thin black bars beneath that, the way a headline and
+three bullets look from across a room" — rendered first time.
+**Why:** the two clauses could not both be satisfied. The model returned no image rather than
+picking a side, and because `art_gen.py` iterates the response parts without checking for an
+empty candidate, a *semantic* prompt failure surfaces as a Python traceback and reads like
+infrastructure.
+**Check:**
+- Treat a reproducible `NoneType`/empty-parts failure as a **prompt contradiction**, not a
+  transient API blip. Re-run once to confirm; if it repeats, read the prompt for a clause that
+  fights another clause.
+- Audit shared blocks against per-item scenes. A global constraint written once and injected
+  into every prompt is exactly where this hides — it was fine for seven panels and fatal for the
+  eighth.
+- When a constraint forbids lettering but the scene needs something that *looks* like text,
+  describe the **marks** (bars, blocks, squiggles) rather than the text. That satisfies both
+  clauses instead of choosing between them.
+
 ## Appending to this file
 
 When a run comes back wrong, add an entry in the same shape — **Symptom / Case (dated) /
