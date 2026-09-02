@@ -2,6 +2,10 @@
 
 Skills, rules and workflows for agentic coding, installable with [`skills`](https://www.npmjs.com/package/skills).
 
+![richdocs showcase: OsakaNights typography, charts, diagrams, maps and cloud architecture](skills/richdocs/assets/richdocs-showcase.gif)
+
+The richdocs showcase demonstrates the visual surface shipped by the skill.
+
 ## Install
 
 ```sh
@@ -34,12 +38,12 @@ Markdown → interactive HTML (mermaid, cytoscape, plotly, draw.io cloud stencil
 npx skills@latest add neozenith/agentic-dotfiles -s richdocs -y
 ```
 
-### mermaidjs_diagrams
+### mermaidjs-diagrams
 
 Render Mermaid diagrams in markdown with enforced complexity limits and WCAG contrast checks.
 
 ```sh
-npx skills@latest add neozenith/agentic-dotfiles -s mermaidjs_diagrams -y
+npx skills@latest add neozenith/agentic-dotfiles -s mermaidjs-diagrams -y
 ```
 
 ### gooddocs
@@ -58,10 +62,40 @@ Researches a topic, summarises it in ≤5 bullets, then runs a Socratic one-ques
 npx skills@latest add neozenith/agentic-dotfiles -s coach -y
 ```
 
+### concise-decisions
+
+Resolve multiple blocking ambiguities with one high-leverage multiple-choice question, a recommended default, and a cascade across related decisions.
+
+```sh
+npx skills@latest add neozenith/agentic-dotfiles -s concise-decisions -y
+```
+
+### librarian
+
+Organise repository documentation by checking canonical files, names, locations, and required cross-links.
+
+```sh
+npx skills@latest add neozenith/agentic-dotfiles -s librarian -y
+```
+
 ### introspect
 
 Query Claude Code session history: conversations, tool usage, event trees, costs.
 
 ```sh
 npx skills@latest add neozenith/agentic-dotfiles -s introspect -y
+```
+
+### dadjoke
+
+Workshop themed dad jokes in short, feedback-led waves. The theme is the invocation
+argument; add a count or "Q&A" to the same argument to shape the wave.
+
+```sh
+npx skills@latest add neozenith/agentic-dotfiles -s dadjoke -y
+```
+
+```text
+/dadjoke kubernetes                         # Claude Code
+$dadjoke five Q&A jokes about kubernetes    # Codex
 ```

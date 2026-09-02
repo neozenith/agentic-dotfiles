@@ -13,7 +13,7 @@ A spec carries diagrams in two files:
 
 - **`DISCOVERY.md`** — the architecture lenses and the gap-increment stack:
   - `## Current State` — **at least two lenses** chosen from the menu
-    (`resources/mermaidjs_diagrams.md` → Lens menu), each a labeled diagram.
+    (`resources/mermaidjs-diagrams.md` → Lens menu), each a labeled diagram.
   - `## Desired State` — the **same** lenses, with consistent node IDs so the before/after reads as a
     visual diff.
   - `## Gap Increments` — **one diagram per `G<n>`**, each starting from the Current-State baseline and
@@ -24,7 +24,7 @@ A spec carries diagrams in two files:
 
 If any required diagram is missing, that is a validation failure — add it before proceeding. Then render
 **every file that carries a diagram** with mmdc in both variants (dark + light) and verify exit code 0;
-read `resources/mermaidjs_diagrams.md` for the commands, complexity thresholds, and pitfalls, and follow
+read `resources/mermaidjs-diagrams.md` for the commands, complexity thresholds, and pitfalls, and follow
 the palette/gate rules in `resources/style.md` → Diagrams. Both gates are blockers:
 
 - **Contrast** — WCAG AA on every `classDef` / `style` (`fill` + `color`, no same-hue `stroke`).

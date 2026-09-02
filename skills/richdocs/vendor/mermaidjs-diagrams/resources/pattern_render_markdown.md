@@ -1,0 +1,169 @@
+# Pattern: Render Diagrams from Markdown
+
+Render mermaid fences embedded in `.md` files using `mmdc`'s native markdown input mode.
+No project scaffolding is required; host prerequisites (npm cache, a Chromium, an execution class that may launch it) are covered in `render_troubleshooting.md`.
+
+## How It Works
+
+`mmdc` reads a markdown file, extracts every ` ```mermaid ` fence, renders each as an
+image artefact, and outputs a validated copy of the markdown with fences replaced by
+`![diagram](image)` tags.
+
+## Rendering Variants
+
+Rendering is parameterised by three values that form a **variant tuple**:
+
+| Parameter | Flag | Values | Skill default (`render_mermaid.sh`) | `mmdc` default |
+|-----------|------|--------|-------------------------------------|----------------|
+| Theme | `-t` / `--theme` | `default`, `dark` | `dark` (plus a `default` pass) | `default` |
+| Background | `-b` / `--backgroundColor` | `white`, `black`, `transparent` | `transparent` (plus `white`) | `white` |
+| Output Format | `-e` / file extension | `png`, `svg` | `png` | `svg` |
+
+The variant tuple determines the **output folder name**: `{theme}_{backgroundColor}_{format}`
+
+Examples:
+- `dark_transparent_png` (default)
+- `default_white_png` (light theme for docs/README)
+- `dark_black_svg` (dark with opaque background, vector)
+
+## Rendering from a Markdown File
+
+All examples use these core variables:
+
+| Variable | Purpose |
+|----------|---------|
+| `INPUT` | Source markdown file path |
+| `INPUT_PATH` | Directory portion of `INPUT` |
+| `THEME` | Mermaid theme (`dark`, `default`) |
+| `BGCOLOR` | Background colour (`transparent`, `white`, `black`) |
+| `OUTPUT_FORMAT` | Output format (`png`, `svg`) |
+| `VARIANT` | Computed as `${THEME}_${BGCOLOR}_${OUTPUT_FORMAT}` |
+| `OUTPUT_BASE` | Output root directory (e.g. `.mmdc_cache`) |
+| `OUTPUT_TARGET` | Assets directory: `${OUTPUT_BASE}/${VARIANT}/${INPUT_PATH}/` |
+| `OUTPUT` | Output file: `${OUTPUT_BASE}/${VARIANT}/${INPUT}` |
+
+### Render a single variant
+
+Define the variant once as a shell function; every later example calls it.
+
+```bash
+INPUT="path/to/document.md"
+INPUT_PATH="path/to/"
+OUTPUT_BASE=".mmdc_cache"
+
+render_variant() {   # usage: render_variant THEME BGCOLOR FORMAT
+  THEME="$1"; BGCOLOR="$2"; OUTPUT_FORMAT="$3"
+  VARIANT="${THEME}_${BGCOLOR}_${OUTPUT_FORMAT}"
+  OUTPUT_TARGET="${OUTPUT_BASE}/${VARIANT}/${INPUT_PATH}/"
+  OUTPUT="${OUTPUT_BASE}/${VARIANT}/${INPUT}"
+  npx -p @mermaid-js/mermaid-cli mmdc \
+    -i "${INPUT}" \
+    -a "${OUTPUT_TARGET}" \
+    -o "${OUTPUT}" \
+    --scale 4 -e "${OUTPUT_FORMAT}" -t "${THEME}" -b "${BGCOLOR}"
+}
+
+render_variant dark transparent png
+```
+
+### Render multiple variants
+
+Both light and dark variants side by side, which is exactly what
+`scripts/render_mermaid.sh` does for you. Two is the floor, not a convenience:
+the skill's diagrams must read on dark and light hosts alike, and a single PNG
+cannot; `dark+transparent` sits on any dark page and `default+white` is the
+print/README artifact.
+
+```bash
+render_variant dark    transparent png   # dark-mode UIs, slides
+render_variant default white       png   # README, light-mode docs
+```
+
+### SVG variant (scalable vector output)
+
+```bash
+render_variant dark transparent svg
+```
+
+**Output structure** (for two PNG variants):
+```
+${OUTPUT_BASE}/
+├── dark_transparent_png/${INPUT_PATH}
+│   ├── document.md           # Markdown with ![diagram] image tags
+│   ├── document-1.png        # First mermaid fence rendered
+│   ├── document-2.png        # Second mermaid fence rendered
+│   └── ...
+└── default_white_png/${INPUT_PATH}
+    ├── document.md
+    ├── document-1.png
+    └── ...
+```
+
+## Using as Verification
+
+Render from a markdown file to verify all mermaid fences are valid:
+
+```bash
+render_variant dark transparent png
+```
+
+**Exit code 0** = `mmdc` believes it rendered everything. That is weaker than it
+sounds: confirm the artifact exists and decodes before trusting it.
+
+```bash
+bash .claude/skills/mermaidjs-diagrams/scripts/render_mermaid.sh --verify "${OUTPUT_TARGET}"*.png
+```
+
+**Non-zero** = error on stderr. Classify it before editing the fence: a
+missing browser, a poisoned npm cache, and a sandbox denial all surface here and
+none of them are the diagram's fault. See `render_troubleshooting.md`; the
+`scripts/render_mermaid.sh` wrapper does that classification (and the
+verification above) for you.
+
+## Icon Packs
+
+When using `architecture-beta` diagrams with Iconify icons, append
+`--iconPacks` to the `mmdc` line of `render_variant` above:
+
+```bash
+  --scale 4 -e "${OUTPUT_FORMAT}" -t "${THEME}" -b "${BGCOLOR}" \
+  --iconPacks @iconify-json/logos @iconify-json/mdi
+```
+
+For custom icon packs via URL:
+```bash
+  --iconPacksNamesAndUrls "vendor#https://example.com/icons.json"
+```
+
+Flowchart diagrams using Font Awesome (`fa:fa-icon`) need no `--iconPacks` flag.
+
+## Per-Project Makefile Target
+
+For projects that want `make diagrams` to render mermaid blocks from `README.md`:
+
+```makefile
+DIAGRAMS_DIR = diagrams
+MMDC = npx -p @mermaid-js/mermaid-cli mmdc
+
+diagrams:                ## Render README Mermaid diagrams (both variants)
+	@mkdir -p $(DIAGRAMS_DIR)/dark_transparent_png
+	@mkdir -p $(DIAGRAMS_DIR)/default_white_png
+	$(MMDC) -i README.md -a $(DIAGRAMS_DIR)/dark_transparent_png/ \
+		--scale 4 -e png -t dark -b transparent
+	$(MMDC) -i README.md -a $(DIAGRAMS_DIR)/default_white_png/ \
+		--scale 4 -e png -t default -b white
+
+diagrams-clean:          ## Remove rendered diagram artefacts
+	rm -rf $(DIAGRAMS_DIR)
+```
+
+## Variant Quick Reference
+
+| Variant Tuple | Theme | Background | Format | Best For |
+|---------------|-------|------------|--------|----------|
+| `dark_transparent_png` | dark | transparent | PNG | Dark-mode UIs, slides, terminals |
+| `dark_transparent_svg` | dark | transparent | SVG | Scalable dark-mode docs |
+| `default_white_png` | default | white | PNG | README, light-mode docs, print |
+| `default_white_svg` | default | white | SVG | Scalable light-mode docs |
+| `dark_black_png` | dark | black | PNG | OLED screens, high contrast |
+| `default_transparent_png` | default | transparent | PNG | Adaptive light-mode overlay |

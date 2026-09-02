@@ -1,29 +1,43 @@
-# Evals for this skill — contract: .claude/rules/claude_skills/evals.md
-# Run from repo root: make -C .claude/skills/<name>/scripts <target>
+# gooddocs skill scripts (TypeScript-only).
+# Run from repo root: make -C .claude/skills/gooddocs/scripts <target>
 
-UV := uv run --no-project
+TS_SCRIPTS = prose_gates
+TS_SRC = $(addsuffix .ts,$(TS_SCRIPTS)) $(addsuffix .test.ts,$(TS_SCRIPTS))
+
 THIS_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
-EVALKIT := $(THIS_DIR)../../_evalkit
+BIOME = bunx --bun @biomejs/biome
 
-.PHONY: evals evals-nightly ci fix
+.PHONY: all help clean \
+        format format-ts format-check format-check-ts \
+        lint lint-ts lint-fix lint-fix-ts \
+        typecheck typecheck-ts \
+        test test-ts test-cov test-cov-ts \
+        install-ts ci fix
 
-# Paid tier: one cheap-model run per golden (needs claude CLI + ANTHROPIC_API_KEY).
-evals:
-	DEEPEVAL_TELEMETRY_OPT_OUT=1 $(UV) evals/test_evals.py
+all: format lint typecheck test-cov
 
-# Full model matrix incl. codex (dollars; nightly/on-demand).
-evals-nightly:
-	DEEPEVAL_TELEMETRY_OPT_OUT=1 \
-	EVAL_MODELS="claude-haiku-4-5,claude-sonnet-4-6,claude-opus-4-8" \
-	CODEX_EVAL_MODELS="gpt-5.5" \
-	$(UV) evals/test_evals.py
+format: format-ts
+format-ts:       ; $(BIOME) format --write $(TS_SRC)
+format-check: format-check-ts
+format-check-ts: ; $(BIOME) format $(TS_SRC)
 
-# Free gate: lint this suite + shared-harness self-tests. Never calls an LLM.
-ci:
-	uvx ruff format --check evals/test_evals.py
-	uvx ruff check --line-length 120 evals/test_evals.py
-	$(MAKE) -C $(EVALKIT) test
+lint: lint-ts
+lint-ts:         ; $(BIOME) lint $(TS_SRC)
+lint-fix: lint-fix-ts
+lint-fix-ts:     ; $(BIOME) lint --write $(TS_SRC)
 
-fix:
-	uvx ruff format evals/test_evals.py
-	uvx ruff check --line-length 120 --fix evals/test_evals.py
+typecheck: typecheck-ts
+typecheck-ts:    ; $(THIS_DIR)node_modules/.bin/tsc --project $(THIS_DIR)tsconfig.json --noEmit
+
+test: test-ts
+test-ts:         ; bun test --cwd $(THIS_DIR)
+
+test-cov: test-cov-ts
+test-cov-ts:     ; bun test --cwd $(THIS_DIR) --coverage
+
+install-ts:      ; bun install --cwd $(THIS_DIR)
+
+ci: format-check lint typecheck test-cov
+fix: format lint-fix
+
+clean:           ; rm -rf node_modules

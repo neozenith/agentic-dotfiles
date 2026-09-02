@@ -8,8 +8,8 @@ apply it to the next decision instead of re-deriving the trade-off.
 Prose skill + eval suite. Doc gates before handoff, run from repo root:
 
 ```sh
-bun run .claude/skills/mermaidjs_diagrams/scripts/mermaid_contrast.ts   .claude/skills/refactor/README.md
-bun run .claude/skills/mermaidjs_diagrams/scripts/mermaid_complexity.ts .claude/skills/refactor/README.md
+bun run .claude/skills/mermaidjs-diagrams/scripts/mermaid_contrast.ts   .claude/skills/refactor/README.md
+bun run .claude/skills/mermaidjs-diagrams/scripts/mermaid_complexity.ts .claude/skills/refactor/README.md
 uvx --from md-toc md_toc --in-place --no-list-coherence github --header-levels 4 .claude/skills/refactor/README.md
 ```
 
@@ -22,11 +22,7 @@ All files ≤ 500 lines (`.claude/rules/claude_skills/index.md`).
 | `SKILL.md` | Agent operating manual: 6 phases, ranking, when-NOT-to, pitfalls |
 | `README.md` | Human explainer: purpose, quickstart, architecture diagram |
 | `resources/evidence.md` | Research citations + counter-evidence (lazy-loaded) |
-| `scripts/evals/` | Base eval: ADR-conflict fixture, golden, runner (via `_evalkit`) |
 | `CLAUDE.md` | This file — rationale and decision log |
-
-Eval suite (`.claude/rules/claude_skills/evals.md`): `make -C
-.claude/skills/refactor/scripts ci` (free) · `… evals` (paid golden runs).
 
 ## Architecture principles
 

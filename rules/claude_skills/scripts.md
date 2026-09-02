@@ -45,9 +45,9 @@ If you only remember two things:
 
 Anything that can't be enforced by `make ci` doesn't exist.
 
-> **Evals are a separate, paid gate** — `make evals` (pytest + deepeval driving
-> real agent CLIs against seeded fixtures) is specified in
-> [`evals.md`](evals.md). It is never a dependency of `ci`.
+> **Paid agent runs are never a dependency of `ci`** — anything that drives a
+> real agent CLI spends money and minutes; `ci` must stay free and
+> deterministic.
 
 ## When a Skill Is Mixed-Language
 

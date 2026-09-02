@@ -70,7 +70,7 @@ to demo. If a library spans N providers, the skill should too — add an example
 `diagrams` script is a thin Graphviz-rendering shell producing a binary PNG — there is no
 meaningful pure logic to unit-test, and it hard-depends on the `dot` binary.
 **Decision:** Keep the diagram sources in `resources/examples/` as self-rendering content
-(the mingrammer analog of `mermaidjs_diagrams`' `.mmd` files). The only gated Python is the
+(the mingrammer analog of `mermaidjs-diagrams`' `.mmd` files). The only gated Python is the
 private gallery generator.
 **Consequences:** Examples stay copy-paste-runnable and the gate stays honest (it covers real
 logic, not a renderer). Pyright flags the `>>` DSL and unused-expression statements in the

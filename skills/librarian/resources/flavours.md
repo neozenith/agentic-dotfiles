@@ -1,12 +1,8 @@
 # Flavours — named convention presets and graduation triggers
 
-A **flavour** is a named, coherent bundle of layout choices sized to a
-project's use case, scale, complexity, and rigour. Init takes a flavour to
-scaffold a new or young repo; the chosen flavour is recorded in
-`docs/CONVENTIONS.md` (Dialect section) and becomes the declared dialect that
-future audits judge against. A repo that has outgrown its declared flavour
-gets **graduation recommendations** — never findings (authority ladder: a
-declared choice is compliant until the maintainer changes it).
+A **flavour** is a named, coherent bundle of layout choices sized to a project's use case, scale, complexity, and rigour.
+Init takes a flavour to scaffold a new or young repo; the chosen flavour is recorded in `docs/CONVENTIONS.md` (Dialect section) and becomes the declared dialect that future audits judge against.
+A repo that has outgrown its declared flavour gets **graduation recommendations** — never findings (authority ladder: a declared choice is compliant until the maintainer changes it).
 
 ## The three flavours
 
@@ -25,16 +21,12 @@ declared choice is compliant until the maintainer changes it).
 | Health files | LICENSE | + SECURITY.md | + CODE_OF_CONDUCT, SUPPORT, GOVERNANCE, CODEOWNERS in `.github/` |
 | Dated docs | as needed | point-in-time docs dated `-YYYY-MM-DD` | dated + segregated from living docs (e.g. `docs/findings/`) |
 
-All three flavours require the core set: README, CONTRIBUTING, CLAUDE.md-role
-file, ADR surface, GLOSSARY.md, and the §2 baseline cross-links (CLAUDE.md →
-ADRs "check before you ask"; CLAUDE.md → GLOSSARY naming + currency
-obligations). Flavours scale the *structure around* the core, never waive it.
+All three flavours require the core set: README, CONTRIBUTING, CLAUDE.md-role file, ADR surface, GLOSSARY.md, and the §2 baseline cross-links (CLAUDE.md → ADRs "check before you ask"; CLAUDE.md → GLOSSARY naming + currency obligations).
+Flavours scale the *structure around* the core, never waive it.
 
 ## Graduation triggers — when to introduce each scale-up element
 
-Audit checks these when the observed repo exceeds its declared flavour, and
-reports them as a "graduation" section of the shelving plan (recommendations,
-severity 🟣, applied only on user acceptance):
+Audit checks these when the observed repo exceeds its declared flavour, and reports them as a "graduation" section of the shelving plan (recommendations, severity 🟣, applied only on user acceptance):
 
 | Element | Introduce when | Graduates toward |
 |---------|----------------|------------------|
@@ -51,21 +43,15 @@ severity 🟣, applied only on user acceptance):
 | Glossary split / per-domain sections | GLOSSARY.md exceeds ~100 terms or serves 2+ bounded contexts | rigorous |
 | `.github/` health-file set | project goes public or takes external contributions | rigorous |
 
-Downscaling is legitimate too: a rigorous layout serving a shrunken project
-(four near-empty Diátaxis buckets — smell M9) gets a consolidation
-recommendation toward the smaller flavour.
+Downscaling is legitimate too: a rigorous layout serving a shrunken project (four near-empty Diátaxis buckets — smell M9) gets a consolidation recommendation toward the smaller flavour.
 
 ## Selecting a flavour (init guidance)
 
 Ask, in order — the first "yes" from the bottom wins:
 
-1. Multiple teams, external contributors, compliance/audit obligations, or a
-   public platform surface? → `rigorous`
+1. Multiple teams, external contributors, compliance/audit obligations, or a public platform surface? → `rigorous`
 2. A team ships and maintains it; others consume it? → `standard`
 3. Otherwise → `minimal`
 
-When init runs on an *existing* repo with a flavour argument, the flavour
-supplies only what the repo hasn't already decided: observed conventions
-still outrank the preset (authority ladder), and every preset-defaulted line
-in CONVENTIONS.md is marked for maintainer veto. A flavour is a starting
-dialect, not an override.
+When init runs on an *existing* repo with a flavour argument, the flavour supplies only what the repo hasn't already decided: observed conventions still outrank the preset (authority ladder), and every preset-defaulted line in CONVENTIONS.md is marked for maintainer veto.
+A flavour is a starting dialect, not an override.

@@ -47,7 +47,7 @@ Required sections, in order (model on a sibling action's README):
    - how to run the engine directly for local iteration (the real command), **and**
    - the single most useful knob / escape hatch (an optional input).
    Every snippet must be copy-pasteable and accurate — verify it before writing it.
-4. **Architecture** — **≥1 Mermaid diagram** authored per the `mermaidjs_diagrams` skill (gates
+4. **Architecture** — **≥1 Mermaid diagram** authored per the `mermaidjs-diagrams` skill (gates
    below). Prefer dual-density: a small inline diagram + a fuller one in a `<details>` block.
 5. **Reference** — the inputs/outputs table (or a link to `action.yml`), the files map, worked
    **examples**, and a **Troubleshooting** table (symptom → cause/fix).
@@ -58,11 +58,11 @@ reusable; project-specific defaults (e.g. a models path) belong in `action.yml` 
 
 ### Architecture diagram rules (non-negotiable)
 
-Governed by the `mermaidjs_diagrams` skill — a diagram is not done until **both** gates exit 0:
+Governed by the `mermaidjs-diagrams` skill — a diagram is not done until **both** gates exit 0:
 
 ```bash
-bun run .claude/skills/mermaidjs_diagrams/scripts/mermaid_contrast.ts   .github/actions/<name>/README.md
-bun run .claude/skills/mermaidjs_diagrams/scripts/mermaid_complexity.ts .github/actions/<name>/README.md
+bun run .claude/skills/mermaidjs-diagrams/scripts/mermaid_contrast.ts   .github/actions/<name>/README.md
+bun run .claude/skills/mermaidjs-diagrams/scripts/mermaid_complexity.ts .github/actions/<name>/README.md
 ```
 
 - Palette from `color_theming.md`: primary nodes use a 600–700 fill with **`stroke:#fff,color:#fff`**;

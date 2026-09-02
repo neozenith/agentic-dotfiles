@@ -15,7 +15,7 @@ Read `resources/escalators-not-stairs.md` now; it governs **every phase**, not j
 gap analysis exists to make **real, demonstrable work** happen — so every gap and every ticket must
 have an **evidenceable real outcome**: a committed artifact produced by running the real code path on
 real input. Bake this into the gaps you draft (Phase 1), the Success Measures
-(Phase 1g), the tickets you decompose (Phase 4), and the validation gates (Phases 3–4e).
+(Phase 1f), the tickets you decompose (Phase 4), and the validation gates (Phases 3–4e).
 
 ## Target Document
 
@@ -33,7 +33,7 @@ or a **GitHub issue reference**.
    - If it has no `README.md`, treat it as a new plan: ask the user to describe the initiative in one
      sentence (the folder name is the slug — confirm or refine it with the user using `kebab-case`),
      then create `README.md` from the index skeleton in `resources/spec-body.md` and `DISCOVERY.md` from
-     the discovery template inside it. Gap and ticket files are added later (gap stubs in Phase 1e,
+     the discovery template inside it. Gap and ticket files are added later (gap stubs in Phase 1c,
      ticket files in Phase 4). Create the directory if it does not exist.
    - **Convenience:** if the directory is a plans *container* (it already holds other plan folders, e.g.
      `docs/plans/`), do not author into it directly — ask the user for the initiative, derive a
@@ -119,37 +119,45 @@ step-by-step playbook**; the steps are:
 
 - **1a — Target setup.** Create the index + Discovery skeleton, or read an existing set and assess
   completeness (local file or GitHub issue).
-- **1b — Dual deep research.** Two parallel subagents: Track A (codebase → Current State), Track B
-  (web/SOTA → Desired State), with every external URL recorded for verification.
-- **1c — Link verification.** Verify every external URL at the highest available tier
-  (`playwright-cli` → `WebFetch` → mark unverified). Hallucination is a critical failure: every claim
-  traces to a `file:line` or a verified URL.
-- **1d — Research synthesis.** Populate Current/Desired State as **2–3 lens diagrams each** (menu in
-  `resources/mermaidjs_diagrams.md`), seed the per-gap increment stack in `DISCOVERY.md`, draft the
-  `G<N>` gaps + stubs, the Overview, the index Gap Map + Dependencies diagrams, and any
-  `<!-- UNRESOLVED -->` ADR placeholders.
-- **1e — Per-gap deep research.** One fresh-context subagent per gap to enrich `## Outputs`
+- **1b — Discovery research (vendored skill).** Run the vendored discovery skill
+  (`vendor/discovery/SKILL.md`) against `<plan>/DISCOVERY.md`: dual parallel research tracks
+  (Track A codebase → Current State, Track B web/SOTA → Desired State), verification of every
+  external URL at the highest available tier, and synthesis into **2–3 paired lens diagrams** per
+  state. Hallucination is a critical failure: every claim traces to a `file:line` or a verified URL.
+- **1c — Gap synthesis.** From the Current/Desired delta, draft the `G<N>` gaps + stubs, seed the
+  per-gap increment stack in `DISCOVERY.md`, the Overview, the index Gap Map + Dependencies
+  diagrams, and any `<!-- UNRESOLVED -->` ADR placeholders.
+- **1d — Per-gap deep research.** One fresh-context subagent per gap to enrich `## Outputs`
   (including the gap's proof-of-execution artifact) and `## Key logic`.
-- **1f — Quality & failure-mode research.** Two subagents: the project's CI gates (→ Success Measures)
+- **1e — Quality & failure-mode research.** Two subagents: the project's CI gates (→ Success Measures)
   and its known gotchas/anti-patterns (→ Negative Measures).
-- **1g — Final assembly.** Populate Success/Negative Measures. Every domain-specific Success Measure is
+- **1f — Final assembly.** Populate Success/Negative Measures. Every domain-specific Success Measure is
   an **executable-evidence escalator** — satisfied only by the gap's committed proof-of-execution
   Output, never by "a test exists" or "it ran". Ensure each gap's `## Outputs` names that artifact.
 
 ### Phase 2: Iterative refinement loop
 
 Settle the open design decisions by asking the human **one maximally-leveraged question at a time**.
-**Read `resources/phase2-refinement.md` for the full step-by-step playbook**; the cycle is:
+The question loop is the **vendored Concise Decisions skill** at `vendor/concise-decisions/` — it owns
+the question contract (self-answering from decision records, ranking, the pragmatic-default test, the
+nine-section briefing, the five-question check, the lens grammar, the TBD routes). This skill owns what
+counts as an ambiguity in a spec and what an answer does to the file set.
+**Read `resources/phase2-refinement.md` for the full step-by-step playbook, and
+`vendor/concise-decisions/SKILL.md` once before the first iteration**; the cycle is:
 
-- **2a — Scan unresolved ADRs.** Collect every `<!-- UNRESOLVED -->` entry across all `G<n>.md` files,
-  and create placeholders for any non-ADR ambiguity (missing details, implicit assumptions).
-- **2b — Rank by cross-gap impact.** Pick the single question whose answer resolves the most ADRs
-  across the most gaps — the key lever for reducing total questions asked.
-- **2c — Ask one question.** Explain why now, which gaps/ADRs it affects, the cascade, and your
-  researched recommendations so the user can confirm a default in one word.
-- **2d — Incorporate the answer.** Settle the affected ADRs into bulleted form, update the index
-  Decisions roll-up, cascade into Outputs/Key logic/Measures and the affected `DISCOVERY.md` diagrams,
-  and restructure the Overview/Gap Map/Dependencies if gaps changed.
+- **2a — Assemble the ambiguity inventory.** Collect every `<!-- UNRESOLVED -->` entry across all
+  `G<n>.md` files, and create placeholders for any non-ADR ambiguity (missing details, implicit
+  assumptions, unpermitted defaults) so the whole open set is rankable at once.
+- **2b — Self-answer, then rank.** Search the spec's own ADRs and markers, then the target project's
+  decision surface (`docs/adrs/`, `CLAUDE.md`/`AGENTS.md` lenses) — an item a record already answers is
+  decided, and is never asked. Rank the rest by how many ADRs across how many gaps the answer resolves,
+  show that ranking, and settle anything that passes the pragmatic-default test yourself.
+- **2c — Ask one question.** Compose it with the vendored loop's shape file, harness adapter, and
+  nine-section template, verbatim — previews are complete outcomes on the spec's real content.
+- **2d — Incorporate the answer.** Settle the affected ADRs into bulleted form with the user's
+  reasoning written as the lens (`Given / We prefer … over … / Because / Unless`), update the index
+  Decisions roll-up, cascade both the choice and the lens into Outputs/Key logic/Measures and the
+  affected `DISCOVERY.md` diagrams, and restructure the Overview/Gap Map/Dependencies if gaps changed.
 - **2e — Re-evaluate.** Fold any new sub-questions into the next ranking; exit when no
   `<!-- UNRESOLVED -->` markers remain and the set is internally consistent.
 
@@ -161,7 +169,7 @@ step-by-step playbook**; the three checks are:
 - **3a — Diagram validation.** `DISCOVERY.md` MUST hold ≥2 Current and ≥2 Desired lens diagrams plus one
   increment diagram per gap; the index MUST hold the Gap Map (`flowchart TD`) and Dependencies
   (`flowchart LR`). Render every diagram-bearing file with mmdc (dark + light, exit 0) and pass the
-  contrast + complexity gates (`resources/mermaidjs_diagrams.md`, `resources/style.md` → Diagrams).
+  contrast + complexity gates (`resources/mermaidjs-diagrams.md`, `resources/style.md` → Diagrams).
 - **3b — Requirement integrity.** Apply `resources/escalators-not-stairs.md` across every gap and ticket:
   every Success Measure is mandatory and falsifiable, every gap names a real proof-of-execution Output,
   every Negative Measure is a concrete Type 2 failure, and no requirement is silently downgraded.
@@ -202,17 +210,27 @@ Phase 2 to rescope. See `resources/phase4-decomposition.md` and the loop-runner 
 
 ## Questioning Principles
 
-- **One question at a time.** Never dump a list of questions. The user should focus
-  on the single most impactful question.
-- **Cascade awareness.** Before asking a question, consider whether the answer to a
-  previous question has already resolved it.
-- **Explain the "why."** Always explain why this question is the most important one
-  right now and what it unblocks.
-- **Converge, don't diverge.** Each iteration should reduce the total number of
-  ambiguities, not increase them. If a question opens up new sub-questions, fold
-  them into the ranking for next iteration — don't ask them all at once.
-- **Know when to stop.** When no ambiguities remain that materially affect the plan's
-  actionability, declare the document complete and move to validation.
+Every question this skill asks — in any phase, not only Phase 2 — is composed with the vendored loop at
+`vendor/concise-decisions/SKILL.md`. These are its principles as they bind here; the vendored surface
+is the authority on the mechanics, and no phase substitutes a cheaper form of question.
+
+- **One question at a time.** Never dump a list of questions, and never a multi-question wizard: answer
+  1 must be able to cascade into 2–n before 2 is asked.
+- **Search before you ask.** A question whose answer was already sitting in an ADR, a settled decision,
+  or a prior user ruling is the failure the loop exists to prevent. Say what you checked.
+- **Cascade awareness.** Before asking, consider whether a previous answer — its *choice* or its
+  *reasoning* — has already resolved it.
+- **Capture the reasoning, not just the choice.** The answer surface must let the user attach their
+  why; that why becomes the ADR's lens, and a codified lens is what lets later questions be
+  self-answered.
+- **Explain the "why now."** Always explain why this is the most impactful question right now, what it
+  unblocks, and which open questions it outranks.
+- **Leave room for a non-decision.** The user must be able to answer `explain`, `show`, `spike`,
+  `defer`/`handoff`, `other`, or `task` without aborting the question.
+- **Converge, don't diverge.** Each iteration should reduce the total number of ambiguities. If a
+  question opens sub-questions, fold them into the ranking for next iteration.
+- **Know when to stop.** When no ambiguities remain that materially affect the plan's actionability,
+  declare the document complete and move to validation.
 
 ## Output Conventions
 
@@ -240,14 +258,14 @@ This skill bundles the following reference documents in its `resources/` directo
 |------|---------|
 | `resources/spec-body.md` | Spec structure — the tiers, the index/gap/ticket/discovery templates, the Execution Plan + Done Criteria, and the index skeleton |
 | `resources/style.md` | Authoring style contract — the voice/format rules every file obeys; read alongside `spec-body.md` before authoring or restyling |
-| `resources/phase1-bootstrap.md` | Phase 1 full playbook — Steps 1a–1g (target setup, dual research, link verification, synthesis, per-gap + quality/failure research, assembly) |
-| `resources/phase2-refinement.md` | Phase 2 full playbook — Steps 2a–2e (scan ADRs, rank by cross-gap impact, ask one question, incorporate, re-evaluate) |
+| `resources/phase1-bootstrap.md` | Phase 1 full playbook — Steps 1a–1f (target setup, vendored discovery research, gap synthesis, per-gap + quality/failure research, assembly) |
+| `resources/phase2-refinement.md` | Phase 2 full playbook — Steps 2a–2e (inventory, self-answer + rank, ask one question via the vendored loop, incorporate the answer and its lens, re-evaluate) |
 | `resources/phase3-validation.md` | Phase 3 full playbook — Steps 3a–3c (diagram lenses + increment gate, requirement integrity, cross-consistency) |
 | `resources/phase4-decomposition.md` | Phase 4 full playbook — Steps 4a–4e (behavior enumeration, ticket structuring, DAG, Execution Plan, validation) + loop-exit conditions |
 | `resources/escalators-not-stairs.md` | Requirement integrity + executable-evidence principles (no stubs, no mocks of the deliverable) — read at the start of planning and applied in every phase |
 | `resources/5ys.md` | 5 Whys root-cause analysis — the precheck before raising a `<!-- CHANGE-REQUEST -->`, and for retrospectives of Type 2 failures |
-| `resources/mermaidjs_diagrams.md` | Mermaid diagram reference — rendering, complexity thresholds, pitfalls |
-| `resources/playwright-cli.md` | Link verification — detection, fallback chain, and unverified markers |
+| `resources/mermaidjs-diagrams.md` | Mermaid diagram reference — rendering, complexity thresholds, pitfalls |
+| `resources/color_theming.md` | Diagram palette source — every diagram derives its colours here, then passes the contrast gate |
 | `resources/gh-cli.md` | GitHub CLI reference — detection, authentication, issue CRUD commands |
 | `resources/gh-issues.md` | GitHub issues backend — local cache, sync protocol, edit history lineage |
 | `resources/tdd/tdd.md` | TDD workflow — red-green-refactor, vertical slicing, anti-patterns. Read at the start of Phase 4 |
@@ -256,6 +274,19 @@ This skill bundles the following reference documents in its `resources/` directo
 | `resources/tdd/interface-design.md` | Testable interface design — accept dependencies, return results, small surface |
 | `resources/tdd/deep-modules.md` | Deep module guidance — small interface, deep implementation |
 | `resources/tdd/refactoring.md` | Refactor candidates — populates the optional ticket `Refactor candidates` field |
+
+The skill also carries a **`vendor/`** directory of wholesale copies of capabilities it needs but does
+not author. They are operated in place and never edited; `vendor/README.md` holds the refresh procedure.
+
+| Vendored | Load when |
+|----------|-----------|
+| `vendor/discovery/SKILL.md` | at Step 1b — it owns the Current/Desired State research (dual tracks, link verification, lens synthesis); its `resources/**` (template, link verification, lens menu) load per its own instructions |
+| `vendor/concise-decisions/SKILL.md` | once before the first Phase 2 iteration — it is the question loop; its `resources/**` (one shape file, one harness adapter, the template, the TBD routes) load on demand per question |
+
+Only `SKILL.md` and `resources/**` are runtime authority — in this skill and in anything vendored.
+`README.md`, `CLAUDE.md`, and `docs/adrs/` are development-time documents for whoever *edits* the skill;
+they are never loaded to run it and never cited as authority during a run. This skill keeps no learning
+store: what it learns becomes an ADR in `CLAUDE.md` **and** a change to a loaded surface.
 
 A skill-root **`CLAUDE.md`** documents how to audit this skill's own usage — using the `introspect`
 skill to extract a timeline of which `resources/*` loaded in a session (and at what token cost) and

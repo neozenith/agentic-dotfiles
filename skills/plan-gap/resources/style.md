@@ -111,14 +111,14 @@ Test/Implementation bullet nest (collapse to table rows).
 Review/background only — the architecture that motivates the gaps, not loaded during the loop. Nav is a
 blockquote-list backlink to the index, followed by a one-line review-only note. Holds `## Current State`
 and `## Desired State` — **each as 2–3 lens diagrams** picked from the menu in
-`resources/mermaidjs_diagrams.md` — and `## Gap Increments`, **one diagram per gap** under the exact
+`resources/mermaidjs-diagrams.md` — and `## Gap Increments`, **one diagram per gap** under the exact
 heading `### G<n> increment`. Gap files link to their increment by anchor (`DISCOVERY.md#g<n>-increment`); the
 diagram never lives inline in the gap (rule 12).
 
 ## Diagrams
 
 - **Lens menu, not one mega-diagram.** Current and Desired State each pick the 2–3 lenses (component,
-  data-flow, sequence, deployment, state, entity — `resources/mermaidjs_diagrams.md`) that genuinely
+  data-flow, sequence, deployment, state, entity — `resources/mermaidjs-diagrams.md`) that genuinely
   illuminate the initiative. Do not force a lens that adds no signal.
 - **Reuse node IDs across the chain.** Current → Desired → every gap increment share node IDs so the
   reader diffs visually. Each increment starts from the prior baseline and highlights only the nodes
@@ -126,7 +126,7 @@ diagram never lives inline in the gap (rule 12).
 - Derive the palette from `resources/color_theming.md`. Use **`fill` + `color` only, no `stroke`** —
   a same-hue stroke fails the 3:1 border check; pick fills dark enough for white text (greens ≥
   `#166534`).
-- Both gates are blockers; run them via `resources/mermaidjs_diagrams.md` before declaring a diagram
+- Both gates are blockers; run them via `resources/mermaidjs-diagrams.md` before declaring a diagram
   done:
   - the **contrast** gate — WCAG AA on every `classDef`/`style`.
   - the **complexity** gate — medium density by default; a Gap Map MAY run detail-density (its 3×N

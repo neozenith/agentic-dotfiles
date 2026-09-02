@@ -365,8 +365,8 @@ labels), never the non-negotiable one (CVD distinguishability).
 ### ADR-006 — Evals deferred
 
 - **Status:** accepted (deferred work)
-- **Context:** `.claude/rules/claude_skills/evals.md` defines the golden/eval
-  contract; building the harness now would have doubled the initial scope.
+- **Context:** the repo's then-current eval contract (since retired) defined a
+  golden/eval harness; building it now would have doubled the initial scope.
 - **Decision:** ship v1 with the free deterministic gate only (`make ci`,
   ≥90% coverage). Eval goldens (render a fixture doc headlessly, assert
   blocks render) are the first follow-up.
@@ -384,7 +384,7 @@ labels), never the non-negotiable one (CVD distinguishability).
   at the sibling skill's scripts; the user overruled it: **richdocs must
   stand on its own — it must not rely on or be aware of sibling skills.**
 - **Decision:** vendor a wholesale copy of the mermaid toolchain at
-  `vendor/mermaidjs_diagrams/` (scripts, tests, Makefile, resources — same
+  `vendor/mermaidjs-diagrams/` (scripts, tests, Makefile, resources — same
   vendoring posture as the stencil zip, ADR-003). SKILL.md mandates running
   the *vendored* `mermaid_complexity.ts` + `mermaid_contrast.ts` on the
   source markdown before `md2html.py`; non-zero exit is a blocker. All
@@ -392,12 +392,12 @@ labels), never the non-negotiable one (CVD distinguishability).
   is in `resources/learned/mermaid-syntax-gate.md`.
 - **Consequences:** ~1.5 MB duplicated; drift from upstream is accepted and
   managed by re-vendoring (see refresh below). Gate needs `bun` +
-  `bun install --cwd vendor/mermaidjs_diagrams/scripts --frozen-lockfile`
+  `bun install --cwd vendor/mermaidjs-diagrams/scripts --frozen-lockfile`
   once. Maintainer docs (this file) may name the upstream for provenance;
   runtime surfaces (SKILL.md, resources) must not.
 - **Refresh procedure:** re-vendor wholesale — `rsync -a --exclude
   node_modules --exclude '.*cache*'` from the upstream skill dir, re-run
-  `bun install --frozen-lockfile` and `make -C …/vendor/mermaidjs_diagrams/
+  `bun install --frozen-lockfile` and `make -C …/vendor/mermaidjs-diagrams/
   scripts test-cov`. Never cherry-pick individual files.
 - **Lens:** when richdocs needs a capability that lives in another skill,
   vendor a wholesale copy into `vendor/` — never link to, invoke, or

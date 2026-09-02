@@ -1,16 +1,24 @@
 # gooddocs — Maintainer Decision Lens
 
-Read the ADR log below before changing anything. Each ADR carries a **Lens** —
-apply it to the next decision instead of re-deriving the trade-off.
+Read the ADR log below before changing anything.
+Each ADR carries a **Lens** — apply it to the next decision instead of re-deriving the trade-off.
 
 ## Development contract
 
-Prose skill + eval suite. Doc gates before handoff, run from repo root:
+Prose skill + eval suite + one TypeScript gate script.
+Doc gates before handoff, run from repo root:
 
 ```sh
-bun run .claude/skills/mermaidjs_diagrams/scripts/mermaid_contrast.ts   .claude/skills/gooddocs/README.md
-bun run .claude/skills/mermaidjs_diagrams/scripts/mermaid_complexity.ts .claude/skills/gooddocs/README.md
+bun run .claude/skills/mermaidjs-diagrams/scripts/mermaid_contrast.ts   .claude/skills/gooddocs/README.md
+bun run .claude/skills/mermaidjs-diagrams/scripts/mermaid_complexity.ts .claude/skills/gooddocs/README.md
 uvx --from md-toc md_toc --in-place --no-list-coherence github --header-levels 4 .claude/skills/gooddocs/README.md
+```
+
+Script changes run the standard loop (`.claude/rules/claude_skills/scripts.md`):
+
+```sh
+make -C .claude/skills/gooddocs/scripts fix
+make -C .claude/skills/gooddocs/scripts ci
 ```
 
 All files ≤ 500 lines (`.claude/rules/claude_skills/index.md`).
@@ -26,12 +34,9 @@ All files ≤ 500 lines (`.claude/rules/claude_skills/index.md`).
 | `resources/voice.md` | Maintainer voice fingerprint — loaded only on `voice` |
 | `resources/slop_smells.md` | Curated AI-slop smell catalog + capture-THE-WHY guidance (lazy; maintainer-grown) |
 | `resources/prose_style.md` | Sentence-level global-audience style: no em-dash, Australian English, short coherent clauses, ESL/translator empathy, inclusive language, standardised domain language (lazy; write/restructure) |
-| `scripts/evals/` | Base eval: drifted-README fixture, golden, runner (via `_evalkit`) |
+| `scripts/prose_gates.ts` | Deterministic prose gate (PG001 wrap, PG002 length, PG003 semicolon list, PG004/PG005 glyphs, PG006-PG009 disguised lists) over mdast; audits markdown-tagged fences recursively; `--fix` reflows sentence-per-line |
 | `CLAUDE.md` | This file — rationale and decision log |
 | `../../workflows/gooddocs-audit.js` | Reusable named **dynamic workflow** wrapping AUDIT (+ safe-fix) for loop/schedule use; reads this skill's doctrine at runtime |
-
-Eval suite (`.claude/rules/claude_skills/evals.md`): `make -C
-.claude/skills/gooddocs/scripts ci` (free), `… evals` (paid golden runs).
 
 ## Architecture principles
 
@@ -44,330 +49,216 @@ Eval suite (`.claude/rules/claude_skills/evals.md`): `make -C
 ### ADR-1: audit is the default mode
 
 - **Status:** Accepted
-- **Context:** "Incorrect documentation is worse than missing documentation"
-  (Write the Docs "Current" principle); stale docs actively mislead, and the
-  user's primary ask was corroborating docs against code reality.
+- **Context:** "Incorrect documentation is worse than missing documentation" (Write the Docs "Current" principle); stale docs actively mislead, and the user's primary ask was corroborating docs against code reality.
 - **Decision:** Bare `/gooddocs` audits; writing requires an explicit target.
-- **Consequences:** The skill never silently rewrites; every write is preceded
-  by at least a mini-audit of carried-forward claims.
-- **Lens:** Any new feature must answer "does this help docs be *true*?"
-  before "does this help docs be *pretty*?" — truth features win ties.
+- **Consequences:** The skill never silently rewrites; every write is preceded by at least a mini-audit of carried-forward claims.
+- **Lens:** Any new feature must answer "does this help docs be *true*?" before "does this help docs be *pretty*?" — truth features win ties.
 
 ### ADR-2: voice is opt-in and layered, not a fork
 
 - **Status:** Accepted
-- **Context:** The maintainer wants docs optionally in his personal voice, but
-  the researched lens discipline must hold either way; duplicating the style
-  principles into a "voice edition" would drift.
-- **Decision:** `resources/voice.md` is loaded only on the `voice` flag and
-  changes register/signature moves only; `lenses.md` always applies.
-- **Consequences:** One source of truth for structure; voice file stays small
-  and personal; default output is brand-agnostic researched style.
-- **Lens:** New style guidance goes in `lenses.md` if it's about *what good
-  docs do*, in `voice.md` only if it's about *how this maintainer sounds*.
+- **Context:** The maintainer wants docs optionally in his personal voice, but the researched lens discipline must hold either way; duplicating the style principles into a "voice edition" would drift.
+- **Decision:** `resources/voice.md` is loaded only on the `voice` flag and changes register/signature moves only; `lenses.md` always applies.
+- **Consequences:** One source of truth for structure; voice file stays small and personal; default output is brand-agnostic researched style.
+- **Lens:** New style guidance goes in `lenses.md` if it's about *what good docs do*, in `voice.md` only if it's about *how this maintainer sounds*.
 
 ### ADR-3: claims are verified by subagents reading code, never by trusting docs
 
 - **Status:** Accepted
-- **Context:** Documentation drift research (just-in-time inconsistency
-  detection, Swimm auto-sync) shows doc claims must be checked against the
-  artifact, not against other prose; LLMs readily "confirm" plausible text.
-- **Decision:** The audit fan-out gives each subagent the doc plus repo
-  access; verdicts require `file:line` or command-output evidence; read-only
-  commands only.
-- **Consequences:** Audits cost subagent tokens; `unverifiable` is an honest
-  verdict category rather than a guess.
-- **Lens:** A claim without evidence is `unverifiable`, never `confirmed` —
-  if adding a new claim type to the check table, define its evidence form
-  first.
+- **Context:** Documentation drift research (just-in-time inconsistency detection, Swimm auto-sync) shows doc claims must be checked against the artifact, not against other prose; LLMs readily "confirm" plausible text.
+- **Decision:** The audit fan-out gives each subagent the doc plus repo access; verdicts require `file:line` or command-output evidence; read-only commands only.
+- **Consequences:** Audits cost subagent tokens; `unverifiable` is an honest verdict category rather than a guess.
+- **Lens:** A claim without evidence is `unverifiable`, never `confirmed` — if adding a new claim type to the check table, define its evidence form first.
 
 ### ADR-4: survey-derived principles live in one lazy resource
 
 - **Status:** Accepted
-- **Context:** The 23-project survey and lens taxonomy are reference material;
-  inlining them in SKILL.md would bloat the always-loaded surface past the
-  point an agent reads it.
-- **Decision:** SKILL.md keeps operations; `lenses.md` keeps the taxonomy,
-  principles, and survey, loaded on first use.
-- **Consequences:** SKILL.md stays under two screens; principles are citable
-  by number ("principle 3: negative space").
-- **Lens:** SKILL.md carries *how to operate*; anything an agent consults
-  rather than executes goes to `resources/`.
+- **Context:** The 23-project survey and lens taxonomy are reference material; inlining them in SKILL.md would bloat the always-loaded surface past the point an agent reads it.
+- **Decision:** SKILL.md keeps operations; `lenses.md` keeps the taxonomy, principles, and survey, loaded on first use.
+- **Consequences:** SKILL.md stays under two screens; principles are citable by number ("principle 3: negative space").
+- **Lens:** SKILL.md carries *how to operate*; anything an agent consults rather than executes goes to `resources/`.
 
 ### ADR-5: restructure is a distinct mode that never touches claims
 
 - **Status:** Accepted
-- **Context:** The maintainer wants the skill to improve the *structural*
-  readability of existing docs and spec/plan files. Folding this into write
-  mode would invite silent rewording of technical content during what should
-  be a shape-only operation; structure has its own evidence base (layer-cake
-  scanning, ~20-28% of words read, 4±1 chunking) and its own rulebook.
-- **Decision:** A third mode with a hard contract: outline-first proposal,
-  claims preserved verbatim, suspected-wrong claims flagged for audit rather
-  than fixed inline. Rules live in `resources/structure.md`, which also feeds
-  write mode (step 3). Whitespace guidance is justified by chunking/scanning
-  evidence only — the widely-cited "Lin 2004 whitespace +20% comprehension"
-  number is a debunked secondary-referencing error and must not be cited.
-- **Consequences:** Restructure PRs are reviewable as pure moves; meaning
-  changes can't hide inside reformatting (the same two-hats discipline the
-  `refactor` skill applies to code).
-- **Lens:** Shape changes and content changes never share a pass — if a
-  restructure tempts you to fix a claim, that's a mode switch the user must
-  see, not a drive-by edit.
+- **Context:** The maintainer wants the skill to improve the *structural* readability of existing docs and spec/plan files.
+  Folding this into write mode would invite silent rewording of technical content during what should be a shape-only operation; structure has its own evidence base (layer-cake scanning, ~20-28% of words read, 4±1 chunking) and its own rulebook.
+- **Decision:** A third mode with a hard contract: outline-first proposal, claims preserved verbatim, suspected-wrong claims flagged for audit rather than fixed inline.
+  Rules live in `resources/structure.md`, which also feeds write mode (step 3).
+  Whitespace guidance is justified by chunking/scanning evidence only — the widely-cited "Lin 2004 whitespace +20% comprehension" number is a debunked secondary-referencing error and must not be cited.
+- **Consequences:** Restructure PRs are reviewable as pure moves; meaning changes can't hide inside reformatting (the same two-hats discipline the `refactor` skill applies to code).
+- **Lens:** Shape changes and content changes never share a pass — if a restructure tempts you to fix a claim, that's a mode switch the user must see, not a drive-by edit.
 
-### ADR-6: visuals are curated dual-density; authoring delegates to mermaidjs_diagrams
+### ADR-6: visuals are curated dual-density; authoring delegates to mermaidjs-diagrams
 
 - **Status:** Accepted
-- **Context:** The maintainer's practice: lots of diagrams to break up text
-  walls and visually encode information, with simplified diagrams shown
-  top-level and ultra-detailed variants hidden in `<details><summary>` blocks
-  (opt-in cascading detail). The repo already has a dedicated
-  `mermaidjs_diagrams` skill owning palette, WCAG contrast, and complexity
-  gates; duplicating that knowledge here would drift.
-- **Decision:** structure.md rules 16-17 encode the technique (diagram +
-  one-sentence prose summary; dual-density pair with inviting `<summary>`
-  labels). All diagram *authoring* is delegated to a subagent that invokes
-  the `mermaidjs_diagrams` skill; gooddocs only decides where a visual earns
-  its place and at what density.
-- **Consequences:** gooddocs output inherits the gate guarantees without
-  owning them; diagram-style changes happen in one skill and propagate.
-- **Lens:** When gooddocs needs a capability another skill owns (diagrams,
-  TOCs via mdtoc), it orchestrates that skill — it never reimplements it.
+- **Context:** The maintainer's practice: lots of diagrams to break up text walls and visually encode information, with simplified diagrams shown top-level and ultra-detailed variants hidden in `<details><summary>` blocks (opt-in cascading detail).
+  The repo already has a dedicated `mermaidjs-diagrams` skill owning palette, WCAG contrast, and complexity gates; duplicating that knowledge here would drift.
+- **Decision:** structure.md rules 16-17 encode the technique (diagram + one-sentence prose summary; dual-density pair with inviting `<summary>` labels).
+  All diagram *authoring* is delegated to a subagent that invokes the `mermaidjs-diagrams` skill; gooddocs only decides where a visual earns its place and at what density.
+- **Consequences:** gooddocs output inherits the gate guarantees without owning them; diagram-style changes happen in one skill and propagate.
+- **Lens:** When gooddocs needs a capability another skill owns (diagrams, TOCs via mdtoc), it orchestrates that skill — it never reimplements it.
   New techniques enter as *placement rules* here, *rendering rules* there.
 
 ### ADR-7: the audience ladder is the top-level axis; Diátaxis is within-rung; purity softened
 
-- **Status:** Accepted (2026-06; amends ADR-4's content and the original
-  "non-negotiable" purity stance)
-- **Context:** The maintainer clarified that "lenses" meant the three-stage
-  learning ladder (Quickstart → User Guides → API Reference = Beginner →
-  Intermediate → Expert). Red-team research confirmed: major docs sites put
-  the ladder at top-level nav with Diátaxis types inside rungs; Diátaxis's
-  own author disclaims per-page purity; whole genres don't fit the four
-  types; scannability evidence is about lookup tasks, not learning.
-- **Decision:** Two-axis classification (rung × lens). Scannability/summary-first at
-  full force on lookup rungs, relaxed on learning rungs. Purity is a default
-  with sanctioned escapes (deliberate fusion, small-project single README,
-  overview/FAQ/gallery categories).
-- **Consequences:** Audit severity became claim-type × rung-traffic; write
-  mode picks rung before lens.
-- **Lens:** When classifying a doc, ask "who is the reader and how much do
-  they already know" (rung) before "what are they trying to do" (lens) —
-  and never enforce a framework harder than its own author does.
+- **Status:** Accepted (2026-06; amends ADR-4's content and the original "non-negotiable" purity stance)
+- **Context:** The maintainer clarified that "lenses" meant the three-stage learning ladder (Quickstart → User Guides → API Reference = Beginner → Intermediate → Expert).
+  Red-team research confirmed: major docs sites put the ladder at top-level nav with Diátaxis types inside rungs; Diátaxis's own author disclaims per-page purity; whole genres don't fit the four types; scannability evidence is about lookup tasks, not learning.
+- **Decision:** Two-axis classification (rung × lens).
+  Scannability/summary-first at full force on lookup rungs, relaxed on learning rungs.
+  Purity is a default with sanctioned escapes (deliberate fusion, small-project single README, overview/FAQ/gallery categories).
+- **Consequences:** Audit severity became claim-type × rung-traffic; write mode picks rung before lens.
+- **Lens:** When classifying a doc, ask "who is the reader and how much do they already know" (rung) before "what are they trying to do" (lens) — and never enforce a framework harder than its own author does.
 
 ### ADR-8: audits are adversarial and execution-first
 
 - **Status:** Accepted (2026-06; hardens ADR-3)
-- **Context:** Sycophancy research: LLMs confirm plausible claims at high
-  rates and judges are swayed by detailed-but-wrong reasoning; a real
-  file:line citation can fail to entail the claim it decorates.
-- **Decision:** Subagent briefs say "find evidence this claim is FALSE";
-  executable checks outrank reading; verdicts split `confirmed-by-execution`
-  vs `confirmed-by-reading (LLM judgment, not proof)`; remediation is
-  fix-or-flag, never delete.
-- **Consequences:** Audits report honest confidence tiers; a "clean" audit is
-  never presented as ground truth.
-- **Lens:** A claim is only as confirmed as the strongest *non-LLM* mechanism
-  that checked it; design every new check to maximize the executable share.
+- **Context:** Sycophancy research: LLMs confirm plausible claims at high rates and judges are swayed by detailed-but-wrong reasoning; a real file:line citation can fail to entail the claim it decorates.
+- **Decision:** Subagent briefs say "find evidence this claim is FALSE"; executable checks outrank reading; verdicts split `confirmed-by-execution` vs `confirmed-by-reading (LLM judgment, not proof)`; remediation is fix-or-flag, never delete.
+- **Consequences:** Audits report honest confidence tiers; a "clean" audit is never presented as ground truth.
+- **Lens:** A claim is only as confirmed as the strongest *non-LLM* mechanism that checked it; design every new check to maximize the executable share.
 
 ### ADR-9: code is authoritative; drift is continuous, so is the audit
 
 - **Status:** Accepted (2026-06)
-- **Context:** The reason gooddocs exists is that **code is the source of truth
-  and docs go stale.** The maintainer wants to keep drift low by running the
-  skill in another process — a `loop` or a schedule — *while working*, not as a
-  rare one-shot sweep.
-- **Decision:** State the premise explicitly: when doc and code disagree the
-  doc is stale by default; the only exception is a doc that is a spec/contract
-  the code violates (flag, don't "fix"). Design for **repeated, scoped** runs
-  against actively-edited files, and wrap the audit fan-out as a reusable named
-  dynamic workflow (`.claude/workflows/gooddocs-audit.js`) for loop/schedule use.
-- **Consequences:** Audit accepts an explicit path set (the loop case) instead
-  of always globbing; "doc is stale" as the default is what makes
-  non-interactive autofix tractable at all.
-- **Lens:** When doc and code disagree, fix the doc unless it is a spec the code
-  violates — and prefer a small scoped run you can repeat over a big one-shot.
+- **Context:** The reason gooddocs exists is that **code is the source of truth and docs go stale.** The maintainer wants to keep drift low by running the skill in another process — a `loop` or a schedule — *while working*, not as a rare one-shot sweep.
+- **Decision:** State the premise explicitly: when doc and code disagree the doc is stale by default; the only exception is a doc that is a spec/contract the code violates (flag, don't "fix").
+  Design for **repeated, scoped** runs against actively-edited files, and wrap the audit fan-out as a reusable named dynamic workflow (`.claude/workflows/gooddocs-audit.js`) for loop/schedule use.
+- **Consequences:** Audit accepts an explicit path set (the loop case) instead of always globbing; "doc is stale" as the default is what makes non-interactive autofix tractable at all.
+- **Lens:** When doc and code disagree, fix the doc unless it is a spec the code violates — and prefer a small scoped run you can repeat over a big one-shot.
 
 ### ADR-10: documentation includes in-code docs; the audit ports to a workflow
 
 - **Status:** Accepted (2026-06)
-- **Context:** Docstrings and explanatory comments are documentation and drift
-  identically to `.md`; and the audit fan-out is orchestration-shaped, so it
-  ports to a deterministic dynamic workflow that can run headless on a schedule.
-- **Decision:** Audit scope includes in-code docs (each unit tagged
-  `markdown` or `in-code`). The workflow encodes *orchestration* in JS while
-  *doctrine* (claim table, smell catalog) stays in the skill and the workflow's
-  agents **read it at runtime** — one source of truth. The audit's read-only
-  invariant is enforced by giving verifier agents a read-only agent type, not by
-  trusting a prompt.
-- **Consequences:** Comments/docstrings get the same drift/slop/why scrutiny;
-  the skill stays the doctrine and the workflow the orchestrator, never
-  duplicating rules.
-- **Lens:** When a skill's value is parallel fan-out, port *that* to a workflow
-  and have it read the skill's doctrine — never copy the rules into the
-  orchestrator, or they drift from each other.
+- **Context:** Docstrings and explanatory comments are documentation and drift identically to `.md`; and the audit fan-out is orchestration-shaped, so it ports to a deterministic dynamic workflow that can run headless on a schedule.
+- **Decision:** Audit scope includes in-code docs (each unit tagged `markdown` or `in-code`).
+  The workflow encodes *orchestration* in JS while *doctrine* (claim table, smell catalog) stays in the skill and the workflow's agents **read it at runtime** — one source of truth.
+  The audit's read-only invariant is enforced by giving verifier agents a read-only agent type, not by trusting a prompt.
+- **Consequences:** Comments/docstrings get the same drift/slop/why scrutiny; the skill stays the doctrine and the workflow the orchestrator, never duplicating rules.
+- **Lens:** When a skill's value is parallel fan-out, port *that* to a workflow and have it read the skill's doctrine — never copy the rules into the orchestrator, or they drift from each other.
 
 ### ADR-11: slop is a curated, maintainer-grown catalog; pruning it is the one sanctioned deletion
 
 - **Status:** Accepted (2026-06)
-- **Context:** AI-authored docs accrete recognizable **slop** — self-addressed
-  task notes, deletable filler, hard-coded value lists that duplicate code and
-  make refactors expensive. The maintainer will grow this list over time as new
-  smells surface.
-- **Decision:** `resources/slop_smells.md` is an append-only catalog with a
-  fixed entry template; audit emits `category: slop` findings; **pruning
-  identified slop is allowed**, whereas deleting *drifted* content is not (that
-  stays fix-or-flag).
-- **Consequences:** The skill sharpens as the catalog grows with zero code
-  changes; deletion stays principled.
-- **Lens:** Separate "content that should not exist" (slop → prune) from
-  "content that is stale" (drift → fix-or-flag); only the former may be deleted.
+- **Context:** AI-authored docs accrete recognizable **slop** — self-addressed task notes, deletable filler, hard-coded value lists that duplicate code and make refactors expensive.
+  The maintainer will grow this list over time as new smells surface.
+- **Decision:** `resources/slop_smells.md` is an append-only catalog with a fixed entry template; audit emits `category: slop` findings; **pruning identified slop is allowed**, whereas deleting *drifted* content is not (that stays fix-or-flag).
+- **Consequences:** The skill sharpens as the catalog grows with zero code changes; deletion stays principled.
+- **Lens:** Separate "content that should not exist" (slop → prune) from "content that is stale" (drift → fix-or-flag); only the former may be deleted.
   Every line must survive the delete test; value lists live in code, not prose.
 
 ### ADR-12: THE WHY is captured in-context as a decision lens; why-gaps are flag-only
 
 - **Status:** Accepted (2026-06)
-- **Context:** Code and docs capture *what* and *how* but rarely *why a thing
-  exists*. The maintainer curates ADRs precisely to **accumulate the project's
-  values**, which become the decision lens for future work — and the richest
-  WHY is often the language used while prompting, which should be preserved
-  "like a letter to a future reader."
+- **Context:** Code and docs capture *what* and *how* but rarely *why a thing exists*.
+  The maintainer curates ADRs precisely to **accumulate the project's values**, which become the decision lens for future work — and the richest WHY is often the language used while prompting, which should be preserved "like a letter to a future reader."
 - **Decision:** WHY is a first-class authoring obligation (a cross-cutting rule
-  + a write-mode step): a short WHY beside the code in critical places, bigger
-  reasons as ADRs. Audit emits `category: why-gap` for critical places missing
-  it, but why-gaps are **flag-only** and safe-autofix **never fabricates
-  rationale.**
-- **Consequences:** The decision lens travels with the context; the skill can
-  detect a missing WHY but will not invent one.
-- **Lens:** When something is non-obvious, record *why* it is so (not just what)
-  next to it, and treat the maintainer's prompting prose as primary source for
-  that WHY. A machine may flag a missing WHY; only a human may supply it.
+  + a write-mode step): a short WHY beside the code in critical places, bigger reasons as ADRs.
+    Audit emits `category: why-gap` for critical places missing it, but why-gaps are **flag-only** and safe-autofix **never fabricates rationale.**
+- **Consequences:** The decision lens travels with the context; the skill can detect a missing WHY but will not invent one.
+- **Lens:** When something is non-obvious, record *why* it is so (not just what) next to it, and treat the maintainer's prompting prose as primary source for that WHY.
+  A machine may flag a missing WHY; only a human may supply it.
 
 ### ADR-13: em-dashes are slop, never a voice signature
 
 - **Status:** Accepted (2026-06; corrects voice.md rule 13)
-- **Context:** The voice fingerprint (rule 13) listed "spaced em-dash
-  appositions" as a maintainer signature move, and a `voice` pass duly seeded a
-  doc with ~25 em-dashes. The maintainer flagged this as "classic AI slop" that
-  "is wrong and slipped in." The em-dash is the most recognisable
-  AI-authorship tell in prose; endorsing it in the voice file actively
-  manufactured the smell the slop catalog exists to prune.
-- **Decision:** Remove the em-dash endorsement from voice.md; ban `—` outright
-  in rule 13 and in "deliberately absent". Promote em-dash to a first-class slop
-  smell (S4) with no parenthetical carve-out, so audit and write modes catch it
-  everywhere. An en-dash in a numeric range stays legitimate.
-- **Consequences:** A `voice` pass now strips em-dashes instead of adding them;
-  S3 (interpunct) defers the em-dash to S4. The two resources agree.
-- **Lens:** A voice signature must never be a known authorship tell. When a
-  voice habit and a slop smell collide, the slop catalog wins, and the fix is to
-  delete the habit from voice.md, not to carve an exception into the smell.
+- **Context:** The voice fingerprint (rule 13) listed "spaced em-dash appositions" as a maintainer signature move, and a `voice` pass duly seeded a doc with ~25 em-dashes.
+  The maintainer flagged this as "classic AI slop" that "is wrong and slipped in." The em-dash is the most recognisable AI-authorship tell in prose; endorsing it in the voice file actively manufactured the smell the slop catalog exists to prune.
+- **Decision:** Remove the em-dash endorsement from voice.md; ban `—` outright in rule 13 and in "deliberately absent".
+  Promote em-dash to a first-class slop smell (S4) with no parenthetical carve-out, so audit and write modes catch it everywhere.
+  An en-dash in a numeric range stays legitimate.
+- **Consequences:** A `voice` pass now strips em-dashes instead of adding them; S3 (interpunct) defers the em-dash to S4.
+  The two resources agree.
+- **Lens:** A voice signature must never be a known authorship tell.
+  When a voice habit and a slop smell collide, the slop catalog wins, and the fix is to delete the habit from voice.md, not to carve an exception into the smell.
 
 ### ADR-14: gravitas adjectives are slop; state the consequence instead
 
 - **Status:** Accepted (2026-07)
-- **Context:** The maintainer flagged phrases like "load-bearing idea" and
-  "hard-fought idea" as AI slop. They are the lexical cousin of the em-dash
-  (ADR-13): a model reaches for them because they *sound* like an author who
-  earned the scar, but they assert importance without evidence a reader can
-  check. Worse than filler, they stand in for the WHY, so the author is
-  excused from writing the consequence that would have proved the claim.
-- **Decision:** Add slop smell S5 (borrowed-gravitas phrases) with a greppable,
-  growable phrase family. Audit prunes the phrase, then asks whether it was
-  masking a `why-gap`: if the importance was real, it is replaced with the named
-  consequence or an ADR pointer; if not, the sentence goes.
-- **Consequences:** Write, restructure, and voice passes all strip these
-  phrases. S5 explicitly hands off to the why-gap category rather than deleting
-  a real rationale, keeping ADR-12 intact (autofix never invents a WHY).
-- **Lens:** When prose *claims* something matters, demand the consequence. If
-  the doc cannot name what breaks when the thing moves, the adjective was
-  decoration, and decoration fails the S2 delete test. Importance is shown, not
-  asserted.
+- **Context:** The maintainer flagged phrases like "load-bearing idea" and "hard-fought idea" as AI slop.
+  They are the lexical cousin of the em-dash (ADR-13): a model reaches for them because they *sound* like an author who earned the scar, but they assert importance without evidence a reader can check.
+  Worse than filler, they stand in for the WHY, so the author is excused from writing the consequence that would have proved the claim.
+- **Decision:** Add slop smell S5 (borrowed-gravitas phrases) with a greppable, growable phrase family.
+  Audit prunes the phrase, then asks whether it was masking a `why-gap`: if the importance was real, it is replaced with the named consequence or an ADR pointer; if not, the sentence goes.
+- **Consequences:** Write, restructure, and voice passes all strip these phrases.
+  S5 explicitly hands off to the why-gap category rather than deleting a real rationale, keeping ADR-12 intact (autofix never invents a WHY).
+- **Lens:** When prose *claims* something matters, demand the consequence.
+  If the doc cannot name what breaks when the thing moves, the adjective was decoration, and decoration fails the S2 delete test.
+  Importance is shown, not asserted.
 
 ### ADR-15: global-audience prose style is its own lazy resource; detection stays tooling-agnostic
 
 - **Status:** Accepted (2026-07)
-- **Context:** Sentence-level discipline (Australian English, no em-dash, short
-  coherent clauses, ESL/translator readability, inclusive language, standardised
-  domain language) is a distinct concern from the structural lens taxonomy
-  (`lenses.md`) and the pruning catalogue (`slop_smells.md`). It governs how one
-  sentence reads, not the page's shape or what to delete. Folding it into either
-  would blur two concerns.
-- **Decision:** Add `resources/prose_style.md`, loaded lazily during write and
-  restructure. Write mode applies it in full; restructure applies only the
-  meaning-preserving subset (em-dash removal, spelling, an inclusive-term swap, a
-  single non-claim-altering split), because ADR-5 forbids reword during shape-only
-  passes. ESL/translator readability is made an evaluable check (proxy metrics or
-  a round-trip translation), not an adjective. The resource states **what** to
-  detect, never **which command** finds it; tooling is the running agent's choice.
-- **Consequences:** SKILL.md write mode gained a step; restructure and
-  cross-cutting rules gained a scoped pointer.
-- **Lens:** Sentence-mechanics go in `prose_style.md`; page-shape in
-  `structure.md`; content-to-delete in `slop_smells.md`; register in `voice.md`.
-  When a rule is about how one sentence reads for the hardest reader (ESL,
-  translator, skimmer), it belongs in prose_style, and when a rule needs
-  enforcing, describe the target, not the tool. Shared doctrine is copied into
-  this skill, never referenced from anywhere outside its own folder.
+- **Context:** Sentence-level discipline (Australian English, no em-dash, short coherent clauses, ESL/translator readability, inclusive language, standardised domain language) is a distinct concern from the structural lens taxonomy (`lenses.md`) and the pruning catalogue (`slop_smells.md`).
+  It governs how one sentence reads, not the page's shape or what to delete.
+  Folding it into either would blur two concerns.
+- **Decision:** Add `resources/prose_style.md`, loaded lazily during write and restructure.
+  Write mode applies it in full; restructure applies only the meaning-preserving subset (em-dash removal, spelling, an inclusive-term swap, a single non-claim-altering split), because ADR-5 forbids reword during shape-only passes.
+  ESL/translator readability is made an evaluable check (proxy metrics or a round-trip translation), not an adjective.
+  The resource states **what** to detect, never **which command** finds it; tooling is the running agent's choice.
+- **Consequences:** SKILL.md write mode gained a step; restructure and cross-cutting rules gained a scoped pointer.
+- **Lens:** Sentence-mechanics go in `prose_style.md`; page-shape in `structure.md`; content-to-delete in `slop_smells.md`; register in `voice.md`.
+  When a rule is about how one sentence reads for the hardest reader (ESL, translator, skimmer), it belongs in prose_style, and when a rule needs enforcing, describe the target, not the tool.
+  Shared doctrine is copied into this skill, never referenced from anywhere outside its own folder.
 
 ### ADR-16: jargon acronyms are slop; "BLUF" is banned in favour of plain words
 
 - **Status:** Accepted (2026-07)
-- **Context:** The skill's doctrine used "BLUF" throughout to name the
-  frontloaded-summary rule. The maintainer flagged it as AI slop: a
-  military/consulting acronym no regular person uses, absorbed from
-  writing-advice blogs. Like the em-dash (ADR-13), its presence signals
-  machine authorship and forces the reader to decode an acronym that adds
-  nothing over "Summary".
-- **Decision:** Purge "BLUF" from every gooddocs surface; use "Summary",
-  "Overview", or behaviour descriptions ("frontloaded summary", "summary
-  first", "opening summary"). Add slop smell S6 (insider jargon acronyms) so
-  audit and write modes catch the family, not just this word.
-- **Consequences:** Skeletons say `<Summary: …>`; the frontloading rule is
-  named by what it does, not by an acronym. Note structure.md's smell table
-  still flags "Overview" as a *vague heading label*: the ban is on the
-  acronym, not a mandate to head every section "Overview".
-- **Lens:** Name a rule by the behaviour it demands, in words the reader
-  already knows. When doctrine vocabulary itself trips an authorship-tell
-  test, replace the word everywhere and add it to the slop catalog so it
-  cannot re-enter.
+- **Context:** The skill's doctrine used "BLUF" throughout to name the frontloaded-summary rule.
+  The maintainer flagged it as AI slop: a military/consulting acronym no regular person uses, absorbed from writing-advice blogs.
+  Like the em-dash (ADR-13), its presence signals machine authorship and forces the reader to decode an acronym that adds nothing over "Summary".
+- **Decision:** Purge "BLUF" from every gooddocs surface; use "Summary", "Overview", or behaviour descriptions ("frontloaded summary", "summary first", "opening summary").
+  Add slop smell S6 (insider jargon acronyms) so audit and write modes catch the family, not just this word.
+- **Consequences:** Skeletons say `<Summary: …>`; the frontloading rule is named by what it does, not by an acronym.
+  Note structure.md's smell table still flags "Overview" as a *vague heading label*: the ban is on the acronym, not a mandate to head every section "Overview".
+- **Lens:** Name a rule by the behaviour it demands, in words the reader already knows.
+  When doctrine vocabulary itself trips an authorship-tell test, replace the word everywhere and add it to the slop catalog so it cannot re-enter.
+
+### ADR-17: the plain-text file is an index too; sentence-per-line, no mid-sentence wraps, no semicolon lists
+
+- **Status:** Accepted (2026-08)
+- **Context:** The maintainer's readability directives: the way the plain-text markdown reads as an indexed structure, as well as the rendered file, is critical for readability.
+  A column-wrap inside a sentence severs one coherent thought across lines.
+  Sentences of ~25 words or fewer fit a screen naturally, so short sentences do the fitting that wrapping pretended to.
+  Dense multi-clause sentences raise unpacking cost and hurt ESL readers and translators; semicolon-delimited runs are a wall of text hiding a list.
+- **Decision:** structure.md rule 13 mandates semantic line breaks (one sentence per source line, never a mid-sentence wrap) instead of offering a column-wrap alternative. prose_style.md gains two hard mechanics (sentence-per-line; no semicolon lists, promote to bullets) and the clause inequality: (fewer clauses + more sentences) beats (more clauses + fewer sentences).
+- **Consequences:** Write and restructure passes reflow existing wrapped prose to sentence-per-line as a shape-only change; diffs become one-thought-sized.
+  Delivered as `scripts/prose_gates.ts` (mdast-based per the parser research: code and tables exempt by construction), run as audit step 1b with findings at the `confirmed-by-execution` tier.
+- **Lens:** Author for two renderings at once: the terminal reader of the raw file and the browser reader of the rendered file.
+  A rule that only serves one of them is half a rule.
+
+### ADR-18: restructuring is part of auditing; disguised lists are a growing rule family
+
+- **Status:** Accepted (2026-08)
+- **Context:** The maintainer kept meeting the same failure during audits: structural findings (hidden lists, wrapped sentences) were reported but their remediation waited for a separate restructure invocation that rarely came.
+  Meanwhile each new hidden-list variant (interpunct run, inline lettered enumeration, comma-joined labelled run, stacked link runs needing nesting) surfaced as a one-off manual fix.
+- **Decision:** Audit gains step 1c: the structure-smell diagnosis runs with every audit, prose-gate findings fold into it as `category: structure`, and mechanical shape fixes are applied in the same pass under restructure discipline (claims verbatim).
+  Whole-doc reshapes stay a standalone restructure invocation, flagged from audit with a proposed outline.
+  Each new disguised-list variant becomes a deterministic PG rule (PG006-PG009 so far) rather than a remembered judgment call.
+- **Consequences:** An audit is never "clean" while known structure smells stand; the PG family grows one small named check per failure mode; template bodies inside markdown-tagged fences are audited recursively so templates meet the same bar.
+- **Lens:** When the maintainer corrects the same shape failure twice, encode it as a deterministic gate rule in the same change — and let audit both detect and (mechanically) repair shape, reserving standalone restructure for outline-scale work.
 
 ## Extension checklist
 
-- [ ] New claim types added to the SKILL.md check table define their evidence
-      form (ADR-3).
-- [ ] Global-audience prose applied in write mode; meaning-preserving subset only
-      in restructure (ADR-15, `prose_style.md`); detection left tooling-agnostic.
-- [ ] ESL/translator readability is evaluated, not assumed: a proxy metric or a
-      round-trip translation that preserves meaning (ADR-15).
-- [ ] No gravitas adjectives ("load-bearing", "hard-fought/won", "key insight",
-      "crucially") in authored prose (ADR-14, slop S5); name the consequence.
-- [ ] No new em-dash (`—`) in any authored doc or skill prose (ADR-13, slop S4);
-      use comma, colon, parentheses, or two sentences.
+- [ ] New claim types added to the SKILL.md check table define their evidence form (ADR-3).
+- [ ] Global-audience prose applied in write mode; meaning-preserving subset only in restructure (ADR-15, `prose_style.md`); detection left tooling-agnostic.
+- [ ] ESL/translator readability is evaluated, not assumed: a proxy metric or a round-trip translation that preserves meaning (ADR-15).
+- [ ] No gravitas adjectives ("load-bearing", "hard-fought/won", "key insight", "crucially") in authored prose (ADR-14, slop S5); name the consequence.
+- [ ] No new em-dash (`—`) in any authored doc or skill prose (ADR-13, slop S4); use comma, colon, parentheses, or two sentences.
 - [ ] Style additions routed per ADR-2 (lenses vs voice).
 - [ ] Audit remains read-only — no new check may execute a mutating command.
-- [ ] New slop smells follow the `slop_smells.md` entry template; pruning slop
-      is the only sanctioned deletion (ADR-11).
-- [ ] In-code docs (comments/docstrings) audited with the same rigor as `.md`
-      (ADR-10); `why-gap` findings stay flag-only — autofix never invents a WHY
-      (ADR-12).
-- [ ] Audit-orchestration changes update `../../workflows/gooddocs-audit.js`;
-      doctrine stays in the skill, not copied into the workflow (ADR-10).
+- [ ] New slop smells follow the `slop_smells.md` entry template; pruning slop is the only sanctioned deletion (ADR-11).
+- [ ] In-code docs (comments/docstrings) audited with the same rigor as `.md` (ADR-10); `why-gap` findings stay flag-only — autofix never invents a WHY (ADR-12).
+- [ ] Audit-orchestration changes update `../../workflows/gooddocs-audit.js`; doctrine stays in the skill, not copied into the workflow (ADR-10).
 - [ ] Both mermaid gates + mdtoc re-run if README touched; all files ≤ 500 lines.
 
 ## Known gotchas
 
-- `git log -1 -- <doc>` vs code-dir dates is a heuristic: a doc younger than
-  the code can still be wrong, and an old doc can be perfectly current — age
-  only prioritizes, never verdicts.
-- Link checkers rate-limit on external URLs; spot-check externals, fully check
-  internals.
-- Lens classification of legacy pages is often "mixed" — the verdict is a
-  split proposal, not a forced single label.
-- The voice file deliberately contains no project nouns (agnostic rule); if an
-  excerpt would leak one, genericize it before adding.
-- The workflow's read-only audit guarantee comes from the verifier **agent
-  type** (no Edit/Write tool), not the prompt. Swap the agent type and you can
-  silently break the read-only invariant (ADR-8/ADR-10) — the prompt won't save
-  you.
-- Safe-autofix (`mode=fix`) edits **documentation text only** (markdown prose or
-  comment/docstring text) and requires drift `authority=code` before touching a
-  claim; it must never change executable code. `why-gap` is never auto-applied.
+- `git log -1 -- <doc>` vs code-dir dates is a heuristic: a doc younger than the code can still be wrong, and an old doc can be perfectly current — age only prioritizes, never verdicts.
+- Link checkers rate-limit on external URLs; spot-check externals, fully check internals.
+- Lens classification of legacy pages is often "mixed" — the verdict is a split proposal, not a forced single label.
+- The voice file deliberately contains no project nouns (agnostic rule); if an excerpt would leak one, genericize it before adding.
+- The workflow's read-only audit guarantee comes from the verifier **agent type** (no Edit/Write tool), not the prompt.
+  Swap the agent type and you can silently break the read-only invariant (ADR-8/ADR-10) — the prompt won't save you.
+- Safe-autofix (`mode=fix`) edits **documentation text only** (markdown prose or comment/docstring text) and requires drift `authority=code` before touching a claim; it must never change executable code. `why-gap` is never auto-applied.

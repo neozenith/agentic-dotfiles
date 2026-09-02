@@ -60,17 +60,17 @@ Any doc containing ` ```mermaid ` fences MUST pass this skill's **vendored**
 parse + contrast gates **on the source markdown, before `md2html.py`**:
 
 ```bash
-bun run .claude/skills/richdocs/vendor/mermaidjs_diagrams/scripts/mermaid_complexity.ts SOURCE.md
-bun run .claude/skills/richdocs/vendor/mermaidjs_diagrams/scripts/mermaid_contrast.ts SOURCE.md
+bun run .claude/skills/richdocs/vendor/mermaidjs-diagrams/scripts/mermaid_complexity.ts SOURCE.md
+bun run .claude/skills/richdocs/vendor/mermaidjs-diagrams/scripts/mermaid_contrast.ts SOURCE.md
 ```
 
 First run only: `bun install --cwd
-.claude/skills/richdocs/vendor/mermaidjs_diagrams/scripts --frozen-lockfile`.
+.claude/skills/richdocs/vendor/mermaidjs-diagrams/scripts --frozen-lockfile`.
 
 Non-zero exit is a blocker — `ParserFailure … yielded 0 nodes` means the
 fence is invalid mermaid and will render as a broken block in the companion.
 `md2html.py` passes fences through verbatim; it cannot catch this for you.
-The vendored `vendor/mermaidjs_diagrams/SKILL.md` documents both tools in
+The vendored `vendor/mermaidjs-diagrams/SKILL.md` documents both tools in
 full (profiles, complexity presets, authoring pitfalls like quoted mindmap
 labels and HTML entities). Prior adjudications on this class of failure live
 in `resources/learned/` — treat them as already-decided, don't re-litigate.
@@ -223,7 +223,7 @@ Beyond standard markdown + ` ```mermaid `, the HTML companion renders:
 | `scripts/md2html.py` | Paired markdown → rich HTML generator |
 | `assets/stencils.json.zip` | Vendored draw.io icon library (see `assets/NOTICE`) |
 | `assets/design-tokens.json` | Default neutral brandpack |
-| `vendor/mermaidjs_diagrams/` | Vendored mermaid toolchain: parse/complexity gate, WCAG contrast gate, color-theming references, render script |
+| `vendor/mermaidjs-diagrams/` | Vendored mermaid toolchain: parse/complexity gate, WCAG contrast gate, color-theming references, render script |
 | `resources/learned/` | Prior adjudications and self-taught facts — read before re-litigating |
 
 richdocs is self-contained: every tool and reference it operates with lives

@@ -2,7 +2,6 @@
 
 This is the **environments** child of the skill/rule family rooted at
 [`index.md`](index.md). Siblings: [`scripts.md`](scripts.md) (code contract),
-[`evals.md`](evals.md) (which simulates these tiers),
 [`statefulness.md`](statefulness.md) (what persists per environment).
 
 Skills run in environments with wildly different capabilities. Helper scripts

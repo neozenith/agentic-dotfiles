@@ -1,8 +1,7 @@
 # Universal Baseline — "compliant" when no local dialect is declared
 
-This is the researched default the librarian falls back to when a repo has no
-`docs/CONVENTIONS.md` and no strong observable dialect of its own. A declared
-local dialect always outranks this baseline (SKILL.md, discovery ladder).
+This is the researched default the librarian falls back to when a repo has no `docs/CONVENTIONS.md` and no strong observable dialect of its own.
+A declared local dialect always outranks this baseline (SKILL.md, discovery ladder).
 
 Research date: 2026-07 (sources in [evidence.md](evidence.md)).
 
@@ -23,76 +22,56 @@ Every project must carry these, regardless of size:
 
 Presence alone is not compliance — key documents must reference each other:
 
-- **CLAUDE.md → ADR surface.** The CLAUDE.md must point at the sibling ADR
-  surface with a "check before you ask" instruction: when facing ambiguity,
-  consult existing decisions and self-answer before raising an open question.
+- **CLAUDE.md → ADR surface.** The CLAUDE.md must point at the sibling ADR surface with a "check before you ask" instruction: when facing ambiguity, consult existing decisions and self-answer before raising an open question.
   New binding decisions are recorded back as ADRs.
-- **Root CLAUDE.md → `docs/CONVENTIONS.md`** when that file exists (see
-  [conventions_template.md](conventions_template.md)). The conventions file
-  is the repo's declared documentation dialect; the agent entry point must
-  route to it.
-- **CLAUDE.md → GLOSSARY.md, with two standing instructions**: (a)
-  *cross-reference naming* — new identifiers, docs, and prose use the
-  glossary's canonical terms, never ad-hoc synonyms; (b) *keep it current* —
-  when a new domain term enters the conversation or the code, add it to the
-  glossary in the same change. The glossary only works as a shared-language
-  contract if the agent file makes both obligations explicit.
-- **README → CONTRIBUTING.** The README links contributors onward; it never
-  absorbs contributor policy.
-- **README as hub.** A thin root README routes to detailed docs that live
-  near the code they describe. Every non-trivial directory earns a
-  `README.md` index (GitHub renders it as the free landing page).
-- **ADR immutability.** Accepted decisions are never rewritten; a new
-  decision supersedes with a cross-link.
+- **Root CLAUDE.md → `docs/CONVENTIONS.md`** when that file exists (see [conventions_template.md](conventions_template.md)).
+  The conventions file is the repo's declared documentation dialect; the agent entry point must route to it.
+- **CLAUDE.md → GLOSSARY.md, with two standing instructions**:
+    - (a) *cross-reference naming* — new identifiers, docs, and prose use the glossary's canonical terms, never ad-hoc synonyms
+    - (b) *keep it current* — when a new domain term enters the conversation or the code, add it to the glossary in the same change.
+      The glossary only works as a shared-language contract if the agent file makes both obligations explicit.
+- **README → CONTRIBUTING.** The README links contributors onward; it never absorbs contributor policy.
+- **README as hub.** A thin root README routes to detailed docs that live near the code they describe.
+  Every non-trivial directory earns a `README.md` index (GitHub renders it as the free landing page).
+- **ADR immutability.** Accepted decisions are never rewritten; a new decision supersedes with a cross-link.
 
 ## 3. Recognised locations and precedence
 
-GitHub resolves community health files by precedence: **`.github/` first,
-then repo root, then `docs/`** — first match wins. Practical split:
+GitHub resolves community health files by precedence: **`.github/` first, then repo root, then `docs/`** — first match wins.
+Practical split:
 
-- **Human-first files stay at root**: `README.md`, `LICENSE`, `CHANGELOG.md`,
-  and usually `CONTRIBUTING.md` (large projects keep it at root as a signpost
-  into deeper contributor docs).
-- **Machine/process files go in `.github/`**: `CODEOWNERS`, `FUNDING.yml`,
-  issue/PR templates (location mandatory), workflows.
-- **`SECURITY.md`, `CODE_OF_CONDUCT.md`, `SUPPORT.md`, `GOVERNANCE.md`**:
-  any of the three recognised locations; root or `.github/` both fine —
-  a *fourth* location (e.g. `docs/community/`) breaks platform surfacing
-  and is a placement finding.
+- **Human-first files stay at root**: `README.md`, `LICENSE`, `CHANGELOG.md`, and usually `CONTRIBUTING.md` (large projects keep it at root as a signpost into deeper contributor docs).
+- **Machine/process files go in `.github/`**: `CODEOWNERS`, `FUNDING.yml`, issue/PR templates (location mandatory), workflows.
+- **`SECURITY.md`, `CODE_OF_CONDUCT.md`, `SUPPORT.md`, `GOVERNANCE.md`**: any of the three recognised locations; root or `.github/` both fine — a *fourth* location (e.g. `docs/community/`) breaks platform surfacing and is a placement finding.
 - **`CHANGELOG.md`**: root, Keep-a-Changelog format is the de facto standard.
 
 ## 4. The docs/ tree
 
-- **Diátaxis is the default taxonomy** for a `docs/` tree that has outgrown
-  the README: `tutorials/` (learning), `how-to/` (task), `reference/`
-  (information), `explanation/` (understanding). Folder names themselves
-  declare the dialect.
-- **Small projects (< ~10 pages) get one good sectioned README**, not four
-  near-empty buckets. Premature taxonomy is itself a finding.
-- **Separate contributor docs from user docs** (Django's `internals/`,
-  Kubernetes' dedicated community repo). A user hitting release-process docs
-  while learning the API is the symptom of the missing split.
-- **Docs-as-code**: anything that changes with the code ships in the repo
-  with the code. External wikis/drives referenced as canonical are a
-  placement finding.
-- **RFC/proposal trees** (`docs/rfcs/`, `docs/proposals/`) are distinct from
-  ADRs: an RFC is a pre-decision discussion artifact (mutable in review); an
-  ADR is a post-decision record (immutable). Keep both roles separate.
+- **Diátaxis is the default taxonomy** for a `docs/` tree that has outgrown the README:
+  - `tutorials/` (learning)
+  - `how-to/` (task)
+  - `reference/` (information)
+  - `explanation/` (understanding)
+
+  Folder names themselves declare the dialect.
+- **Small projects (< ~10 pages) get one good sectioned README**, not four near-empty buckets.
+  Premature taxonomy is itself a finding.
+- **Separate contributor docs from user docs** (Django's `internals/`, Kubernetes' dedicated community repo).
+  A user hitting release-process docs while learning the API is the symptom of the missing split.
+- **Docs-as-code**: anything that changes with the code ships in the repo with the code.
+  External wikis/drives referenced as canonical are a placement finding.
+- **RFC/proposal trees** (`docs/rfcs/`, `docs/proposals/`) are distinct from ADRs: an RFC is a pre-decision discussion artifact (mutable in review); an ADR is a post-decision record (immutable).
+  Keep both roles separate.
 
 ## 5. Agent-file conventions
 
-- **AGENTS.md is the cross-harness standard** (Linux Foundation, 60k+ repos);
-  CLAUDE.md is what Claude Code reads natively. Compliant repos have **one
-  source of truth** with the other name as a symlink, or a CLAUDE.md whose
-  first line imports AGENTS.md (`@AGENTS.md`) followed by harness-specific
-  extras. Two divergent full copies is a finding.
-- **Router, not warehouse**: target under ~200 lines at root; exact
-  build/test commands, layout by directory purpose, hard "never" boundaries,
-  and *pointers* into `docs/` — never pasted conventions an existing doc or
-  linter already owns. Each fact lives in exactly one document.
-- **Nesting**: per-directory agent files override the root for their subtree
-  (closest file to the edited code wins). Subtree invariants belong in a
-  subtree agent file, not appended to the root.
+- **AGENTS.md is the cross-harness standard** (Linux Foundation, 60k+ repos); CLAUDE.md is what Claude Code reads natively.
+  Compliant repos have **one source of truth** with the other name as a symlink, or a CLAUDE.md whose first line imports AGENTS.md (`@AGENTS.md`) followed by harness-specific extras.
+  Two divergent full copies is a finding.
+- **Router, not warehouse**: target under ~200 lines at root; exact build/test commands, layout by directory purpose, hard "never" boundaries, and *pointers* into `docs/` — never pasted conventions an existing doc or linter already owns.
+  Each fact lives in exactly one document.
+- **Nesting**: per-directory agent files override the root for their subtree (closest file to the edited code wins).
+  Subtree invariants belong in a subtree agent file, not appended to the root.
 
 ## 6. Naming rules
 
@@ -109,12 +88,14 @@ then repo root, then `docs/`** — first match wins. Practical split:
 
 Both compliant; the repo declares its pick in `docs/CONVENTIONS.md`:
 
-- **Single-file log** (`ADRs.md`): suits small projects and agent-context
-  logs; may federate into scoped logs (a log beside each subtree it governs,
-  nearest log up the tree wins) with the root file as index.
-- **File-per-decision** (`adrs/` or `docs/adr/` or `docs/decisions/`):
-  diffable, linkable, explicit supersession; the scale default. Carry an
-  index (`README.md` table: number, title, status, date).
-- Migration between layouts is a librarian APPLY operation: mechanical,
-  content-preserving, index regenerated, inbound `ADR-NNNN` citations kept
-  resolvable.
+- **Single-file log** (`ADRs.md`): suits small projects and agent-context logs; may federate into scoped logs (a log beside each subtree it governs, nearest log up the tree wins) with the root file as index.
+- **File-per-decision** (`adrs/` or `docs/adr/` or `docs/decisions/`): diffable, linkable, explicit supersession; the scale default.
+  Carry an index (`README.md` table: number, title, status, date).
+- Migration between layouts is a librarian APPLY operation: mechanical, content-preserving, index regenerated, inbound `ADR-NNNN` citations kept resolvable.
+
+**Layout is where records live; format is what one record looks like.** The two are separate dialect lines, and a repo declares each.
+The preferred format for a single record is [adr_template.md](adr_template.md): a metadata table, a `Lens` blockquote carrying the reusable rule, then `Problem` / `Decision` / `Consequences` under their own headings.
+It applies to both layouts, as a file in file-per-decision and as a section in a single-file log.
+
+Treat it as the rung-3 default, per the authority ladder: a declared or consistently observed local format outranks it, and an existing record is never rewritten to match.
+The audit uses it to name what a **structurally** incomplete record is missing (no status, no decision statement, no reasoning), never to judge how good the reasoning is.

@@ -18,30 +18,30 @@ With parallel AI research agents, verified citations (reduce hallucinated refere
 flowchart LR
     USER(["User Brief"])
 
-    subgraph P1b["Phase 1b: Broad Research"]
+    subgraph P1b["Phase 1b: Discovery Research (vendored skill)"]
         TA["Track A - Current State<br/>Codebase Explorer"]
         TB["Track B - Future State<br/>SOTA + Prior Art"]
+        LV["Link Verification<br/>(playwright-cli<br/>or WebFetch)"]
     end
 
-    LV["Phase 1c: Link Verification<br/>(playwright-cli<br/>or WebFetch)"]
-    SYN["Phase 1d: Identify<br/>Top-Level G&lt;N&gt; Gaps"]
+    SYN["Phase 1c: Identify<br/>Top-Level G&lt;N&gt; Gaps"]
 
-    subgraph P1e["Phase 1e: Per-Gap Deep Dive"]
+    subgraph P1e["Phase 1d: Per-Gap Deep Dive"]
         G1A["G1<br/>Agent"]
         G2A["G2<br/>Agent"]
         GNA["G..N<br/>Agent"]
     end
 
-    subgraph P1f["Phase 1f: Success Measures"]
+    subgraph P1f["Phase 1e: Success Measures"]
         QA["Quality<br/>Standards<br/>Agent"]
         FM["Failure<br/>Modes<br/>Agent"]
     end
 
     subgraph P2["Phase 2: Refinement"]
-        ADR["Scan Unresolved<br/>ADRs"]
-        Q["Ask Most <b>Impactful</b><br/>Question"]
-        HITL(["Human<br/>Answer"])
-        INC["Integrate Answer<br/>Across All Relevant Questions<br/>and Resolve ADRs"]
+        ADR["Inventory Ambiguity,<br/>Self-Answer from<br/>Decision Records, Rank"]
+        Q["Ask Most <b>Impactful</b><br/>Question<br/>(vendored decision loop)"]
+        HITL(["Human Answer<br/>+ Reasoning"])
+        INC["Integrate Choice <b>and</b> Lens<br/>Across All Relevant Questions<br/>and Resolve ADRs"]
     end
 
     subgraph P3["Phase 3: Validation"]
@@ -104,12 +104,12 @@ flowchart LR
     style P3 fill:#04785722,stroke:#10b981,color:#6ee7b7
 ```
 
-- **Parallel broad research** — codebase explorer + SOTA web researcher run simultaneously
+- **Parallel broad research** — codebase explorer + SOTA web researcher run simultaneously. The Current/Desired State research discipline is the Discovery skill, vendored wholesale into `vendor/discovery/` so this skill stands alone
 - **Anti-hallucination** — every external URL verified via playwright-cli or WebFetch before citation
 - **Per-gap deep dive** — N agents in parallel, each with fresh context focused on one gap
 - **Quality + failure discovery** — agents scan your CI gates, agentic rules, and memory for codified standards and historical gotchas
-- **ADR-driven questions** — unresolved decisions tracked per gap; the skill picks the single question that resolves the most ADRs across all gaps simultaneously
-- **Human-in-the-loop** — you answer one focused question per iteration; the skill propagates your answer across all affected sections
+- **ADR-driven questions** — unresolved decisions tracked per gap; the skill searches existing decision records first (the spec's own ADRs, prior rulings, your project's `docs/adrs/` and `CLAUDE.md` lenses) and only then picks the single question that resolves the most ADRs across all gaps simultaneously
+- **Human-in-the-loop** — you answer one focused question per iteration, with a full briefing and one answer surface that captures your choice *and* your reasoning; the skill propagates both across all affected sections. Every answer may also be a non-decision — `explain`, `show`, `spike`, `defer`, `other`, `task` — without aborting the question. The question loop is the Concise Decisions skill, vendored wholesale into `vendor/concise-decisions/` so this skill stands alone
 - **Executable evidence — no stubs, no mocks of the deliverable** — every gap's Outputs include a *proof-of-execution* artifact produced by running the real code path on real input (the tracer bullet produces it); a ticket that can only ship a stub triggers a 5-Whys root-cause check (`resources/5ys.md`), and a `<!-- CHANGE-REQUEST -->` only if a genuine plan defect is confirmed — the `/loop` stops and returns to refinement
 
 ## Document Structure
