@@ -99,3 +99,20 @@ npx skills@latest add neozenith/agentic-dotfiles -s dadjoke -y
 /dadjoke kubernetes                         # Claude Code
 $dadjoke five Q&A jokes about kubernetes    # Codex
 ```
+
+## Hooks
+
+### tool_coach
+
+A `PreToolUse` hook that turns a dead-end "permission denied" into a redirect:
+every blocked call comes back with the thing to do instead, so the model stops
+retrying near-miss variants. Structural checks (no deletions, no scratch space
+outside the project) parse the command's argv; tool-choice coaching lives in an
+editable rules file. Stdlib only.
+
+See [hooks/README.md](hooks/README.md) for what it checks and how to wire it
+into `settings.json`.
+
+```sh
+make hooks-test
+```

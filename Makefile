@@ -1,4 +1,4 @@
-.PHONY: help xharness-local xharness-pypi xharness-status evals
+.PHONY: help xharness-local xharness-pypi xharness-status evals hooks-test
 
 TOGGLE := uv run --no-sync scripts/toggle_xharness_eval_editable.py
 
@@ -7,6 +7,7 @@ help:
 	@echo "xharness-pypi    use the published pytest-xharness-eval release, then uv sync"
 	@echo "xharness-status  print which source pyproject.toml currently points at"
 	@echo "evals            run the paid skill eval matrix (uv run pytest skills/*/evals)"
+	@echo "hooks-test       run the PreToolUse hook test suite with coverage"
 
 # Both toggles are idempotent: re-running in the current state is a no-op edit
 # followed by a no-op sync. `uv sync` re-locks when pyproject.toml drifts from
@@ -40,3 +41,10 @@ evals-report:
 	@test -f skills/$(SKILL)/evals/captured/report.html || { echo "no captured report for $(SKILL); run make evals first"; exit 1; }
 	@echo "open http://localhost:8765/report.html"
 	python3 -m http.server 8765 --directory skills/$(SKILL)/evals/captured
+
+# The PreToolUse hook in hooks/. Stdlib-only and self-contained: `--no-project`
+# keeps uv from adopting this repo's env, and the test file's PEP-723 header
+# declares pytest itself.
+hooks-test:
+	uv run --no-project hooks/test_tool_coach.py \
+		--cov=tool_coach --cov-report=term-missing --cov-fail-under=90

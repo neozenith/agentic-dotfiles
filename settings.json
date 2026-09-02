@@ -71,11 +71,13 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash|Write|Edit|NotebookEdit",
+        "matcher": "Bash|Write|Edit|NotebookEdit|Read",
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/scripts/guard_filesystem.py\""
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/tool_coach.py\"",
+            "timeout": 10,
+            "statusMessage": "Checking the call against this project's working agreements…"
           }
         ]
       }

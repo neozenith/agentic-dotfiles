@@ -1,0 +1,40 @@
+{
+  "_comment": [
+    "Pattern rules for the tool_coach PreToolUse hook (hooks/tool_coach.py).",
+    "Each rule: a regex matched against the Bash `command` string, after heredoc",
+    "bodies have been stripped. First match wins. On match the tool call is DENIED",
+    "and `message` is shown to the model as the redirect (a permissionDecisionReason).",
+    "The goal is to replace a dead-end 'permission denied' with a 'do THIS instead'",
+    "so the model stops retrying variants.",
+    "",
+    "Deletions and out-of-project paths are NOT rules here: they are structural",
+    "checks in tool_coach.py, which parses the command's argv so it also catches",
+    "the wrapped, absolute-path and pipeline forms a regex would miss.",
+    "",
+    "Order matters: put more-specific patterns above broader ones (the inline-snippet",
+    "rule must precede the bare-interpreter rule). Edit this file freely - no code",
+    "change needed. Patterns are Python `re` syntax."
+  ],
+  "rules": [
+    {
+      "name": "no-python-dash-c",
+      "pattern": "\\bpython3?\\b[^\\n;&|]*\\s-c(?:\\b|=|$)",
+      "message": "Blocked: an inline -c snippet. Ad-hoc inline code leaves no auditable trace of what ran. Instead, write a real script FILE under tmp/ (for example tmp/<descriptive_name>.py) and run it with `uv run tmp/<descriptive_name>.py`. Treat the script as a named artifact you can re-read, diff and re-run. This applies to every variant, including the ones wrapped in `uv run`."
+    },
+    {
+      "name": "no-bare-python",
+      "pattern": "(?:^|[\\n;&|()]|&&|\\|\\|)\\s*(?:sudo\\s+)?(?:[\\w./-]*/)?python3?\\b",
+      "message": "Blocked: a direct interpreter invocation. This environment standardizes on uv so the correct virtualenv is always active. Run a module with `uv run -m <pkg.module>`, a script with `uv run <script.py>`, or for a subproject `uv run --directory <subproject> ...`. Re-run through uv rather than calling the interpreter directly."
+    },
+    {
+      "name": "no-pythonpath",
+      "pattern": "\\bPYTHONPATH=",
+      "message": "Blocked: setting the PYTHONPATH= environment variable. Let uv manage the import path instead of injecting it manually - use `uv run` (or `uv run --directory <subproject>`), which activates the right environment and resolves imports correctly."
+    },
+    {
+      "name": "no-timeout-binary",
+      "pattern": "(?:^|[\\n;&|()`]|&&|\\|\\|)\\s*(?:sudo\\s+)?timeout\\b",
+      "message": "Blocked: the timeout(1) binary. Use the Bash tool's own timeout parameter (in milliseconds) to bound a command instead of wrapping it in the timeout executable."
+    }
+  ]
+}
