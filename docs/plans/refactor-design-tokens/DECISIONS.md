@@ -1,0 +1,512 @@
+# Decisions — design-token refactor
+
+Maintainer decisions taken during the `ce-brainstorm` run started 2026-08-30.
+Each entry records the choice **and the reasoning as a four-clause lens**, so a later
+session can tell when the decision stopped applying.
+
+Status of the five topics is tracked in [`README.md`](README.md). Research dossiers that
+ground these decisions are in [`research/`](research/).
+
+---
+
+## DT-LOC-1 — the curated profile store is shared across skills
+
+- **Status:** decided 2026-09-02 (user-directed, chosen over per-skill and hybrid stores)
+- **Decision:** the two **user-curated** tiers are a single shared store that every skill
+  in this family reads. `{skill_name}` does **not** appear in their paths. The
+  **shipped** tiers stay inside each skill, unchanged, and remain skill-scoped by
+  construction.
+
+  ```text
+  1  <project>/.design-profiles/<name>/          shared, project-local
+  2  ~/.design-profiles/<name>/                  shared, user-global
+  3  <project>/.{codex,claude}/skills/<skill>/resources/profile/<name>/
+  4  ~/.{codex,claude}/skills/<skill>/resources/profile/<name>/
+  5  <skill>/resources/themes/<name>/            shipped backstop (always terminates)
+  ```
+
+  Lookup **cascades on miss**: a named profile absent from a tier is sought in the next.
+  The directory name `.design-profiles/` is provisional — the *scope* is decided, the
+  spelling is not.
+
+- **Rejected alternatives:**
+  - **Per-skill stores** (`.richdocs_cache/`, `.mermaidjs-diagrams_cache/`) — simple and
+    keeps each skill in its own lane, but a brand must be curated twice and kept in sync
+    by hand, and the vendored `skills/richdocs/vendor/mermaidjs-diagrams/` copy has no
+    defined store to read.
+  - **Hybrid cascade** (per-skill tiers *then* shared tiers, 7 deep) — allows a
+    skill-specific tweak to shadow a shared brand, at the cost of more locations to keep
+    in sync and machinery to sync them.
+
+- **Lens:**
+  - **Given** the maintainer uses `richdocs` and `mermaidjs-diagrams` together often, and
+    a curated brand profile is written rarely and then read many times,
+  - **we prefer** one shared, set-and-forget profile repository **over** per-skill stores
+    or a hybrid cascade,
+  - **because** a single location makes sharing simpler by construction rather than by
+    discipline, and removes the need for any sync machinery — which for these use cases
+    is not a value add,
+  - **unless** the two skills' profile schemas diverge far enough that one profile can no
+    longer satisfy both, at which point the shared store stops being set-and-forget.
+
+- **Consequences:**
+  - `richdocs`' vendored mermaid toolchain resolves to the same store as its host —
+    the ambiguity that per-skill stores left open does not arise.
+  - One profile must satisfy **both** skills' needs, so the schema is a superset; a
+    surface that does not use a group ignores it.
+  - Curation (topic 4) is **one act**, not one per skill.
+  - Ripple (topic 5) generates **one** artifact covering every surface, not one per skill.
+  - ADR-009's no-symlink portability contract is untouched — it binds tier 5 only.
+  - `richdocs` ADR-018's two-root search (`tmp/richdocs/theme/` → built-in) is superseded
+    by the five-tier cascade above; its *lens* (an optional additive override dir resolved
+    by precedence, degrading to fully self-contained when absent) is preserved and
+    extended.
+
+### Derived rule — one resolver, used twice
+
+Applied as a pragmatic default under DT-LOC-1's lens, not separately asked:
+`.default-profile` resolves its named profile through **the same cascade** as an explicit
+`--theme`. There is one lookup function; the default path and the explicit path differ
+only in where the name comes from. A `.default-profile` naming a profile that resolves in
+a later tier is a hit, not an error; a name that resolves nowhere fails loudly.
+
+---
+
+## DT-PIPE-1 — three artifacts, two transforms; only DTCG is read at runtime
+
+- **Status:** stated by the maintainer 2026-09-02 and confirmed on playback. This is the
+  maintainer's own model, not an agent proposal.
+- **Supersedes:** the framing of DT-OVR-1, which was withdrawn. There is no patch layer
+  and no fork command; override is a position in this pipeline, not a separate mechanism.
+
+### The pipeline
+
+```text
+  SEED                    IR                        DTCG JSON
+  ────                    ──                        ─────────
+  very small set     ──▶  complete spec        ──▶  the only artifact
+  primary + secondary     every permutation:        skills read at
+  accent, plus a few      golden walk,              runtime
+  more (not locked)       cytoscape, deck.gl,
+                          drawio, light/dark
+       │                       │                         │
+   scrapeable              hand-editable            hand-editable
+   from a website          iterate here             fine-tune here
+                                │                         │
+                        curation script            build / templating
+                        maximises WCAG + CVD       script
+                        pragmatically
+```
+
+### The rules
+
+1. **Only the final DTCG JSON is read at runtime.** Skills never see the seed or the IR.
+2. **DTCG is fully regenerable from a valid IR.** The IR is what the user keeps and
+   iterates on, project-local or user-global.
+3. **A valid DTCG carries values for every permutation.** No gaps, nothing computed at
+   load.
+4. **WCAG and CVD checks do not run when loading a DTCG.** Editing it is a hard choice
+   the user made; the system does not second-guess it.
+5. **The gates run at curation time instead** — seed → IR maximises WCAG and CVD to a
+   *pragmatic*, not necessarily optimum, level.
+6. **The seed exists to make scraping useful.** Grab a brand's colours from their
+   website, extrapolate to a full IR. Candidate seed attributes are drawn from
+   `diagram-design`'s semantic roles; the exact set is **not locked yet**.
+7. **Both the IR and the DTCG are hand-editable.** Editing either is legitimate — the IR
+   regenerates, the DTCG does not.
+
+### Consequences
+
+- **Topic 3 (override) is closed.** Override *is* editing your IR and rebuilding, or
+  editing the DTCG directly. "Eject" has a precise meaning: eject from the seed by
+  editing the IR; eject from the IR by editing the DTCG.
+- **The gates become generative, not policing** — consistent with the maintainer's
+  standing ruling that rules impute what a pack does not state and never police what it
+  does. Imputation happens in curation; after that the values are stated, and stated
+  values are final.
+- **`themecheck.py`'s pack-validity role moves to curation.** ADR-016's per-theme
+  `waivers.seriesContrast` mechanism becomes unnecessary — nothing gates the thing a
+  waiver was written to excuse.
+- **Neither skill needs a shared gate**, which sidesteps `skills/CLAUDE.md`
+  self-containment entirely: each skill reads a complete DTCG file. The complexity lives
+  in a curation tool, not in either skill.
+
+### Open, explicitly not decided
+
+Both items below have moved on since this entry was written; see
+[`OPEN-QUESTIONS.md`](OPEN-QUESTIONS.md) for their live state.
+
+- **Seed contents** — the role vocabulary is now locked by DT-ROLES-1, and the neutral and accent
+  parameters by DT-REF-1 and DT-ACCENT-1. What *else* the seed carries is still deliberately small
+  and unlocked.
+- **Render-time contrast gates** — `scripts/mermaid_contrast.ts` must survive; where it fires is
+  Q8, which depends on Q6.
+
+---
+
+## DT-BUILD-1 — curation bakes every surface into the IR; build only serialises
+
+- **Status:** decided 2026-09-02 (user-directed, chosen over build-time expansion and
+  load-time skill mapping)
+- **Decision:** curation produces a **semantically complete `ir.json`** — every surface
+  present: golden-walk categorical colours, cytoscape, plotly, deck.gl, draw.io, mermaid,
+  light and dark. The build step is a pure transform: IR → DTCG, adding no design
+  knowledge. Per-surface tuning happens by editing the IR, which is the durable editing
+  surface.
+
+- **The seed is optional.** `seed.json` is an on-ramp — it exists so a scraped brand can
+  be extrapolated into a full IR. A hand-authored `ir.json` with no seed at all is a
+  first-class, fully valid profile. The **IR is the root of the system**, not the seed.
+
+  ```text
+  ~/.design-profiles/<name>/
+    seed.json            OPTIONAL — the scrape on-ramp
+    ir.json              the root artifact; semantically complete; hand-editable
+    design-tokens.json   DTCG; built from ir.json; the only file skills read
+  ```
+
+- **Rejected alternatives:**
+  - **Build expands per-surface** (IR holds roles + walk params only) — a new surface
+    would be free for every profile, but per-surface tuning would have to happen in the
+    DTCG, the one file a rebuild overwrites. Contradicts iterating on the IR.
+  - **Each skill maps roles at load** (industry norm, Style Dictionary platforms) —
+    breaks DT-PIPE-1 rule 3, reintroduces load-time computation, and duplicates mapping
+    logic across two self-contained skills.
+
+- **Lens:**
+  - **Given** the maintainer iterates on a profile by hand over time, and a profile's
+    value is that every surface it paints stays consistent,
+  - **we prefer** a semantically complete IR that curation fills and build merely
+    serialises, **over** an IR of parameters expanded at build time,
+  - **because** it makes the file the user edits the same file that holds every value
+    they might want to change — tuning is direct, and nothing they tune is overwritten by
+    a rebuild,
+  - **unless** curation stops being additive-only, at which point re-running it would
+    destroy the hand edits that are the whole point of the IR.
+
+- **Consequences:**
+  - **Curation must be idempotent and additive** — it imputes what is absent and never
+    overwrites what is stated. This is the maintainer's standing ruling #2, now
+    load-bearing rather than advisory. A new surface is added by re-running curation on
+    an existing IR: the absent group is imputed, the stated groups are untouched.
+  - **The build step holds no design knowledge.** It converts a compact hand-editable
+    shape into the spec-conformant DTCG serialisation and validates completeness.
+  - "A valid profile" means a valid **IR**; a valid DTCG is what falls out of it.
+  - `mermaid_contrast.ts` has mermaid values to check in both the IR and the DTCG —
+    placement is still open, but not for lack of a checkable surface.
+
+---
+
+## DT-NEUTRAL-1 — neutrals are pure greys stated as lightness
+
+> **Superseded in part by DT-REF-1**, which moves the colour space to OKLCH and re-anchors the
+> bases. The chroma-0 / hue-0 ruling and the fixed-increment model below still stand; the HSL
+> percentages quoted in this entry do not. Read DT-REF-1 for the live values.
+
+- **Status:** stated by the maintainer 2026-09-02, corrected the same day
+- **Decision:** neutrals lock **hue 0 and saturation 0** — pure greys, not hue-tinted.
+  Roles are stated as HSL lightness percentages. The step size (5%) may be exposed as an
+  optional `seed.json` parameter.
+
+  ```text
+  role          dark    light
+  bg-dark         0%     100%
+  bg              5%      95%
+  bg-light       10%      90%
+  text-muted     70%      30%
+  text           95%       5%
+  ```
+
+- **Supersedes** two earlier drafts: `CURATION.md` stage 1's hue-tinted warm neutral (the
+  agent's guess, following `diagram-design`; not the maintainer's model), and an earlier
+  transcription of this ramp as 5/10/15 + 85/90/95, which the maintainer corrected.
+
+- **Verified** by `tmp/check_neutral_ramp.py`:
+  - Every stated pairing reaches **AAA (7:1)** except one — `text-muted` on `bg-light` in
+    **light** mode, at 6.80:1 (AA only). Dark mode's same pairing is 8.30:1.
+  - **The light/dark mirror is NOT contrast-exact.** Only `bg × text` matches (17.43:1
+    both ways, because it is the same two values swapped). Every pairing involving the
+    interior value differs: `bg × text-muted` is 9.23:1 dark but 7.63:1 light. Relative
+    luminance is not symmetric under `L → 100−L` — sRGB's transfer function means a given
+    lightness step near black moves far less luminance than the same step near white.
+    **Light mode is systematically weaker under a lightness mirror.**
+  - The 60-point gap between `bg-light` and `text-muted` has **ample room for a border**
+    at 3:1 — dark needs 35–40%, light needs 51–58%, all inside the gap.
+  - `text-muted` is conservative: AAA needs only 59–65% in dark mode against the stated
+    70%, so there is headroom to go softer.
+
+  *(An earlier claim in this session that "the mirror is exact" was wrong; it was measured
+  on the superseded ramp, where every tested pair was the same two numbers swapped.)*
+
+## DT-CVD-1 — CVD safety is low priority
+
+- **Status:** stated by the maintainer 2026-09-02
+- **Decision:** colour-vision-deficiency safety is **important but a very low priority**,
+  and is not to be raised again as an objection to a design choice.
+- **Consequence:** the research finding that a fixed-lightness hue ring cannot be CVD-safe
+  is recorded in `CURATION.md` stage 4 as context, not as a constraint. CVD scoring may
+  inform curation's ordering step, but never blocks a palette or reopens a decision.
+
+---
+
+## DT-REF-1 — the neutral ramp is one reference plus parameterised offsets, in OKLCH
+
+- **Status:** decided 2026-09-03 (user-directed, chosen after seeing all three rendered)
+- **Colour space:** **OKLCH**, not HSL. Neutrals are chroma 0, hue 0 — pure greys. For an
+  achromatic colour the OKLab transform collapses to `L = cbrt(Y)`, so relative luminance
+  is exactly `Y = L³` and WCAG contrast is closed-form without a colour library.
+
+### The parameters
+
+Every value below is a **`seed.json` input with the stated default**. Specifying nothing
+yields the full ramp; specifying one value shifts everything relative to it.
+
+| Parameter | Default | What it does |
+|---|---|---|
+| `L-dark-bg` | **0.15** | the dark mode reference |
+| `L-light-bg` | **0.90** | the light mode reference |
+| `offset.bg-dark` | **−0.05** | absolute lightness; darker surface in *both* modes |
+| `offset.bg-light` | **+0.05** | absolute lightness; lighter surface in *both* modes |
+| `offset.text-muted` | **+0.65** | measured *toward the text end*, so mode-independent |
+| `offset.text` | **+0.90** | measured *toward the text end*, so mode-independent |
+
+Two kinds of offset, and the distinction is load-bearing: **absolute** offsets keep their
+direction in absolute lightness (`bg-dark` is darker in both modes), while **toward-text**
+offsets flip direction with the mode, which is what makes one number serve both.
+
+### What it resolves to
+
+```text
+role          dark L       hex   | light L       hex
+bg-dark         0.10   #030303   |    0.85   #cecece
+bg              0.15   #0b0b0b   |    0.90   #dedede
+bg-light        0.20   #161616   |    0.95   #eeeeee
+text-muted      0.80   #bebebe   |    0.25   #222222
+text            1.00   #ffffff   |    0.00   #000000
+```
+
+- **Every pairing is AAA** (worst 9.69:1). Verified in `tmp/verify_chosen_ref.py`.
+- Both bg triples are clearly separated — dark 8-bit `[3, 11, 22]` (gaps 8, 11), light
+  `[206, 222, 238]` (gaps 16, 16).
+- Dark `text` clamps to 1.00 and light `text` to 0.00; both modes reach the extreme.
+- Worst dark/light contrast divergence is 7.31, which is accepted: every pairing clears
+  AAA regardless, so parity was not worth optimising for.
+
+### Rejected alternatives
+
+- **Dark `bg` at 0.05** (the originally stated value, carried over from an HSL sketch) —
+  `Y = 0.000125` becomes sRGB channel 0.41, which rounds to **0**, so `bg-dark` and `bg`
+  both render `#000000`. Three specified dark surfaces collapse to one visible colour.
+  This is the HSL→OKLCH trap: HSL 5% grey is roughly **OKLCH 0.16**, so the increments
+  carry over but the base cannot.
+- **Symmetric mirror** (dark 0.15 / light 0.85) — one number generates both modes, but
+  light mode's lightest surface is `#dedede`, reading as grey paper rather than a page,
+  and it measured the worst divergence at 9.35.
+
+### Lens
+
+- **Given** OKLCH is perceptually uniform but sRGB's 8-bit grid is not, and the dark and
+  light ends of the gamut have genuinely different usable range,
+- **we prefer** two independently stated references with shared relative offsets, **over**
+  a single reference plus a mirror rule,
+- **because** paying one extra number buys three visible dark surfaces *and* keeps light
+  mode near enough to white to leave headroom above `bg-light` for a bright-white border,
+- **unless** the target medium is not 8-bit sRGB, at which point the dark-end collapse
+  that forced the asymmetry no longer applies.
+
+### Consequences
+
+- **The seed carries parameters, not just colours.** `seed.json` is a set of knobs with
+  sane defaults, which is the maintainer's stated aim: specify little, gain a lot.
+- The same pattern — one reference plus parameterised, defaulted offsets — is the template
+  for the remaining stages.
+- Light `bg-light` at `#eeeeee` leaves exactly `0.05 L` of headroom to pure white, kept
+  deliberately for top-border highlights.
+- A 3:1 border role still has no name. Measured positions: dark `L 0.47–0.50`
+  (`#5b5b5b`–`#636363`), light `L 0.55–0.63` (`#717171`–`#898989`).
+
+---
+
+## DT-ROLES-1 — semantic role names follow Atlassian's grammar
+
+- **Status:** decided 2026-09-09 (user-directed, chosen over `richdocs`' `bg`/`fg`/`surface` and
+  `diagram-design`'s `paper`/`ink`/`paper-2`, both of which the maintainer rejected)
+- **Decision:** adopt **Atlassian Design System's** token grammar and role vocabulary as the
+  canonical semantic layer. Neither existing skill's naming survives; both migrate to this.
+
+### The grammar
+
+Three slots — **foundation · property · modifier** — verbatim from
+[Atlassian's spec](https://atlassian.design/foundations/tokens/design-tokens):
+
+> **Foundation**: the type of visual design attribute — `color`, `elevation`, `space`.
+> **Property**: the UI element the token applies to — `border`, `background`, `text`.
+> **Modifier**: additional detail — colour role, emphasis level, interaction state.
+> *"Not every token has a modifier. For example, `color.text` is our default body text color."*
+
+Emphasis ladders `subtlest → subtle → (default) → bold → boldest`.
+
+### The locked role names
+
+| Job | Canonical name | was (`richdocs`) | was (`diagram-design`) |
+|---|---|---|---|
+| recessed ground | `color.surface.sunken` | — | — |
+| page ground | `color.surface` | `bg` | `paper` |
+| raised ground | `color.surface.raised` | `surface` | `paper-2` |
+| primary text | `color.text` | `fg` | `ink` |
+| secondary text | `color.text.subtle` | `muted` | `muted` |
+| tertiary text | `color.text.subtlest` | — | `soft` |
+| text on a focal fill | `color.text.inverse` | `onAccent` | — |
+| hairline border | `color.border` | `border` | `rule` |
+| strong border | `color.border.bold` | — | `rule-solid` |
+| focal fill | `color.background.brand.bold` | `accent` | — |
+| focal tint | `color.background.brand.subtlest` | — | `accent-tint` |
+| focal stroke | `color.border.brand` | — | `accent` |
+| link | `color.link` | `link` | `link` |
+| categorical channel | `color.chart.categorical.<N>` | `categoryColours` | `series-<N>` |
+| status | `color.text.danger` / `.warning` / `.success` | `status.*` | — |
+
+Verified against the shipped artifact
+[`@atlaskit/tokens@16.10.0` `atlassian-light.js`](https://cdn.jsdelivr.net/npm/@atlaskit/tokens@16.10.0/dist/cjs/artifacts/themes/atlassian-light.js):
+`--ds-surface{,-sunken,-raised,-overlay,-container}`, `--ds-text{,-subtle,-subtlest,-inverse}`,
+`--ds-border{,-bold,-focused,-input}`, `--ds-link{,-visited}`,
+`--ds-background-brand-{subtlest,bold,boldest}`, `--ds-chart-categorical-1…8`.
+
+### Rejected alternatives
+
+- **`richdocs`' current names** (`bg`/`fg`/`surface`/`muted`/`onAccent`) — 8 colour roles, missing
+  a third text tier, a second border tier and a focal tint; `link` duplicates `accent`'s hex.
+- **`diagram-design`'s names** (`paper`/`paper-2`/`ink`/`soft`/`rule`/`rule-solid`/`accent-tint`) —
+  10 roles, but no name for text sitting on a focal fill, and only two grounds.
+- **GitHub Primer's grammar** (`fgColor-default`/`bgColor-accent-emphasis`) — the closest
+  competitor and a genuinely published grammar, but its variant vocabulary is closed at three
+  (`default`/`muted`/`emphasis`) and it **deprecated `subtle` in favour of `muted`** to shrink
+  variant count, so the third text tier has no home.
+- **DTCG** — defines **no** role vocabulary at all; it is a format spec (`$type`, `$value`,
+  aliases, `$extensions`) plus the Resolver's own nouns. No prior art to inherit.
+- **Tailwind v4** — ships **no** semantic layer; grepping its `theme.css` for
+  `primary|secondary|accent|brand` returns zero matches. The primary/secondary framing is
+  entirely downstream (shadcn, daisyUI, Preline).
+
+### Lens
+
+- **Given** two in-house vocabularies that overlap on six roles and disagree on what `accent`
+  means, and an industry where only Atlassian and Polaris publish a complete grammar,
+- **we prefer** Atlassian's `foundation · property · modifier` grammar **over** either in-house
+  set or Primer's `<element>Color-<variant>` form,
+- **because** it is the only surveyed vocabulary that already carries three text tiers, two
+  border tiers, a three-deep surface stack, *and* a published separation between a singular
+  `brand` hue and a meaningless-by-design `accent` palette — which is precisely this system's
+  accent-versus-categorical split,
+- **unless** Atlassian deprecates the ladder wholesale, in which case the grammar still stands
+  and only the modifier words move.
+
+### Consequences
+
+- **`accent` is retired as a role name.** It named three different jobs across the two skills:
+  richdocs' fill (`background.brand.bold`), diagram-design's stroke (`border.brand`), and its
+  tint (`background.brand.subtlest`). The collision is now impossible to write.
+- **`link` becomes a documented alias of the brand hue**, not an independent role — Primer makes
+  this explicit, and `osakanights` already ships both as the same hex (`#5c4295` / `#c3b0fd`).
+- **DTCG forbids a group from carrying a value**, so Atlassian's bare `--ds-text` serialises as
+  `color.text.default` in nested DTCG — `text` must be a group to hold `subtle`. Flattened CSS
+  output restores the bare name.
+- The three grounds map straight onto DT-REF-1: `surface.sunken` / `surface` / `surface.raised`
+  are `bg-dark` / `bg` / `bg-light`. `text` and `text.subtle` are the two stated foreground
+  offsets; `text.subtlest` is a third offset still to be set.
+- **`color.border` has no value yet** — measured at `L 0.47–0.50` dark, `L 0.55–0.63` light for
+  3:1. `color.border.bold` is a second, stronger step above it.
+- Both skills' existing packs need a rename migration; `richdocs` ADR-004's two-palette split
+  (chrome CSS vars + canvas JS palette) is unaffected — only the keys change.
+
+---
+
+## DT-ACCENT-1 — one required brand hue; a second is imputed as walk slot 1 and overridable
+
+- **Status:** decided 2026-09-09. The requirement (optional override of an imputed default) is
+  the maintainer's; the imputation rule is the agent's, drawn from research and accepted.
+- **Decision:** `seed.json` requires **one** brand hue. A second is **imputed, never demanded** —
+  and because DT-ROLES-1 leaves no `secondary` role, it has exactly one home:
+  **`color.chart.categorical.1`**, imputed at `primary + 137.5°`.
+
+  A stated seed value **overrides that slot**, letting a brand that genuinely owns two colours
+  place its second one without inventing anything. This is mermaid's own mechanism:
+
+  ```js
+  // vendored mermaid, verified in skills/richdocs/vendor/…/mermaid.esm.min
+  this.secondaryColor = this.secondaryColor || adjust(this.primaryColor, {h: -120})
+  this.cScale1        = this.cScale1        || this.secondaryColor
+  ```
+
+- **Why a stated second hue is safe here:** it lands in a **categorical** slot, not a second
+  focal role. `color.background.brand.*` stays singular, so the focal signal cannot be split.
+
+- **Rejected alternatives:**
+  - **Two required accents** — the shape *no* surveyed system uses. Most scraped brands yield
+    only one colour, so the seed would routinely be invalid.
+  - **A separate `secondary` role imputed at `hue + 60°` (M3's tertiary)** — the only second-hue
+    offset shipped as a default by a major system, but Google never published why 60, and
+    DT-ROLES-1 gives it nowhere to live.
+  - **`+180°` (complementary) or `+120°` (triad)** — measured *less* harmonious than random hue
+    pairs when tested in CIE LCh (Tan, Echevarria & Gingold, IEEE TVCG 2025: complementary
+    40.7–44.2%, triad 40.5–44%, both losing to a randomised control).
+
+- **What the research established** (`research/research-secondary-accent.md`,
+  `research-accent-derivation.md`, `research-accent-in-dataviz.md`):
+  - "Primary + secondary accent" traces to **Bootstrap's `$secondary`, which is `$gray-600`** —
+    a grey. In 5.3 `--bs-secondary-color` absorbed the deprecated `.text-muted`. Downstream
+    copied the names and kept the greys: shadcn's entire default palette is chroma 0.
+  - **Nine of ten surveyed systems ship exactly one accent hue.** Polaris ships none; Spectrum 2
+    *removed* accent to reserve it; Atlassian states *"Avoid mixing different accent colors."*
+  - **M3's `secondary` is the same hue at lower chroma** (C16 vs primary's C36) — a desaturated
+    primary, not a second colour. It is a different *hue* in only 2 of 9 variants.
+  - Neither **DTCG** nor **Tailwind** offers prior art: DTCG defines no role vocabulary at all,
+    and Tailwind ships no semantic layer (`primary|secondary|accent|brand` returns zero matches
+    in its `theme.css`).
+
+- **Lens:**
+  - **Given** the evidence that a second brand hue is folklore rather than a load-bearing role,
+    and that some brands nonetheless genuinely own two colours,
+  - **we prefer** imputing the second hue into a categorical slot with a stated override
+    **over** requiring it, omitting it entirely, or giving it its own role,
+  - **because** it costs nothing when a brand has one colour, gives a two-colour brand a real
+    place to put its second, and keeps the focal signal singular by construction,
+  - **unless** a use case appears that needs two *simultaneous* focal roles, which no surveyed
+    system supports and which would reopen DT-ROLES-1 rather than this decision.
+
+- **Consequence:** resolves `CURATION.md`'s "[OPEN] one walk or two?" to **one**.
+
+## DT-WALK-1 — the categorical walk ships 12 pre-computed slots
+
+- **Status:** decided 2026-09-09 (user-directed)
+- **Decision:** the golden-angle walk computes and ships **12 slots**, `color.chart.categorical.1`
+  through `.12`. All are present in every IR and DTCG whether or not a given document uses them.
+  Pre-computed, not lazily derived — consistent with DT-PIPE-1 rule 3.
+
+- **Verified free** by `tmp/walk_12.py`, seeded on `osakanights`' light accent `#5c4295`
+  (`L 0.4498  C 0.1312  H 295.04°`):
+  - The chroma-binding hue is **210.04° at slot 2**, `maxC 0.0779` — already inside the first
+    seven slots. `min` over 7 slots and over 12 slots are **identical**, so extending to 12
+    costs nothing in gamut.
+  - Effective chroma for the whole walk is `0.0779` — **59.4%** of the seed's chroma, the price
+    of holding chroma constant across every hue.
+  - Adjacency at 12 slots is uneven: smallest gap **20.00°**, largest **52.50°**, against
+    `30.00°` for even spacing.
+
+- **Context, not a constraint:** research puts the distinguishable ceiling around 7 (Healey:
+  "seven isoluminant colours is the maximum") and the hard cap around 12 (Ware: "between six and
+  twelve"; ColorBrewer caps at 12). Shipping 12 makes them **available**, and says nothing about
+  how many a document should use. Per DT-CVD-1, CVD does not gate this.
+
+- **Lens:**
+  - **Given** the walk is deterministic and its gamut cost is set by the single worst hue, which
+    already falls inside the first seven slots,
+  - **we prefer** pre-computing all 12 **over** shipping 7 and deriving more on demand,
+  - **because** the extra five are free, and a complete DTCG cannot leave values to be computed
+    at load,
+  - **unless** the chroma model changes to per-slot maximum, at which case slot count and
+    saturation stop being independent.
+
+- **Open, arising from this:** whether the walk holds **one chroma for all slots** (equal-chroma,
+  59% retained) or takes **each hue's own maximum** (vivid but unequal). Tableau deliberately
+  broke equal-lightness for exactly this reason; not yet decided.
