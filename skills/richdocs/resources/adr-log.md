@@ -7,6 +7,32 @@ before changing anything: each entry carries a **Lens**, a forward-looking rule 
 apply to the next related decision.
 
 
+### ADR-020 — A vendored copy carries no `SKILL.md`
+
+- **Status:** accepted (refines ADR-007)
+- **Context:** the packs failed marketplace validation. A harness registers
+  every `SKILL.md` beneath a plugin as a skill, so the vendored
+  `mermaidjs-diagrams/SKILL.md` declared the name `mermaidjs-diagrams` a second
+  time and the whole `jpai-essentials` plugin was rejected as a duplicate.
+  Vendoring was correct, keeping upstream's filename was not.
+- **Decision:** on the way in, upstream's `SKILL.md` is renamed to
+  `<name>.md` — here `vendor/mermaidjs-diagrams/mermaidjs-diagrams.md`. Every
+  relative link that resolved to it is repointed, in the copy and in the
+  richdocs surfaces that cite it, and so is every mention left in the copy's
+  own runtime surfaces (`resources/**`) — a run must not be told to open a file
+  that is not there. Its provenance documents (`README.md`, `CLAUDE.md`) keep
+  upstream's wording, because they are addressed to whoever edits upstream,
+  where the file really is `SKILL.md`.
+- **Consequences:** the copy is no longer byte-identical to upstream, so the
+  refresh is rsync plus a scripted rename rather than rsync alone.
+  `uv run scripts/validate_plugins.py` asserts no `SKILL.md` survives below a
+  composed skill's root, so a refresh that forgets the rename fails in CI
+  instead of at the marketplace.
+- **Lens:** a directory a harness scans holds exactly one registrable
+  entrypoint. Anything copied in for self-containment gets its entrypoint
+  demoted to a plain document, because self-containment must not cost the
+  right to be installed.
+
 ### ADR-019 — Output report is worktree-aware and prints absolute paths
 
 - **Status:** accepted
@@ -396,8 +422,10 @@ labels), never the non-negotiable one (CVD distinguishability).
   once. Maintainer docs (this file) may name the upstream for provenance;
   runtime surfaces (SKILL.md, resources) must not.
 - **Refresh procedure:** re-vendor wholesale — `rsync -a --exclude
-  node_modules --exclude '.*cache*'` from the upstream skill dir, re-run
-  `bun install --frozen-lockfile` and `make -C …/vendor/mermaidjs-diagrams/
+  node_modules --exclude '.*cache*'` from the upstream skill dir, then
+  `mv SKILL.md mermaidjs-diagrams.md` inside the copy, repoint the links
+  upstream wrote to it, and `sed` every remaining mention in `resources/**`.
+  Re-run `bun install --frozen-lockfile` and `make -C …/vendor/mermaidjs-diagrams/
   scripts test-cov`. Never cherry-pick individual files.
 - **Lens:** when richdocs needs a capability that lives in another skill,
   vendor a wholesale copy into `vendor/` — never link to, invoke, or

@@ -11,8 +11,9 @@ import sys
 from argparse import Namespace
 from pathlib import Path
 
-import md2html
 import pytest
+
+import md2html
 import showcase
 
 
@@ -51,7 +52,7 @@ def test_split_imports_ignores_the_word_import_inside_a_comment() -> None:
     """REGRESSION: the word "@import" in theme.css prose was matched and hoisted,
     producing a stylesheet made of English."""
     css = "/* This file must @import the webfiles. */\n@import url('real.css');\np { margin: 0; }"
-    imports, rest = showcase.split_imports(css)
+    imports, _rest = showcase.split_imports(css)
     assert imports.count("@import") == 1
     assert "webfiles" not in imports
     assert "real.css" in imports

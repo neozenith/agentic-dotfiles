@@ -30,7 +30,7 @@
 // The static imports below are safe (they don't touch the DOM at load time).
 import { Window } from "happy-dom";
 import { parseArgs } from "node:util";
-import { readdirSync, statSync } from "node:fs";
+import { type Dirent, readdirSync, statSync } from "node:fs";
 import { extname, join, relative, resolve } from "node:path";
 import { parse as langiumParse } from "@mermaid-js/parser";
 
@@ -159,10 +159,13 @@ function configFromPreset(name: string): ThresholdConfig {
   };
 }
 
-function applyEnvOverrides(config: ThresholdConfig): ThresholdConfig {
+function applyEnvOverrides(config: ThresholdConfig, cliPresetGiven = false): ThresholdConfig {
   const out = { ...config };
   let customized = false;
-  const envPreset = Bun.env.MERMAID_COMPLEXITY_PRESET;
+  // CLI preset > env preset > default. An explicit --preset must not be
+  // overwritten by inherited environment state, or CI behaviour depends on
+  // whatever the surrounding shell happens to export.
+  const envPreset = cliPresetGiven ? undefined : Bun.env.MERMAID_COMPLEXITY_PRESET;
   if (envPreset) {
     Object.assign(out, configFromPreset(envPreset));
   }
@@ -357,11 +360,30 @@ const LANGIUM_TYPES: Record<
 };
 
 function detectKeyword(content: string): string | null {
+  // A leading "---" opens a YAML frontmatter block that runs to the next "---".
+  // Everything between is config, not diagram source: returning its first key
+  // (typically "config:") would miss the Langium dispatch table and mis-report a
+  // valid frontmatter-prefixed diagram (e.g. architecture-beta) as ParserFailure.
+  let seenContent = false;
+  let inFrontmatter = false;
+
   for (const raw of content.split("\n")) {
     const line = raw.trim();
     if (!line || line.startsWith("%%")) continue;
-    // Skip YAML frontmatter block ("---\n...\n---")
-    if (line === "---") continue;
+
+    if (line === "---") {
+      if (inFrontmatter) {
+        inFrontmatter = false; // closing delimiter — diagram source follows
+      } else if (!seenContent) {
+        inFrontmatter = true; // opening delimiter — only valid before any source
+      }
+      seenContent = true;
+      continue;
+    }
+
+    seenContent = true;
+    if (inFrontmatter) continue;
+
     const first = line.split(/\s+/)[0];
     return first ?? null;
   }
@@ -1502,7 +1524,10 @@ export async function main(argv: string[] = Bun.argv.slice(2)): Promise<number> 
     return 2;
   }
 
-  // Config: CLI preset > env preset > default
+  // Config: CLI preset > env preset > default. Test for the flag's presence
+  // before defaulting — `values.preset ?? "high-density"` would erase the
+  // difference between "not passed" and "passed the default".
+  const cliPresetGiven = typeof values.preset === "string";
   let config: ThresholdConfig;
   try {
     config = configFromPreset(String(values.preset ?? "high-density"));
@@ -1510,7 +1535,7 @@ export async function main(argv: string[] = Bun.argv.slice(2)): Promise<number> 
     console.error(`error: ${(err as Error).message}`);
     return 2;
   }
-  config = applyEnvOverrides(config);
+  config = applyEnvOverrides(config, cliPresetGiven);
   const cliOverrides: Array<[string, keyof ThresholdConfig]> = [
     ["node-ideal", "node_ideal"],
     ["node-acceptable", "node_acceptable"],
@@ -1566,25 +1591,62 @@ export async function main(argv: string[] = Bun.argv.slice(2)): Promise<number> 
   return findings.length > 0 ? 1 : 0;
 }
 
-const DIRECTORY_FILE_EXTS = new Set([".mmd", ".md", ".markdown"]);
+export const DIRECTORY_FILE_EXTS = new Set([".mmd", ".md", ".markdown"]);
 
-function collectFiles(paths: string[]): string[] {
+// Directories never worth walking. Vendored trees dwarf real content — this
+// skill's own scripts/node_modules holds 173 markdown files against 38 authored
+// ones — and dot-directories hold VCS and tool state, not diagrams. A denylist
+// keeps the walker dependency-free, so it behaves the same outside a git repo.
+export const SKIP_DIRS = new Set(["node_modules", "vendor", "dist", "build", "__pycache__"]);
+
+const skipDir = (name: string): boolean => name.startsWith(".") || SKIP_DIRS.has(name);
+
+/**
+ * Expand paths into diagram-bearing files, descending through subdirectories.
+ *
+ * A directory argument is the documented invocation (`... docs/`), so stopping
+ * at the first level silently omits nested diagrams and lets the gate exit 0 on
+ * files it never read. Shared with mermaid_contrast.ts so the two gates cannot
+ * drift into scanning different file sets.
+ */
+export function collectFiles(paths: string[], onError?: (path: string) => void): string[] {
   const out: string[] = [];
+  const seen = new Set<string>();
+
+  const walk = (dir: string): void => {
+    let entries: Dirent[];
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      onError?.(dir);
+      return;
+    }
+    for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+      const abs = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (!skipDir(entry.name)) walk(abs);
+      } else if (entry.isFile() && DIRECTORY_FILE_EXTS.has(extname(entry.name).toLowerCase())) {
+        if (!seen.has(abs)) {
+          seen.add(abs);
+          out.push(abs);
+        }
+      }
+    }
+  };
+
   for (const p of paths) {
     const abs = resolve(p);
     try {
       const st = statSync(abs);
       if (st.isDirectory()) {
-        for (const name of readdirSync(abs)) {
-          if (DIRECTORY_FILE_EXTS.has(extname(name).toLowerCase())) {
-            out.push(join(abs, name));
-          }
-        }
-      } else if (st.isFile()) {
+        walk(abs);
+      } else if (st.isFile() && !seen.has(abs)) {
+        // An explicitly named file is honoured whatever its extension.
+        seen.add(abs);
         out.push(abs);
       }
     } catch {
-      /* missing path — ignore */
+      onError?.(abs);
     }
   }
   return out;

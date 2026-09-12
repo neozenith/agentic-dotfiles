@@ -87,7 +87,7 @@ debug:
 format: format-py format-ts
 
 format-py: $(PY_SRC)
-	$(UV) ruff format $(PY_SRC)
+	$(UV) --with ruff ruff format $(PY_SRC)
 
 format-ts: $(TS_SRC)
 	$(BIOME) format $(BIOME_FLAGS) --write $(TS_SRC)
@@ -95,7 +95,7 @@ format-ts: $(TS_SRC)
 format-check: format-check-py format-check-ts
 
 format-check-py: $(PY_SRC)
-	$(UV) ruff format --check $(PY_SRC)
+	$(UV) --with ruff ruff format --check $(PY_SRC)
 
 format-check-ts: $(TS_SRC)
 	$(BIOME) format $(BIOME_FLAGS) $(TS_SRC)
@@ -105,7 +105,7 @@ format-check-ts: $(TS_SRC)
 lint: lint-py lint-ts
 
 lint-py: $(PY_SRC)
-	$(UV) ruff check --line-length 120 $(PY_SRC)
+	$(UV) --with ruff ruff check --line-length 120 $(PY_SRC)
 
 lint-ts: $(TS_SRC)
 	$(BIOME) lint $(BIOME_FLAGS) $(TS_SRC)
@@ -113,7 +113,7 @@ lint-ts: $(TS_SRC)
 lint-fix: lint-fix-py lint-fix-ts
 
 lint-fix-py: $(PY_SRC)
-	$(UV) ruff check --fix --line-length 120 $(PY_SRC)
+	$(UV) --with ruff ruff check --fix --line-length 120 $(PY_SRC)
 
 lint-fix-ts: $(TS_SRC)
 	$(BIOME) lint $(BIOME_FLAGS) --write $(TS_SRC)
@@ -123,7 +123,7 @@ lint-fix-ts: $(TS_SRC)
 typecheck: typecheck-py typecheck-ts
 
 typecheck-py: $(addsuffix .py,$(PY_SCRIPTS) $(PRIVATE_PY_SCRIPTS))
-	$(UV) mypy $(addsuffix .py,$(PY_SCRIPTS) $(PRIVATE_PY_SCRIPTS)) --ignore-missing-imports --strict
+	$(UV) --with mypy mypy $(addsuffix .py,$(PY_SCRIPTS) $(PRIVATE_PY_SCRIPTS)) --ignore-missing-imports --strict
 
 # We invoke the local tsc binary directly rather than `bunx tsc`, because
 # `bunx --cwd` has dependency-resolution quirks when the current directory

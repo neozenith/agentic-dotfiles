@@ -72,13 +72,16 @@ describe("scoreDirectives", () => {
     expect(skipped[0]?.reason).toMatch(/no fill declared/);
   });
 
-  test("only fill declared — skipped because theme defaults would apply", () => {
+  test("only fill declared — BLOCKING: github requires a color: beside every fill:", () => {
     const dirs: StyleDirective[] = [
       { kind: "classDef", selector: "fill-only", properties: { fill: "#2563eb" }, line: 1 },
     ];
     const { pairs, skipped } = scoreDirectives(dirs);
     expect(pairs).toHaveLength(0);
-    expect(skipped[0]?.reason).toMatch(/theme defaults/);
+    expect(skipped[0]?.reason).toMatch(/no color: declared/);
+    // Not an informational skip: an unscoreable mandatory pair must gate, or the
+    // audit exits 0 on a text pair it never checked.
+    expect(skipped[0]?.blocking).toBe(true);
   });
 
   test("inlineClass and linkStyle are NOT scored (informational)", () => {
@@ -187,8 +190,10 @@ describe("scoreDirectives — unparseable colors route to skipped with reasons",
     ];
     const { pairs, skipped } = scoreDirectives(dirs);
     expect(pairs).toHaveLength(0);
-    expect(skipped).toHaveLength(1);
-    expect(skipped[0]?.reason).toMatch(/border pair unparseable/);
+    // Two gaps now: the missing color: and the unparseable stroke. Both block.
+    expect(skipped).toHaveLength(2);
+    expect(skipped.some((s) => /border pair unparseable/.test(s.reason))).toBe(true);
+    expect(skipped.every((s) => s.blocking)).toBe(true);
   });
 });
 
@@ -269,10 +274,22 @@ describe("scoreForProfile + auditContent profile", () => {
     ];
     const gh = scoreForProfile(dirs, "github");
     const md = scoreForProfile(dirs, "mkdocs-material");
-    // github: one border pair (fill+stroke), no per-theme split.
-    expect(gh.pairs.every((p) => p.theme === undefined)).toBe(true);
+    // github: the fill is translucent, so it is composited over BOTH GitHub
+    // canvases and scored per theme — a fill that reads on one and vanishes on
+    // the other must not pass.
+    expect(gh.pairs.some((p) => p.theme === "light")).toBe(true);
+    expect(gh.pairs.some((p) => p.theme === "dark")).toBe(true);
     // mkdocs: per-theme pairs present.
     expect(md.pairs.some((p) => p.theme === "dark")).toBe(true);
+  });
+
+  test("github does NOT split an OPAQUE fill per theme (same on both canvases)", () => {
+    const dirs: StyleDirective[] = [
+      { kind: "classDef", selector: "solid", properties: { fill: "#1e40af", color: "#ffffff" }, line: 1 },
+    ];
+    const gh = scoreForProfile(dirs, "github");
+    expect(gh.pairs).toHaveLength(1);
+    expect(gh.pairs[0]?.theme).toBeUndefined();
   });
 
   test("auditContent carries the profile and gates on text only under mkdocs", () => {

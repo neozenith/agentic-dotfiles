@@ -31,6 +31,7 @@ import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 from xml.sax.saxutils import quoteattr
 
 from md2html import (
@@ -42,7 +43,6 @@ from md2html import (
     make_build_id,
 )
 from stencil import DEFAULT_ZIP, load_stencils
-from typing import Any
 
 # ── Configuration ──────────────────────────────────────────────────────────
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -184,7 +184,7 @@ ICON = 52
 
 
 # ── CSS scoping ────────────────────────────────────────────────────────────
-_COMMENT_RE = re.compile(r"/\*.*?\*/", re.S)
+_COMMENT_RE = re.compile(r"/\*.*?\*/", re.DOTALL)
 
 # `@import[^;]+;` is WRONG, and failed silently in two ways:
 #
@@ -204,7 +204,7 @@ _IMPORT_RE = re.compile(
         )
         [^;]*                   # media query / layer / supports
         ;""",
-    re.I | re.X,
+    re.IGNORECASE | re.VERBOSE,
 )
 
 

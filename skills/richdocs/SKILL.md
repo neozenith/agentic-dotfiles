@@ -70,7 +70,7 @@ First run only: `bun install --cwd
 Non-zero exit is a blocker — `ParserFailure … yielded 0 nodes` means the
 fence is invalid mermaid and will render as a broken block in the companion.
 `md2html.py` passes fences through verbatim; it cannot catch this for you.
-The vendored `vendor/mermaidjs-diagrams/SKILL.md` documents both tools in
+The vendored `vendor/mermaidjs-diagrams/mermaidjs-diagrams.md` documents both tools in
 full (profiles, complexity presets, authoring pitfalls like quoted mindmap
 labels and HTML entities). Prior adjudications on this class of failure live
 in `resources/learned/` — treat them as already-decided, don't re-litigate.
