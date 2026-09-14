@@ -1,6 +1,6 @@
 # Open questions
 
-Seven questions, ranked by what each unblocks. Everything settled is in
+Six questions, ranked by what each unblocks. Everything settled is in
 [`DECISIONS.md`](DECISIONS.md); do not reopen those without evidence.
 
 **How to ask these.** Route every one through the `concise-decisions` skill and its Claude Code
@@ -10,24 +10,10 @@ carry real computed values, not illustrative fragments; `scripts/` exists so the
 
 ---
 
-## Q6 — where do semantic node roles draw their colour from?
+## ~~Q6~~ — closed by DT-CAT-1. Do not reopen.
 
-**The last structural question.** `skills/mermaidjs-diagrams/resources/color_theming.md` defines
-diagram-*role* categories — `Input`, `Process`, `Output`, `Storage`, `Error`, `External` — as HSL
-hue families sourced from Tailwind v3. Under the locked vocabulary they have no home.
-
-Candidates: they bind to `color.chart.categorical.<N>`; or to the status roles
-(`color.text.danger` and friends); or a third place that does not exist yet.
-
-**What the research already settled** (`research/research-channels.md`): assigning hues to nominal
-semantic categories and to chart series is *the same operation* — Munzner's **identity channel**,
-Bertin's **selective retinal variable**, Wilkinson's **scale**. It breaks at *assignment*, not at
-channel: Setlur & Stone require a system to first determine a category's **"colorability"**, and the
-literature's practical rule is **pin the colourable, rotate the rest**. `Error` is colourable;
-`Process` is not.
-
-**Blocks:** topic 5 (ripple) almost entirely, and the mermaid surface mapping in `CURATION.md`
-stage 6.
+Categorical classes are sequentially assigned `color.chart.categorical.<N>` slots for visual
+separation only. This was never an open design question.
 
 ---
 
@@ -116,7 +102,8 @@ which DT-PIPE-1 rule 4 explicitly turns off at load:
 Worse, some failures the pack cannot express at all: `htmlLabels:false` makes flowchart edge labels
 fail WCAG on light hosts, and the contrast gate cannot see it (see repo memory).
 
-**Depends on:** Q6, since the gate can only check values that exist somewhere checkable.
+**No longer blocked:** DT-CAT-1 settles that diagram classes use sequential categorical slots, so
+the values the gate checks exist.
 
 ---
 

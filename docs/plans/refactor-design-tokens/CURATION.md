@@ -157,13 +157,13 @@ ring cannot be CVD-safe (ColorBrewer flags zero qualitative schemes safe at ≥5
 conventional meaning get conventional hues, then solve for contrast.
 
 Precedent: M3 imputes secondary, tertiary and both neutrals from one seed but **hard-codes error at
-hue 25 / chroma 84**. Theory backs the split — Setlur & Stone require a system to first determine a
-category's *"colorability"*; the practical rule is **pin the colourable, rotate the rest**.
+hue 25 / chroma 84**.
 
 Real anchor: `osakanights` already does this, with a `status` group carrying per-mode
 `good/warning/serious/critical` alongside `categoryColours`.
 
-Where mermaid's semantic *node* roles draw from is Q6, and it is the last structural question.
+**Categorical classes are not status colours.** Storage, compute, Input, Process and every other
+class take sequential `color.chart.categorical.<N>` slots (DT-CAT-1), for visual separation only.
 
 ---
 

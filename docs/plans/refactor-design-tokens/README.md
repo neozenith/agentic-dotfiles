@@ -44,7 +44,7 @@ The work was framed as five topics. Two are closed, one is active, two are downs
 | 1 | **Structure** | What are the layers, and what does indirection mean? | **Mostly closed** — DT-ROLES-1 locks 15 role names; DT-PIPE-1 locks the three-artifact model |
 | 2 | **Location** | Where does a profile live, how is it found? | **Closed** — DT-LOC-1 |
 | 3 | **Override** | How does a project override, and where is the authoring boundary? | **Closed** — DT-PIPE-1; override *is* editing the IR or the DTCG |
-| 4 | **Curation** | How is a profile authored? What is stated vs imputed? | **Active** — 5 of 7 open questions live here |
+| 4 | **Curation** | How is a profile authored? What is stated vs imputed? | **Active** — 5 of 6 open questions live here |
 | 5 | **Ripple** | How does one value reach every surface, and what stays consistent? | **Downstream** — expected to fall out of topics 1 and 4 |
 
 **Out of scope:** `pytest-xharness-eval` usage on either skill. Dropped by the maintainer.
@@ -53,8 +53,8 @@ The work was framed as five topics. Two are closed, one is active, two are downs
 
 | Path | What it holds |
 |---|---|
-| [`DECISIONS.md`](DECISIONS.md) | The ten locked decisions, each with a four-clause lens and its rejected alternatives. **Canonical.** |
-| [`OPEN-QUESTIONS.md`](OPEN-QUESTIONS.md) | The seven parked questions, ranked, with what each blocks. |
+| [`DECISIONS.md`](DECISIONS.md) | The eleven locked decisions, each with a four-clause lens and its rejected alternatives. **Canonical.** |
+| [`OPEN-QUESTIONS.md`](OPEN-QUESTIONS.md) | The six parked questions, ranked, with what each blocks. |
 | [`CURATION.md`](CURATION.md) | The seed → IR pipeline, stage by stage. Partly settled, partly draft — each stage says which. |
 | [`research/`](research/) | Six sourced dossiers plus a grounding quote-sheet. Every claim carries a URL. **Do not re-derive.** |
 | [`scripts/`](scripts/) | Three runnable measurement scripts. The numbers in `DECISIONS.md` came from these. |
@@ -73,6 +73,7 @@ The work was framed as five topics. Two are closed, one is active, two are downs
 | **DT-ACCENT-1** | One required brand hue; a second is imputed as walk slot 1 and overridable |
 | **DT-WALK-1** | The categorical walk ships **12** pre-computed slots |
 | **DT-BORDER-1** | `border` is the text colour at 14% alpha; `border.bold` is opaque at 0.35 toward text |
+| **DT-CAT-1** | Categorical classes are sequentially assigned categorical slots, for visual separation only. **Never re-ask.** |
 
 ## The role vocabulary
 
@@ -90,6 +91,11 @@ color.background.brand.subtlest                             color.text.danger / 
 `accent` is **retired as a role name** — it named three different jobs across the two skills.
 
 ## Ground rules that earned their place
+
+- **Never ask how categorical classes get colour.** Storage, compute, network, Input, Process and
+  every other class are like apples and pears: sequentially assigned `color.chart.categorical.<N>`
+  slots, for visual separation only. No named class roles, ever. This has been re-asked across
+  many sessions and is the single most frustrating mistake to repeat. See DT-CAT-1.
 
 Carried from the [retro](../../retros/plan-gap/design-thinking.md) that restarted this work, and
 reinforced during the session:

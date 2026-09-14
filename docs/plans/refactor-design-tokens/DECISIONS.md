@@ -140,7 +140,7 @@ Both items below have moved on since this entry was written; see
   parameters by DT-REF-1 and DT-ACCENT-1. What *else* the seed carries is still deliberately small
   and unlocked.
 - **Render-time contrast gates** — `scripts/mermaid_contrast.ts` must survive; where it fires is
-  Q8, which depends on Q6.
+  Q8.
 
 ---
 
@@ -580,3 +580,40 @@ looked the nicer of the 2 options."*
 - **Surface support for alpha must be verified** before stage 6 is final: cytoscape and deck.gl accept
   it; mermaid `themeVariables` and draw.io are unverified. Logged in `OPEN-QUESTIONS.md`.
 - `color.border.brand` (DT-ROLES-1) is unaffected; its value belongs with the brand roles (Q3).
+
+---
+
+## DT-CAT-1 — categorical classes are sequentially assigned categorical slots. Nothing else.
+
+- **Status:** decided, and **not open to re-asking**. Stated by the maintainer 2026-09-15 after the
+  question was raised again despite being settled across many prior sessions:
+
+  > *"CATEGORICAL CLASSES like storage, network, compute... should be treated like Apples,
+  > Mandarins, Peaches, Pears. They are categorical things and they get SEQUENTIALLY ASSIGNED FROM
+  > THE CATEGORICAL CLASSES. THE WHOLE POINT IS VISUAL COLOUR SEPARATION. NOTHING ELSE."*
+
+- **Decision:** any categorical class — infrastructure kinds (`Storage`, `Compute`, `Network`,
+  `Database`, `Security` …) or diagram node kinds (`Input`, `Process`, `Output` …) — takes its colour
+  by **sequential assignment** from `color.chart.categorical.<N>`. The only purpose is visual colour
+  separation between classes.
+
+- **There is no `color.diagram.<class>` role.** Never is, never will be. Classes get no named roles,
+  no per-class hue, no aliases, and no "meaning" or "colourability" analysis.
+
+- **Supersedes** `skills/mermaidjs-diagrams/resources/color_theming.md`'s fixed per-role hue
+  families (Input blue 217°, Process violet 271°, Storage amber 38° …) and `richdocs`'
+  name-keyed `categoryColours` map (`Compute`, `Storage`, `Database` …). Both become sequential
+  assignment in the migration.
+
+- **Standing rule for every future session:** do not raise, frame, or offer options about how
+  categorical classes get their colour. If a document or question carries that framing, close it by
+  citing this entry. Status colours (DT-ROLES-1's `color.text.danger` / `.warning` / `.success`) are
+  a separate, already-locked channel and are not a reason to reopen this.
+
+- **Lens:**
+  - **Given** categorical classes are nominal, with no inherent order or colour,
+  - **we prefer** sequential assignment from the categorical channel **over** any per-class naming
+    or hue binding,
+  - **because** the categorical channel exists to separate categories visually, and that is the
+    whole job,
+  - **unless** never; unconditional.
