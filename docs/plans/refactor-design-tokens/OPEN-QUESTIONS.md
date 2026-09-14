@@ -1,6 +1,6 @@
 # Open questions
 
-Four questions, ranked by what each unblocks. Everything settled is in
+Two questions, ranked by what each unblocks. Everything settled is in
 [`DECISIONS.md`](DECISIONS.md); do not reopen those without evidence.
 
 **How to ask these.** Route every one through the `concise-decisions` skill and its Claude Code
@@ -17,35 +17,10 @@ separation only. This was never an open design question.
 
 ---
 
-## Q11 — equal chroma across the walk, or each hue's own maximum?
+## ~~Q11~~ and ~~Q3~~ — closed by DT-WALK-2
 
-Arose from measuring DT-WALK-1. Run `scripts/walk_12.py` to reproduce.
-
-At `osakanights`' accent (`L 0.4498  C 0.1312  H 295.04°`), holding one chroma for all 12 slots
-means taking the minimum over hues — `0.0779`, **59.4% of the seed's chroma**. The binding hue is
-210.04°. Per-slot maximum chroma gives vivid colours that do not match each other.
-
-Tableau deliberately broke equal-lightness for exactly this reason. Note DT-CVD-1: CVD is not an
-argument here.
-
-**Blocks:** the final walk values, and therefore every surface that consumes them.
-
----
-
-## Q3 — contrast targets per role, and is there a `contrastLevel` dial?
-
-DT-REF-1 fixed the reference and the offsets but not the *targets* those offsets are meant to hit.
-M3 models a role as `(palette, defaultTone(isDark), ContrastCurve, backgroundRef)` and **solves**
-for tone — `Contrast.lighter/darker` return `−1` when a ratio is unachievable. It also ships a
-system-wide `contrastLevel` dial from `−1` to `1`.
-
-Currently the offsets are stated numbers that happen to measure well (every pairing AAA, worst
-9.69:1 — see `scripts/verify_chosen_ref.py`). The question is whether they stay stated, or become
-solved against declared targets.
-
-**Related:** an earlier attempt to ask this (as "which roles are stated vs solved") was rejected as
-unclear. Reframe around the maintainer's own stated preference: *set one reference, relative ratios
-are the defaults, specify little and gain a lot.*
+Walk lightness is solved per slot and mode. Chroma is one rule with a ceiling: default `"floor"`
+gives every slot the same chroma, and `"seed"` lets each hue reach its maximum up to the brand's.
 
 ---
 
@@ -119,6 +94,9 @@ now stale, with nothing reporting it.
 ---
 
 ## Also unresolved, low stakes
+
+- **A `contrastLevel` dial.** M3 ships a system-wide −1 to 1 shift of every contrast target.
+  Not adopted by DT-WALK-2; add only if a brand needs a global high- or low-contrast variant.
 
 - **Alpha support per surface.** DT-BORDER-1 makes `color.border` translucent. Cytoscape and deck.gl
   accept alpha; mermaid `themeVariables` and draw.io stencil styles are unverified. A surface that

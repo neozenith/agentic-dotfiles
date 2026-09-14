@@ -113,7 +113,8 @@ Roles to produce: `color.background.brand.bold`, `color.background.brand.subtles
   brand colour verbatim and buy contrast from the *foreground* side instead
   (`FIDELITY`/`CONTENT` variants). That matches the standing rule that a stated value is final.
 
-Contrast targets for these roles are Q3.
+Lightness for these roles is solved against their grounds by default, and a stated value is never
+pushed (DT-WALK-2, applied by cascade; DT-CONTRAST-1).
 
 ---
 
@@ -132,7 +133,10 @@ Measured on `osakanights` (`scripts/walk_12.py`): the chroma-binding hue is **21
 identical and **extending to 12 costs nothing**. Adjacency is uneven: smallest gap `20.00°`, largest
 `52.50°`, against `30.00°` for even spacing.
 
-Whether the walk holds one chroma for all slots or takes each hue's maximum is Q11.
+**Lightness and chroma are settled by DT-WALK-2.** Each slot's lightness is solved: the value
+nearest the seed's that keeps it at 3:1 against every ground of the mode. Chroma is
+`min(max in-gamut chroma, walk.chromaCeiling)`, where the default `"floor"` gives every slot
+the same chroma and `"seed"` lets each hue reach its own maximum up to the brand's.
 
 **Three mechanical facts worth keeping in view**, from `research/research-accent-derivation.md`:
 

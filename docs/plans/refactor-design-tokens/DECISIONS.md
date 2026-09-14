@@ -507,9 +507,8 @@ Verified against the shipped artifact
   - **unless** the chroma model changes to per-slot maximum, at which case slot count and
     saturation stop being independent.
 
-- **Open, arising from this:** whether the walk holds **one chroma for all slots** (equal-chroma,
-  59% retained) or takes **each hue's own maximum** (vivid but unequal). Tableau deliberately
-  broke equal-lightness for exactly this reason; not yet decided.
+- **Resolved by DT-WALK-2:** chroma is one rule with a ceiling, defaulting to one uniform chroma
+  (`walk.chromaCeiling: "floor"`), and lightness is solved per slot and mode.
 
 ---
 
@@ -676,3 +675,88 @@ parameter is informational.
   `color.text.subtle` stays distinct from `color.text` rather than being driven to the same
   extreme. **Stated values** are never pushed toward any threshold. There is no iteration budget
   or fixed floor to choose, because the DT-REF-1 defaults already clear AAA (worst 9.69:1).
+
+---
+
+## DT-WALK-2 — walk lightness is solved; chroma is one rule with a ceiling, defaulting to uniform
+
+- **Status:** decided 2026-09-15 (user-directed, after comparing options A–E rendered with OKLCH
+  scenes). Closes Q11 and Q3.
+
+### The maintainer's reasoning, verbatim
+
+> *"I want the lightness to be solved for by default and not stated."*
+>
+> *"I can see how Option C would shrink all colours to fit the circle evenly inside the perceptible
+> region. This is at the cost of not being true to the original accent. Option D adjusts the
+> lightness and almost over saturates. Option E tries to derive the lightness whilst staying true to
+> the original colour wheel as close as possible."*
+>
+> *"I prefer C since it has a much more uniform appearance and no categorical colour on the walk is
+> competing. I feel like there is some seed parameter that should be set to allow the option for
+> option E though."*
+
+### Lightness: solved per slot, per mode
+
+Each slot's lightness is **solved**, never stated: the value nearest the seed's lightness that keeps
+the slot at **3:1 against every ground** of the mode (WCAG 2.2 SC 1.4.11). On `osakanights` the solve
+moves dark-mode lightness by at most 0.05 and leaves light mode unchanged.
+
+A stated lightness was rejected: the seed's lightness (0.45) puts all 12 dark-mode bars under 3:1, and
+a hue-only seed is exactly the default path DT-CONTRAST-1 says must maximise.
+
+### Chroma: one rule, one parameter
+
+```text
+chroma(slot) = min( max in-gamut chroma at that slot's lightness and hue,  walk.chromaCeiling )
+```
+
+| `walk.chromaCeiling` | Behaviour | Was option |
+|---|---|---|
+| **`"floor"`** (default) | the walk's gamut floor, the lowest maximum across all 12 hues, so every slot takes the **same** chroma | **C** |
+| `"seed"` | the seed accent's chroma, so each hue reaches its own maximum but never exceeds the brand | E |
+| a number | an explicit ceiling; a high enough value is uncapped | D, as a limit |
+
+`tmp/probe_chroma_ceiling.py` confirms the single rule reproduces C, E and D **exactly** (worst
+difference 0.00000 in both modes). This is the seed parameter the maintainer anticipated for E.
+
+Measured on `osakanights` (`scripts/build_q11_q3_doc.py`), dark / light:
+
+| Ceiling | Weakest bar | Bars under 3:1 | Chroma kept | Closest pair ΔE_OK |
+|---|---|---|---|---|
+| `"floor"` (C, default) | 3.00 / 4.54 | 0 | 65% / 59% | 0.030 / 0.027 |
+| `"seed"` (E) | 3.01 / 4.52 | 0 | 89% / 85% | 0.035 / 0.031 |
+
+Every ceiling clears 3:1 on every ground because lightness is solved in all of them, so choosing a
+ceiling never costs contrast.
+
+### Rejected alternatives
+
+- **A stated lightness (A, B)** — fails 3:1 for all 12 dark-mode slots on a hue-only seed.
+- **Uncapped per-slot chroma (D) as default** — reaches 128% of the brand accent's chroma; it
+  *"almost over saturates"*.
+- **Seed-capped chroma (E) as default** — truest to the original colour wheel, but uneven: six slots
+  at brand intensity, six below. Kept as `walk.chromaCeiling: "seed"`.
+
+### Lens
+
+- **Given** the walk exists only to separate categories visually (DT-CAT-1), and every slot sits among
+  the others,
+- **we prefer** a solved lightness and one uniform chroma by default **over** stated lightness or
+  per-hue chroma,
+- **because** a uniform walk looks even and no categorical colour competes with another, while the
+  solve keeps every slot legible against the ground,
+- **unless** a brand needs its categorical colours truer to its own accent, which is what
+  `walk.chromaCeiling: "seed"` is for.
+
+### Consequences
+
+- **Q3 closes.** Its only visible effect was on the walk. The DT-REF-1 neutral offsets already give
+  every text pairing AAA, so solving them against a target would produce the same values.
+- **Applied by cascade, not separately asked:** the brand roles (`color.background.brand.*`,
+  `color.border.brand`, `color.link`) follow the same default: lightness solved against their
+  grounds, a stated value never pushed (DT-CONTRAST-1). Reopen only if this is wrong.
+- The `contrastLevel` dial (M3's system-wide −1 to 1 target shift) is not adopted by this decision;
+  logged as low stakes.
+- DT-WALK-1's "12 slots cost nothing over 7" still holds: the floor is set by the 210° hue, which is
+  already in the first seven.
