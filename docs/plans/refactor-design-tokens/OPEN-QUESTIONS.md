@@ -1,6 +1,6 @@
 # Open questions
 
-Five questions, ranked by what each unblocks. Everything settled is in
+Four questions, ranked by what each unblocks. Everything settled is in
 [`DECISIONS.md`](DECISIONS.md); do not reopen those without evidence.
 
 **How to ask these.** Route every one through the `concise-decisions` skill and its Claude Code
@@ -78,13 +78,10 @@ category.
 
 ---
 
-## Q7 — what does "pragmatic" mean as a WCAG stopping rule?
+## ~~Q7~~ — closed by DT-CONTRAST-1
 
-DT-PIPE-1 rule 5 says curation maximises WCAG *"to a pragmatic, not necessarily optimum level"* —
-the maintainer's words. The stopping rule is undefined.
-
-Candidates: hit a fixed floor and stop; maximise subject to holding every stated value; iterate a
-bounded number of times. Not chosen.
+Imputed values are pushed until every text-on-background pairing passes, within each role's tier.
+Stated values are never pushed.
 
 ---
 

@@ -622,7 +622,7 @@ looked the nicer of the 2 options."*
 
 ## DT-CONTRAST-1 — defaults must maximise text contrast; a user's stated deviation is a choice, never a failure
 
-- **Status:** decided 2026-09-15 (user-directed). Closes Q8.
+- **Status:** decided 2026-09-15 (user-directed). Closes Q8 and Q7.
 - **The maintainer, verbatim:**
 
   > *"The most important thing to check is text on a background colour. All of our defaults when I
@@ -670,5 +670,9 @@ parameter is informational.
   provenance is tracked.
 - ADR-016's per-theme `waivers` mechanism is fully redundant: a stated deviation needs no waiver,
   because it never fails.
-- Q7 ("pragmatic" stopping rule) narrows to the default path only, since stated values are never
-  pushed toward a threshold.
+- **Closes Q7, the "pragmatic" stopping rule.** DT-PIPE-1 rule 5's *"pragmatic, not necessarily
+  optimum"* now has a definition. **Imputed values** are pushed until every text-on-background
+  pairing passes, and "maximise" means clearing the target within each role's own tier, so
+  `color.text.subtle` stays distinct from `color.text` rather than being driven to the same
+  extreme. **Stated values** are never pushed toward any threshold. There is no iteration budget
+  or fixed floor to choose, because the DT-REF-1 defaults already clear AAA (worst 9.69:1).
