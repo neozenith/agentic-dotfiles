@@ -27,7 +27,7 @@ extrapolated into a full IR.
 | Parameter | Required | Default | Decision |
 |---|---|---|---|
 | brand hue | **yes** | — | DT-ACCENT-1 |
-| second brand hue | no | imputed at `primary + 137.5°` | DT-ACCENT-1 |
+| secondary hue | no | the brand hue at reduced chroma; drives selected, active, focus and hover state | DT-ACCENT-1 |
 | `L-dark-bg` | no | **0.15** | DT-REF-1 |
 | `L-light-bg` | no | **0.90** | DT-REF-1 |
 | `offset.surface.sunken` | no | **−0.05** | DT-REF-1 |
@@ -126,7 +126,7 @@ pushed (DT-WALK-2, applied by cascade; DT-CONTRAST-1).
 2. Walk by **137.5°** for each subsequent slot.
 3. Gamut-map by **reducing chroma, holding L and H** (CSS Color 4 binary search). Never vary
    lightness — that would destroy the contrast guarantee.
-4. A **stated** second brand hue overrides slot 1.
+4. No slot is pinned. The secondary is not a categorical colour (DT-ACCENT-1).
 
 Measured on `osakanights` (`scripts/walk_12.py`): the chroma-binding hue is **210.04° at slot 2**
 (`maxC 0.0779`), which is already inside the first seven slots — so `min` over 7 and over 12 are

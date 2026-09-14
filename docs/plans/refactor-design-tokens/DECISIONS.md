@@ -421,60 +421,88 @@ Verified against the shipped artifact
 
 ---
 
-## DT-ACCENT-1 — one required brand hue; a second is imputed as walk slot 1 and overridable
+## DT-ACCENT-1 — one required brand hue; the secondary drives selected, active, focus and hover state
 
-- **Status:** decided 2026-09-09. The requirement (optional override of an imputed default) is
-  the maintainer's; the imputation rule is the agent's, drawn from research and accepted.
-- **Decision:** `seed.json` requires **one** brand hue. A second is **imputed, never demanded** —
-  and because DT-ROLES-1 leaves no `secondary` role, it has exactly one home:
-  **`color.chart.categorical.1`**, imputed at `primary + 137.5°`.
+- **Status:** decided 2026-09-09; **revised 2026-09-15** (user-directed). Also closes Q10.
+- **Requirement (the maintainer's, unchanged):** `seed.json` requires **one** brand hue. A secondary is
+  **imputed, never demanded**, and a stated seed value can override the imputed default.
 
-  A stated seed value **overrides that slot**, letting a brand that genuinely owns two colours
-  place its second one without inventing anything. This is mermaid's own mechanism:
+### What the secondary is for
 
-  ```js
-  // vendored mermaid, verified in skills/richdocs/vendor/…/mermaid.esm.min
-  this.secondaryColor = this.secondaryColor || adjust(this.primaryColor, {h: -120})
-  this.cScale1        = this.cScale1        || this.secondaryColor
-  ```
+**Interaction state:** selected, active, focus and hover. It is never a categorical colour.
 
-- **Why a stated second hue is safe here:** it lands in a **categorical** slot, not a second
-  focal role. `color.background.brand.*` stays singular, so the focal signal cannot be split.
+| Role (Atlassian names, verified in `@atlaskit/tokens@16.10.0`) | Job | Derived as |
+|---|---|---|
+| `color.background.selected` | container behind the selected or active item | the secondary at low chroma, lightness solved so text on it passes (DT-CONTRAST-1) |
+| `color.background.selected.hovered` | hover over a selectable item | the same tint, one lightness step further from the ground |
+| `color.border.selected` | outline of the selected element | the secondary hue at a lightness solved for 3:1 on every ground |
+| `color.border.focused` | keyboard focus ring | alias of `color.border.selected`, drawn with a `color.surface` gap so it shows on any fill |
+| `color.text.selected` | text on the selected container | lightness solved against `color.background.selected` |
 
-- **Rejected alternatives:**
-  - **Two required accents** — the shape *no* surveyed system uses. Most scraped brands yield
-    only one colour, so the seed would routinely be invalid.
-  - **A separate `secondary` role imputed at `hue + 60°` (M3's tertiary)** — the only second-hue
-    offset shipped as a default by a major system, but Google never published why 60, and
-    DT-ROLES-1 gives it nowhere to live.
-  - **`+180°` (complementary) or `+120°` (triad)** — measured *less* harmonious than random hue
-    pairs when tested in CIE LCh (Tan, Echevarria & Gingold, IEEE TVCG 2025: complementary
-    40.7–44.2%, triad 40.5–44%, both losing to a randomised control).
+- **Imputed default:** the brand hue at reduced chroma. M3 uses HCT chroma 16 against the primary's 36,
+  so roughly 44% of the primary's chroma; the exact ratio is a seed parameter. The secondary is the
+  **same hue** as the brand unless the user states otherwise, which keeps the focal signal singular.
+- **Stated override:** a stated secondary hue replaces the imputed one in every role above. Lightness
+  is still solved, so the override never costs contrast.
 
-- **What the research established** (`research/research-secondary-accent.md`,
-  `research-accent-derivation.md`, `research-accent-in-dataviz.md`):
-  - "Primary + secondary accent" traces to **Bootstrap's `$secondary`, which is `$gray-600`** —
-    a grey. In 5.3 `--bs-secondary-color` absorbed the deprecated `.text-muted`. Downstream
-    copied the names and kept the greys: shadcn's entire default palette is chroma 0.
-  - **Nine of ten surveyed systems ship exactly one accent hue.** Polaris ships none; Spectrum 2
-    *removed* accent to reserve it; Atlassian states *"Avoid mixing different accent colors."*
-  - **M3's `secondary` is the same hue at lower chroma** (C16 vs primary's C36) — a desaturated
-    primary, not a second colour. It is a different *hue* in only 2 of 9 variants.
-  - Neither **DTCG** nor **Tailwind** offers prior art: DTCG defines no role vocabulary at all,
-    and Tailwind ships no semantic layer (`primary|secondary|accent|brand` returns zero matches
-    in its `theme.css`).
+### Evidence
 
-- **Lens:**
-  - **Given** the evidence that a second brand hue is folklore rather than a load-bearing role,
-    and that some brands nonetheless genuinely own two colours,
-  - **we prefer** imputing the second hue into a categorical slot with a stated override
-    **over** requiring it, omitting it entirely, or giving it its own role,
-  - **because** it costs nothing when a brand has one colour, gives a two-colour brand a real
-    place to put its second, and keeps the focal signal singular by construction,
-  - **unless** a use case appears that needs two *simultaneous* focal roles, which no surveyed
-    system supports and which would reopen DT-ROLES-1 rather than this decision.
+`research/research-secondary-accent.md`:
 
-- **Consequence:** resolves `CURATION.md`'s "[OPEN] one walk or two?" to **one**.
+> *"The fourth, 'the non-categorical UI accent (links, selection)', is the only one with cross-system
+> backing, and the evidence sharpens it: **the job is `selected/active state`, and it belongs to a
+> container token, not a second hue.** Confirmed in three independent M3 implementations and derivable
+> at chroma 16 from the primary."*
+
+- **M3:** `secondaryContainer` is the colour behind the active navigation item
+  (`NavigationBarTokens.ItemActiveIndicatorColor`), a selected filter chip, and a selected tonal button.
+- **shadcn/ui:** `accent` is *"interactive hover, focus, and active surfaces"*.
+- **GitHub Primer:** its single accent is reserved for *"links, selected, active, and focus states"*.
+- **Atlassian** ships the role names directly: `--ds-background-selected{,-hovered,-pressed,-bold}`,
+  `--ds-border-selected`, `--ds-border-focused`, `--ds-text-selected`.
+
+Background findings that still stand: the "primary + secondary accent" folklore traces to Bootstrap's
+`$secondary`, which is `$gray-600`; nine of ten surveyed systems ship exactly one accent hue; M3's
+`secondary` is a different hue in only 2 of its 9 variants; neither DTCG nor Tailwind defines any role
+vocabulary to inherit.
+
+### What changed from the original entry
+
+The original imputed the second hue as **`color.chart.categorical.1`** at `primary + 137.5°`. That was
+wrong on two counts:
+
+1. The same research dossier had found that *"occupy slot 1 of the single walk"* has no support,
+   because every system firewalls categorical data-viz from the UI accent (Spectrum, Atlassian, Radix).
+2. It created the collision Q10 was worried about: a selected node in categorical slot 1 would share
+   its hue with the selection.
+
+**The walk is now a pure golden walk.** No slot is pinned or taken by the secondary (DT-CAT-1,
+DT-WALK-1, DT-WALK-2).
+
+### Rejected alternatives
+
+- **The secondary as walk slot 1** (the original entry) — unsupported, and collides with selection.
+- **A reserved highlight hue kept out of the walk** — a new independent colour, and the walk would have
+  to avoid its hue band, which costs separation.
+- **The raw brand hue for selection** — a selected element whose colour is near the brand hue becomes
+  hard to see; a low-chroma container plus a gapped ring avoids that.
+- **Emphasis as a lightness modifier only** — subtle on the uniform-chroma walk DT-WALK-2 defaults to.
+- **Two required accents** — no surveyed system uses this, and most scraped brands yield one colour.
+- **`+180°` or `+120°` hue offsets** — measured less harmonious than random hue pairs in CIE LCh (Tan,
+  Echevarria & Gingold, IEEE TVCG 2025).
+
+### Lens
+
+- **Given** research shows a secondary's only load-bearing job is interaction state, and categorical
+  colours must stay purely for separating categories,
+- **we prefer** a secondary derived from the brand hue that drives selected, active, focus and hover
+  roles, **over** placing it in the categorical walk or picking a separate highlight hue,
+- **because** it is derived rather than picked, it can never collide with a category, and it follows
+  the shipped practice of M3, shadcn, Primer and Atlassian,
+- **unless** a brand states its own secondary, which then replaces the imputed hue in every
+  interaction-state role.
+
+---
 
 ## DT-WALK-1 — the categorical walk ships 12 pre-computed slots
 

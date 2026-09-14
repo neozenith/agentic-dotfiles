@@ -1,6 +1,6 @@
 # Open questions
 
-Two questions, ranked by what each unblocks. Everything settled is in
+One question remains. Everything settled is in
 [`DECISIONS.md`](DECISIONS.md); do not reopen those without evidence.
 
 **How to ask these.** Route every one through the `concise-decisions` skill and its Claude Code
@@ -31,25 +31,11 @@ toward text. See `DECISIONS.md`.
 
 ---
 
-## Q10 — a reserved highlight token
+## ~~Q10~~ — closed by DT-ACCENT-1 (revised)
 
-The research's own recommendation, and not yet a decision. `research/research-accent-in-dataviz.md`
-found that what the system is actually missing is not a second brand hue but a **reserved,
-walk-excluded highlight**.
-
-Emphasis / highlight / selection is a real distinct colour role: Highcharts
-`--highcharts-highlight-color-*` (a fourth family alongside categorical, neutral and status),
-Cytoscape `:selected` `#0169D9`, deck.gl `highlightColor`, mxGraph `HIGHLIGHT_COLOR`, Plotly
-`activeshape.fillcolor`. Every one is picked to sit **outside** the content palette.
-
-But chart libraries do emphasis as a **modifier**, not a hue — ECharts `liftColor()`, Carbon
-`-hovered` at −7% lightness, Highcharts hover `brightness`. Vega, Observable Plot and Excalidraw
-have no such role at all.
-
-The likely split: **`selection`** as a reserved hue for interactive chrome (the cytoscape viewer,
-deck.gl), and **`emphasis`** as a lightness modifier for static content focus (mermaid, plotly
-images, draw.io). A reserved hue must be excluded from the 12-slot walk or it collides with a
-category.
+The secondary drives selected, active, focus and hover state through `color.background.selected`,
+`color.border.selected`, `color.border.focused` and `color.text.selected`. It is derived from the brand
+hue at low chroma and can be overridden in the seed.
 
 ---
 
