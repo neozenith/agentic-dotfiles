@@ -79,10 +79,19 @@ re-anchoring, not re-labelling.
 
 ---
 
-## Stage 2 — borders 🟡 draft
+## Stage 2 — borders ✅ settled (DT-BORDER-1)
 
-Two roles, locked as names by DT-ROLES-1, values open (Q9). Measured 3:1 positions and the
-opaque-vs-alpha question are in `OPEN-QUESTIONS.md`.
+Two roles with two different jobs, so two different mechanisms.
+
+- **`color.border`** — decorative divider, exempt from WCAG 2.2 SC 1.4.11. The mode's `color.text`
+  at `alpha.border` (default **0.14**), composited over whichever ground it sits on. One token stays
+  consistent across all three grounds: contrast 1.36–1.52:1 in both modes.
+- **`color.border.bold`** — functional boundary, 3:1 required. Opaque, solved as the nearest
+  lightness that reaches 3:1 against **every** ground. The hardest ground is `surface.raised` in dark
+  and `surface.sunken` in light, so both modes land on the same `offset.border.bold` (default
+  **0.35** toward text): dark `L 0.50 #636363`, light `L 0.55 #717171`.
+
+Reproduce with `scripts/build_q9_doc.py`.
 
 ---
 

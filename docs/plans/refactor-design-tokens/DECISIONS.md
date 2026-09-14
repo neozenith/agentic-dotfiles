@@ -510,3 +510,73 @@ Verified against the shipped artifact
 - **Open, arising from this:** whether the walk holds **one chroma for all slots** (equal-chroma,
   59% retained) or takes **each hue's own maximum** (vivid but unequal). Tableau deliberately
   broke equal-lightness for exactly this reason; not yet decided.
+
+---
+
+## DT-BORDER-1 — `color.border` is a translucent text tint; `color.border.bold` is opaque and solved
+
+- **Status:** decided 2026-09-15 (user-directed, option B, chosen after seeing both options rendered
+  on the locked ramp in `Q9-borders`)
+- **Decision:** the two border roles do **different jobs**, and each gets the mechanism that suits
+  its job.
+
+| Role | Job | Mechanism | Default |
+|---|---|---|---|
+| `color.border` | decorative divider: table rules, card edges | the mode's `color.text` at a fixed **alpha**, composited over whatever ground it sits on | `alpha.border` = **0.14** |
+| `color.border.bold` | functional boundary: an input's edge, a focusable outline | **opaque** grey, solved as the nearest lightness reaching 3:1 against *every* ground | `offset.border.bold` = **0.35** toward text |
+
+Both defaults are `seed.json` parameters, following the DT-REF-1 pattern.
+
+### What it resolves to
+
+```text
+color.border        dark   #ffffff at 14%  ->  #262626 / #2d2d2d / #373737   1.36 / 1.43 / 1.52 : 1
+                    light  #000000 at 14%  ->  #b1b1b1 / #bfbfbf / #cdcdcd   1.36 / 1.37 / 1.37 : 1
+color.border.bold   dark   L 0.50  #636363   3.43 / 3.28 / 3.01 : 1   hardest ground: surface.raised
+                    light  L 0.55  #717171   3.10 / 3.63 / 4.21 : 1   hardest ground: surface.sunken
+                    (ratios listed on surface.sunken / surface / surface.raised)
+```
+
+Reproduce with `scripts/build_q9_doc.py`.
+
+### The two findings that framed it
+
+- **The two roles are not a weak and a strong version of one thing.** WCAG 2.2 SC 1.4.11 requires
+  3:1 only for boundaries *needed to identify* a component or state; decorative dividers are exempt.
+  Atlassian's shipped tokens split exactly here: `--ds-border` is `#0B120E24` (near-black at 14%,
+  **1.35:1** on its white surface) while `--ds-border-bold` is opaque `#7D818A` (**3.90:1**).
+  An earlier framing in `OPEN-QUESTIONS.md` put the 3:1 target on `color.border`; that was wrong,
+  and a 3:1 divider would be a visible grey rule on every row.
+- **The hardest ground for `border.bold` differs by mode** — `surface.raised` in dark,
+  `surface.sunken` in light — which is why both modes land on the **same 0.35 offset**. An earlier
+  estimate of `+0.35` dark / `−0.27` light assumed `raised` was hardest in both.
+
+### Rejected alternative
+
+- **Opaque `color.border`**, one grey matched to option B on `surface` — its contrast spread across
+  the three grounds is **0.42** (1.17–1.58:1) against the tint's **0.16**. In light mode it nearly
+  disappears on `surface.sunken` at 1.17:1. Staying consistent would need one border per ground.
+
+### Lens
+
+Maintainer, verbatim: *"I liked option B because we could derive it RELATIVE to text and it
+looked the nicer of the 2 options."*
+
+- **Given** the neutral ramp is built as one reference plus relative derivations (DT-REF-1), and
+  dividers sit on three grounds with no contrast floor,
+- **we prefer** a translucent tint of `color.text` **over** an opaque grey,
+- **because** it is **derived relative to text** rather than being another independently picked
+  value, which keeps the ramp's "specify little, derive the rest" shape; and rendered side by side
+  it **looked the nicer of the two**. The measurements agree: one token keeps nearly the same
+  relationship to every ground (spread 0.16 vs 0.42),
+- **unless** a render surface cannot composite alpha, in which case that surface needs a baked opaque
+  fallback per ground.
+
+### Consequences
+
+- `color.border` is the first role whose rendered colour depends on its ground. It is still a
+  **stated** value, so DT-PIPE-1's "nothing computed at load" holds: compositing happens at paint.
+- The IR cannot state `color.border`'s contrast in isolation. Curation can report it per ground.
+- **Surface support for alpha must be verified** before stage 6 is final: cytoscape and deck.gl accept
+  it; mermaid `themeVariables` and draw.io are unverified. Logged in `OPEN-QUESTIONS.md`.
+- `color.border.brand` (DT-ROLES-1) is unaffected; its value belongs with the brand roles (Q3).

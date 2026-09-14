@@ -1,6 +1,6 @@
 # Open questions
 
-Eight questions, ranked by what each unblocks. Everything settled is in
+Seven questions, ranked by what each unblocks. Everything settled is in
 [`DECISIONS.md`](DECISIONS.md); do not reopen those without evidence.
 
 **How to ask these.** Route every one through the `concise-decisions` skill and its Claude Code
@@ -63,25 +63,10 @@ are the defaults, specify little and gain a lot.*
 
 ---
 
-## Q9 — values for `color.border` and `color.border.bold`
+## ~~Q9~~ — resolved by DT-BORDER-1
 
-The two border roles are locked as names but have no values. Measured on the locked ramp, a 3:1
-non-text contrast (WCAG 2.2 SC 1.4.11) lands at:
-
-| Mode | on `surface.sunken` | on `surface` | on `surface.raised` |
-|---|---|---|---|
-| dark | `L 0.47` | `L 0.48` | `L 0.50` |
-| light | `L 0.55` | `L 0.59` | `L 0.63` |
-
-So `color.border` is roughly a `±0.32` offset from `bg`. `color.border.bold` is a second, stronger
-step above it.
-
-⚠️ `diagram-design` solves both tiers with **alpha**, not lightness: `rule` is `rgba(ink, 0.12)`,
-and its light→dark rule is *"same opacities, RGB flipped"*. Alpha compositing over an unknown
-background is a genuinely different mechanism from a solved lightness, and the locked OKLCH ramp
-cannot express it. Decide whether borders are opaque or alpha.
-
-**Cheap** — the measurements exist.
+`color.border` is the text colour at 14% alpha; `color.border.bold` is opaque at a 0.35 offset
+toward text. See `DECISIONS.md`.
 
 ---
 
@@ -159,6 +144,10 @@ now stale, with nothing reporting it.
 ---
 
 ## Also unresolved, low stakes
+
+- **Alpha support per surface.** DT-BORDER-1 makes `color.border` translucent. Cytoscape and deck.gl
+  accept alpha; mermaid `themeVariables` and draw.io stencil styles are unverified. A surface that
+  cannot composite needs a baked opaque value per ground.
 
 - **`.design-profiles/` spelling.** DT-LOC-1 fixed the *scope* of the shared store, not its name.
 - **The rest of the seed.** Beyond the brand hue and the neutral parameters, what else does
