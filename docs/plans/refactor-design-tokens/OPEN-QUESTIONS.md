@@ -1,6 +1,6 @@
 # Open questions
 
-Six questions, ranked by what each unblocks. Everything settled is in
+Five questions, ranked by what each unblocks. Everything settled is in
 [`DECISIONS.md`](DECISIONS.md); do not reopen those without evidence.
 
 **How to ask these.** Route every one through the `concise-decisions` skill and its Claude Code
@@ -88,22 +88,10 @@ bounded number of times. Not chosen.
 
 ---
 
-## Q8 — where does `mermaid_contrast.ts` fire?
+## ~~Q8~~ — closed by DT-CONTRAST-1
 
-Flagged by the maintainer as important-but-unplaced. It is a **different gate** from pack validity,
-which DT-PIPE-1 rule 4 explicitly turns off at load:
-
-- Pack validity asks *are these colours contrasty?* — answered at curation, never at load.
-- `mermaid_contrast.ts` checks a **finished diagram against a host background**
-  (`Profile = "github" | "mkdocs-material"`). A perfect pack does not guarantee that, because the
-  author may bind the wrong role to a node, or the host's page background may differ from the
-  profile's own.
-
-Worse, some failures the pack cannot express at all: `htmlLabels:false` makes flowchart edge labels
-fail WCAG on light hosts, and the contrast gate cannot see it (see repo memory).
-
-**No longer blocked:** DT-CAT-1 settles that diagram classes use sequential categorical slots, so
-the values the gate checks exist.
+Text on a background colour is what gets checked. Defaults must pass; a miss caused by a stated seed
+parameter is the user's choice, reported as information and never as a failure.
 
 ---
 
@@ -112,6 +100,9 @@ the values the gate checks exist.
 **Parked by the maintainer**, not deferred by ranking: *"too early to answer this. we should define
 the curation process of generating from seed to ir before we can contemplate what re-computing
 means."*
+
+**DT-CONTRAST-1 now requires it:** a contrast miss is a defect only when the value was imputed, and
+the user's choice when it was stated, so the report is only correct if provenance is tracked.
 
 It has to come back before curation is finished, because DT-BUILD-1 depends on it: curation must be
 **idempotent and additive** — imputing what is absent and never overwriting what is stated — or

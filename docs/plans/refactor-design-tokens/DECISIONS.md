@@ -617,3 +617,58 @@ looked the nicer of the 2 options."*
   - **because** the categorical channel exists to separate categories visually, and that is the
     whole job,
   - **unless** never; unconditional.
+
+---
+
+## DT-CONTRAST-1 — defaults must maximise text contrast; a user's stated deviation is a choice, never a failure
+
+- **Status:** decided 2026-09-15 (user-directed). Closes Q8.
+- **The maintainer, verbatim:**
+
+  > *"The most important thing to check is text on a background colour. All of our defaults when I
+  > specify only a Hue in the seeds and leave everything else default, then it should maximise the
+  > contrast. IF ANY OTHER SEED PARAMETER IS SPECIFIED THAT THEN CONTRADICTS the WCAG contrast
+  > ratios, it becomes a CHOICE by the user. It is an informational warning at best but they have
+  > chosen to ignore the WCAG contrast ratios BY CHOICE and that is their artistic license and we
+  > will NEVER flag the WCAG contrast as a failure after that."*
+
+### The rule
+
+| What was stated in the seed | A WCAG contrast miss is… | Reported as |
+|---|---|---|
+| Only a hue; every other parameter defaulted | a **defect in our defaults** | a failure of curation, to be fixed in the defaults |
+| Any other parameter that causes the miss | the **user's deliberate choice** | informational only, **never** a failure |
+
+- **What is checked:** **text on a background colour** is the pairing that matters. Every text role
+  against every ground or fill it can sit on (`color.text*` on `color.surface*`,
+  `color.text.inverse` on `color.background.brand.bold`, text on categorical fills).
+- **The default path must maximise contrast.** A hue-only seed is the guarantee: every text pairing
+  the defaults produce clears WCAG.
+- **After any stated deviation, the system never fails on contrast.** The user has exercised artistic
+  licence. At most, curation tells them which pairings dropped below which threshold.
+
+### Where `mermaid_contrast.ts` fits
+
+It keeps its job, checking **text on a background colour** in a finished diagram. Its **severity**
+follows the table above: a miss caused only by defaults is a failure, and a miss caused by a stated
+parameter is informational.
+
+### Lens
+
+- **Given** defaults are the system's promise and every stated parameter is the user's own decision,
+- **we prefer** guaranteeing contrast on the default path and treating stated deviations as
+  information **over** gating every profile on WCAG,
+- **because** a user who changes a colour has made a deliberate artistic choice, and failing their
+  work for it would police a value they stated,
+- **unless** never; unconditional. This restates DT-PIPE-1's standing rule — a stated value is final;
+  rules impute, never police — for contrast specifically.
+
+### Consequences
+
+- **DT-PROV-1 now has a hard requirement.** Telling "defect in our defaults" from "user's choice"
+  requires knowing whether each value was **imputed or stated**. The report is only correct if
+  provenance is tracked.
+- ADR-016's per-theme `waivers` mechanism is fully redundant: a stated deviation needs no waiver,
+  because it never fails.
+- Q7 ("pragmatic" stopping rule) narrows to the default path only, since stated values are never
+  pushed toward a threshold.

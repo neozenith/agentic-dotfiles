@@ -205,5 +205,7 @@ Curation maximises WCAG **pragmatically, not optimally** (DT-PIPE-1 rule 5), the
 achieved. Nothing downstream re-checks: loading a DTCG runs no WCAG or CVD gate, because editing
 that file is a hard choice the user made.
 
-The stopping rule is Q7. Where `mermaid_contrast.ts` fires is Q8 — and it is a *different* gate from
-pack validity, since it checks a finished diagram against a **host** background.
+The stopping rule is Q7, and it applies to the default path only. Contrast severity follows
+DT-CONTRAST-1: text on a background colour is what gets checked, a miss produced by defaults is a
+failure, and a miss produced by any stated seed parameter is the user's choice, reported as
+information and never as a failure.
