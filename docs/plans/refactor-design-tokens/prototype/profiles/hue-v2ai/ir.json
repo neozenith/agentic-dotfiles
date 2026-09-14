@@ -1,0 +1,1422 @@
+{
+  "$extensions": {
+    "dev.agentic-dotfiles.curation": {
+      "params": {
+        "brand.hue": {
+          "value": 84.58,
+          "source": "stated"
+        },
+        "brand.chroma": {
+          "value": "cusp",
+          "source": "default (prototype)"
+        },
+        "L-dark-bg": {
+          "value": 0.15,
+          "source": "default (DT-REF-1)"
+        },
+        "L-light-bg": {
+          "value": 0.9,
+          "source": "default (DT-REF-1)"
+        },
+        "offset.surface.sunken": {
+          "value": -0.05,
+          "source": "default (DT-REF-1)"
+        },
+        "offset.surface.raised": {
+          "value": 0.05,
+          "source": "default (DT-REF-1)"
+        },
+        "offset.text": {
+          "value": 0.9,
+          "source": "default (DT-REF-1)"
+        },
+        "offset.text.subtle": {
+          "value": 0.65,
+          "source": "default (DT-REF-1)"
+        },
+        "target.text.subtlest": {
+          "value": 4.5,
+          "source": "default (prototype)"
+        },
+        "alpha.border": {
+          "value": 0.14,
+          "source": "default (DT-BORDER-1)"
+        },
+        "offset.border.bold": {
+          "value": 0.35,
+          "source": "default (DT-BORDER-1)"
+        },
+        "target.graphic": {
+          "value": 3.0,
+          "source": "default (WCAG 2.2 SC 1.4.11)"
+        },
+        "target.text.inverse": {
+          "value": 7.0,
+          "source": "default (prototype (DT-CONTRAST-1: maximise))"
+        },
+        "target.link": {
+          "value": 4.5,
+          "source": "default (prototype)"
+        },
+        "alpha.brand.subtlest": {
+          "value": 0.16,
+          "source": "default (prototype (richdocs rdMix 0.84))"
+        },
+        "secondary.hue": {
+          "value": null,
+          "source": "default (DT-ACCENT-1 (defaults to brand.hue))"
+        },
+        "secondary.chromaRatio": {
+          "value": 0.444,
+          "source": "default (DT-ACCENT-1 (M3 chroma 16/36))"
+        },
+        "offset.background.selected": {
+          "value": 0.1,
+          "source": "default (prototype)"
+        },
+        "walk.slots": {
+          "value": 12,
+          "source": "default (DT-WALK-1)"
+        },
+        "walk.angle": {
+          "value": 137.5,
+          "source": "default (DT-WALK-1)"
+        },
+        "walk.lightness": {
+          "value": 0.6,
+          "source": "default (prototype (richdocs measured bands 0.58-0.65))"
+        },
+        "walk.chromaCeiling": {
+          "value": "floor",
+          "source": "default (DT-WALK-2)"
+        },
+        "status.hue.danger": {
+          "value": 25.0,
+          "source": "default (prototype)"
+        },
+        "status.hue.warning": {
+          "value": 80.0,
+          "source": "default (prototype)"
+        },
+        "status.hue.success": {
+          "value": 145.0,
+          "source": "default (prototype)"
+        },
+        "status.chromaCap": {
+          "value": 0.18,
+          "source": "default (prototype)"
+        },
+        "target.status": {
+          "value": 4.5,
+          "source": "default (prototype)"
+        }
+      }
+    }
+  },
+  "color.surface.sunken": {
+    "light": "#cecece",
+    "dark": "#030303",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "reference + absolute offset",
+        "inputs": [
+          "L-light-bg=0.9 [default (DT-REF-1)]",
+          "L-dark-bg=0.15 [default (DT-REF-1)]",
+          "offset.surface.sunken=-0.05 [default (DT-REF-1)]"
+        ],
+        "oklch": {
+          "light": [
+            0.85,
+            0.0,
+            0.0
+          ],
+          "dark": [
+            0.1,
+            0.0,
+            0.0
+          ]
+        }
+      }
+    }
+  },
+  "color.surface": {
+    "light": "#dedede",
+    "dark": "#0b0b0b",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "mode reference",
+        "inputs": [
+          "L-light-bg=0.9 [default (DT-REF-1)]",
+          "L-dark-bg=0.15 [default (DT-REF-1)]"
+        ],
+        "oklch": {
+          "light": [
+            0.9,
+            0.0,
+            0.0
+          ],
+          "dark": [
+            0.15,
+            0.0,
+            0.0
+          ]
+        }
+      }
+    }
+  },
+  "color.surface.raised": {
+    "light": "#eeeeee",
+    "dark": "#161616",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "reference + absolute offset",
+        "inputs": [
+          "L-light-bg=0.9 [default (DT-REF-1)]",
+          "L-dark-bg=0.15 [default (DT-REF-1)]",
+          "offset.surface.raised=0.05 [default (DT-REF-1)]"
+        ],
+        "oklch": {
+          "light": [
+            0.95,
+            0.0,
+            0.0
+          ],
+          "dark": [
+            0.2,
+            0.0,
+            0.0
+          ]
+        }
+      }
+    }
+  },
+  "color.text": {
+    "light": "#000000",
+    "dark": "#ffffff",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "reference + offset toward text",
+        "inputs": [
+          "L-light-bg=0.9 [default (DT-REF-1)]",
+          "L-dark-bg=0.15 [default (DT-REF-1)]",
+          "offset.text=0.9 [default (DT-REF-1)]"
+        ],
+        "oklch": {
+          "light": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "dark": [
+            1.0,
+            0.0,
+            0.0
+          ]
+        }
+      }
+    }
+  },
+  "color.text.subtle": {
+    "light": "#222222",
+    "dark": "#bebebe",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "reference + offset toward text",
+        "inputs": [
+          "L-light-bg=0.9 [default (DT-REF-1)]",
+          "L-dark-bg=0.15 [default (DT-REF-1)]",
+          "offset.text.subtle=0.65 [default (DT-REF-1)]"
+        ],
+        "oklch": {
+          "light": [
+            0.25,
+            0.0,
+            0.0
+          ],
+          "dark": [
+            0.8,
+            0.0,
+            0.0
+          ]
+        }
+      }
+    }
+  },
+  "color.border.bold": {
+    "light": "#717171",
+    "dark": "#636363",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "reference + offset toward text",
+        "inputs": [
+          "L-light-bg=0.9 [default (DT-REF-1)]",
+          "L-dark-bg=0.15 [default (DT-REF-1)]",
+          "offset.border.bold=0.35 [default (DT-BORDER-1)]"
+        ],
+        "oklch": {
+          "light": [
+            0.55,
+            0.0,
+            0.0
+          ],
+          "dark": [
+            0.5,
+            0.0,
+            0.0
+          ]
+        }
+      }
+    }
+  },
+  "color.text.subtlest": {
+    "light": "#585858",
+    "dark": "#7f7f7f",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "nearest the ground reaching the target on every ground",
+        "inputs": [
+          "target.text.subtlest=4.5 [default (prototype)]"
+        ],
+        "oklch": {
+          "light": [
+            0.46,
+            0.0,
+            0.0
+          ],
+          "dark": [
+            0.595,
+            0.0,
+            0.0
+          ]
+        }
+      }
+    }
+  },
+  "color.border": {
+    "light": "#00000024",
+    "dark": "#ffffff24",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "color.text at alpha",
+        "inputs": [
+          "alpha.border=0.14 [default (DT-BORDER-1)]"
+        ]
+      }
+    }
+  },
+  "color.background.brand.bold": {
+    "light": "#725400",
+    "dark": "#febf00",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "brand hue nearest its cusp: inverse text reaches target, and 3:1 on every ground",
+        "inputs": [
+          "brand.hue=84.58 [stated]",
+          "brand.chroma=cusp [default (prototype)]",
+          "cusp L=0.840 C=0.1723 (derived)",
+          "target.text.inverse=7.0 [default (prototype (DT-CONTRAST-1: maximise))]",
+          "target.graphic=3.0 [default (WCAG 2.2 SC 1.4.11)]"
+        ],
+        "oklch": {
+          "light": [
+            0.465,
+            0.0955,
+            84.58
+          ],
+          "dark": [
+            0.84,
+            0.1723,
+            84.58
+          ]
+        }
+      }
+    }
+  },
+  "color.text.inverse": {
+    "light": "#ffffff",
+    "dark": "#000000",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "black or white, whichever has more contrast on the brand fill",
+        "inputs": [
+          "color.background.brand.bold"
+        ]
+      }
+    }
+  },
+  "color.background.brand.subtlest": {
+    "light": "#cdc8ba",
+    "dark": "#322809",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "brand fill at alpha over color.surface",
+        "inputs": [
+          "alpha.brand.subtlest=0.16 [default (prototype (richdocs rdMix 0.84))]"
+        ]
+      }
+    }
+  },
+  "color.border.brand": {
+    "light": "#926c00",
+    "dark": "#febf00",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "brand hue nearest its cusp reaching the target on every ground",
+        "inputs": [
+          "brand.hue=84.58 [stated]",
+          "brand.chroma=cusp [default (prototype)]",
+          "cusp L=0.840 C=0.1723 (derived)",
+          "target.graphic=3.0 [default (WCAG 2.2 SC 1.4.11)]"
+        ],
+        "oklch": {
+          "light": [
+            0.555,
+            0.1139,
+            84.58
+          ],
+          "dark": [
+            0.84,
+            0.1723,
+            84.58
+          ]
+        }
+      }
+    }
+  },
+  "color.link": {
+    "light": "#705300",
+    "dark": "#febf00",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "brand hue nearest its cusp reaching the target on every ground",
+        "inputs": [
+          "brand.hue=84.58 [stated]",
+          "brand.chroma=cusp [default (prototype)]",
+          "cusp L=0.840 C=0.1723 (derived)",
+          "target.link=4.5 [default (prototype)]"
+        ],
+        "oklch": {
+          "light": [
+            0.46,
+            0.0945,
+            84.58
+          ],
+          "dark": [
+            0.84,
+            0.1723,
+            84.58
+          ]
+        }
+      }
+    }
+  },
+  "color.background.selected": {
+    "light": "#d5ba85",
+    "dark": "#2d1f00",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "secondary at reduced chroma, offset from the ground toward text",
+        "inputs": [
+          "secondary.hue=None [default (DT-ACCENT-1 (defaults to brand.hue))]",
+          "secondary.chromaRatio=0.444 [default (DT-ACCENT-1 (M3 chroma 16/36))]",
+          "offset.background.selected=0.1 [default (prototype)]"
+        ],
+        "oklch": {
+          "light": [
+            0.8,
+            0.0765,
+            84.58
+          ],
+          "dark": [
+            0.25,
+            0.0517,
+            84.58
+          ]
+        }
+      }
+    }
+  },
+  "color.background.selected.hovered": {
+    "light": "#c5ab75",
+    "dark": "#3c2b00",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "secondary at reduced chroma, offset from the ground toward text",
+        "inputs": [
+          "secondary.hue=None [default (DT-ACCENT-1 (defaults to brand.hue))]",
+          "secondary.chromaRatio=0.444 [default (DT-ACCENT-1 (M3 chroma 16/36))]",
+          "offset.background.selected=0.1 [default (prototype)]"
+        ],
+        "oklch": {
+          "light": [
+            0.75,
+            0.0765,
+            84.58
+          ],
+          "dark": [
+            0.3,
+            0.0618,
+            84.58
+          ]
+        }
+      }
+    }
+  },
+  "color.border.selected": {
+    "light": "#926c00",
+    "dark": "#febf00",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "secondary hue reaching 3:1 on every ground",
+        "inputs": [
+          "secondary.hue=None [default (DT-ACCENT-1 (defaults to brand.hue))]",
+          "secondary.chromaRatio=0.444 [default (DT-ACCENT-1 (M3 chroma 16/36))]",
+          "target.graphic=3.0 [default (WCAG 2.2 SC 1.4.11)]"
+        ],
+        "oklch": {
+          "light": [
+            0.555,
+            0.1139,
+            84.58
+          ],
+          "dark": [
+            0.84,
+            0.1723,
+            84.58
+          ]
+        }
+      }
+    }
+  },
+  "color.border.focused": {
+    "light": "#926c00",
+    "dark": "#febf00",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "alias",
+        "inputs": [],
+        "alias": "color.border.selected"
+      }
+    }
+  },
+  "color.text.selected": {
+    "light": "#000000",
+    "dark": "#ffffff",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "alias",
+        "inputs": [],
+        "alias": "color.text"
+      }
+    }
+  },
+  "color.text.danger": {
+    "light": "#ac1922",
+    "dark": "#de4e4b",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "conventional hue reaching the target on every ground",
+        "inputs": [
+          "status.hue.danger=25.0 [default (prototype)]",
+          "status.chromaCap=0.18 [default (prototype)]",
+          "target.status=4.5 [default (prototype)]"
+        ],
+        "oklch": {
+          "light": [
+            0.48,
+            0.18,
+            25.0
+          ],
+          "dark": [
+            0.62,
+            0.18,
+            25.0
+          ]
+        }
+      }
+    }
+  },
+  "color.text.warning": {
+    "light": "#755200",
+    "dark": "#a77600",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "conventional hue reaching the target on every ground",
+        "inputs": [
+          "status.hue.warning=80.0 [default (prototype)]",
+          "status.chromaCap=0.18 [default (prototype)]",
+          "target.status=4.5 [default (prototype)]"
+        ],
+        "oklch": {
+          "light": [
+            0.465,
+            0.0964,
+            80.0
+          ],
+          "dark": [
+            0.6,
+            0.1244,
+            80.0
+          ]
+        }
+      }
+    }
+  },
+  "color.text.success": {
+    "light": "#006718",
+    "dark": "#189a30",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "conventional hue reaching the target on every ground",
+        "inputs": [
+          "status.hue.success=145.0 [default (prototype)]",
+          "status.chromaCap=0.18 [default (prototype)]",
+          "target.status=4.5 [default (prototype)]"
+        ],
+        "oklch": {
+          "light": [
+            0.445,
+            0.1401,
+            145.0
+          ],
+          "dark": [
+            0.6,
+            0.18,
+            145.0
+          ]
+        }
+      }
+    }
+  },
+  "color.chart.categorical.1": {
+    "light": "#8d6e29",
+    "dark": "#9d7b2c",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "golden walk slot 1: hue +0x137.5 deg, lightness solved to 3:1, chroma ceiling",
+        "inputs": [
+          "brand.hue=84.58 [stated]",
+          "walk.slots=12 [default (DT-WALK-1)]",
+          "walk.angle=137.5 [default (DT-WALK-1)]",
+          "walk.lightness=0.6 [default (prototype (richdocs measured bands 0.58-0.65))]",
+          "walk.chromaCeiling=floor [default (DT-WALK-2)]",
+          "target.graphic=3.0 [default (WCAG 2.2 SC 1.4.11)]"
+        ],
+        "oklch": {
+          "light": [
+            0.555,
+            0.0943,
+            84.58
+          ],
+          "dark": [
+            0.6,
+            0.1038,
+            84.58
+          ]
+        }
+      }
+    }
+  },
+  "color.chart.categorical.2": {
+    "light": "#1b7d99",
+    "dark": "#1e8dac",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "golden walk slot 2: hue +1x137.5 deg, lightness solved to 3:1, chroma ceiling",
+        "inputs": [
+          "brand.hue=84.58 [stated]",
+          "walk.slots=12 [default (DT-WALK-1)]",
+          "walk.angle=137.5 [default (DT-WALK-1)]",
+          "walk.lightness=0.6 [default (prototype (richdocs measured bands 0.58-0.65))]",
+          "walk.chromaCeiling=floor [default (DT-WALK-2)]",
+          "target.graphic=3.0 [default (WCAG 2.2 SC 1.4.11)]"
+        ],
+        "oklch": {
+          "light": [
+            0.55,
+            0.0943,
+            222.08
+          ],
+          "dark": [
+            0.6,
+            0.1038,
+            222.08
+          ]
+        }
+      }
+    }
+  },
+  "color.chart.categorical.3": {
+    "light": "#a35d74",
+    "dark": "#b2647e",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "golden walk slot 3: hue +2x137.5 deg, lightness solved to 3:1, chroma ceiling",
+        "inputs": [
+          "brand.hue=84.58 [stated]",
+          "walk.slots=12 [default (DT-WALK-1)]",
+          "walk.angle=137.5 [default (DT-WALK-1)]",
+          "walk.lightness=0.6 [default (prototype (richdocs measured bands 0.58-0.65))]",
+          "walk.chromaCeiling=floor [default (DT-WALK-2)]",
+          "target.graphic=3.0 [default (WCAG 2.2 SC 1.4.11)]"
+        ],
+        "oklch": {
+          "light": [
+            0.565,
+            0.0943,
+            359.58
+          ],
+          "dark": [
+            0.6,
+            0.1038,
+            359.58
+          ]
+        }
+      }
+    }
+  },
+  "color.chart.categorical.4": {
+    "light": "#557d45",
+    "dark": "#628f4f",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "golden walk slot 4: hue +3x137.5 deg, lightness solved to 3:1, chroma ceiling",
+        "inputs": [
+          "brand.hue=84.58 [stated]",
+          "walk.slots=12 [default (DT-WALK-1)]",
+          "walk.angle=137.5 [default (DT-WALK-1)]",
+          "walk.lightness=0.6 [default (prototype (richdocs measured bands 0.58-0.65))]",
+          "walk.chromaCeiling=floor [default (DT-WALK-2)]",
+          "target.graphic=3.0 [default (WCAG 2.2 SC 1.4.11)]"
+        ],
+        "oklch": {
+          "light": [
+            0.545,
+            0.0943,
+            137.08
+          ],
+          "dark": [
+            0.6,
+            0.1038,
+            137.08
+          ]
+        }
+      }
+    }
+  },
+  "color.chart.categorical.5": {
+    "light": "#636eaa",
+    "dark": "#6e7bbe",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "golden walk slot 5: hue +4x137.5 deg, lightness solved to 3:1, chroma ceiling",
+        "inputs": [
+          "brand.hue=84.58 [stated]",
+          "walk.slots=12 [default (DT-WALK-1)]",
+          "walk.angle=137.5 [default (DT-WALK-1)]",
+          "walk.lightness=0.6 [default (prototype (richdocs measured bands 0.58-0.65))]",
+          "walk.chromaCeiling=floor [default (DT-WALK-2)]",
+          "target.graphic=3.0 [default (WCAG 2.2 SC 1.4.11)]"
+        ],
+        "oklch": {
+          "light": [
+            0.555,
+            0.0943,
+            274.58
+          ],
+          "dark": [
+            0.6,
+            0.1038,
+            274.58
+          ]
+        }
+      }
+    }
+  },
+  "color.chart.categorical.6": {
+    "light": "#a0643e",
+    "dark": "#b16d42",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "golden walk slot 6: hue +5x137.5 deg, lightness solved to 3:1, chroma ceiling",
+        "inputs": [
+          "brand.hue=84.58 [stated]",
+          "walk.slots=12 [default (DT-WALK-1)]",
+          "walk.angle=137.5 [default (DT-WALK-1)]",
+          "walk.lightness=0.6 [default (prototype (richdocs measured bands 0.58-0.65))]",
+          "walk.chromaCeiling=floor [default (DT-WALK-2)]",
+          "target.graphic=3.0 [default (WCAG 2.2 SC 1.4.11)]"
+        ],
+        "oklch": {
+          "light": [
+            0.56,
+            0.0943,
+            52.08
+          ],
+          "dark": [
+            0.6,
+            0.1038,
+            52.08
+          ]
+        }
+      }
+    }
+  },
+  "color.chart.categorical.7": {
+    "light": "#00817c",
+    "dark": "#00948d",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "golden walk slot 7: hue +6x137.5 deg, lightness solved to 3:1, chroma ceiling",
+        "inputs": [
+          "brand.hue=84.58 [stated]",
+          "walk.slots=12 [default (DT-WALK-1)]",
+          "walk.angle=137.5 [default (DT-WALK-1)]",
+          "walk.lightness=0.6 [default (prototype (richdocs measured bands 0.58-0.65))]",
+          "walk.chromaCeiling=floor [default (DT-WALK-2)]",
+          "target.graphic=3.0 [default (WCAG 2.2 SC 1.4.11)]"
+        ],
+        "oklch": {
+          "light": [
+            0.545,
+            0.0943,
+            189.58
+          ],
+          "dark": [
+            0.6,
+            0.1038,
+            189.58
+          ]
+        }
+      }
+    }
+  },
+  "color.chart.categorical.8": {
+    "light": "#936193",
+    "dark": "#a169a0",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "golden walk slot 8: hue +7x137.5 deg, lightness solved to 3:1, chroma ceiling",
+        "inputs": [
+          "brand.hue=84.58 [stated]",
+          "walk.slots=12 [default (DT-WALK-1)]",
+          "walk.angle=137.5 [default (DT-WALK-1)]",
+          "walk.lightness=0.6 [default (prototype (richdocs measured bands 0.58-0.65))]",
+          "walk.chromaCeiling=floor [default (DT-WALK-2)]",
+          "target.graphic=3.0 [default (WCAG 2.2 SC 1.4.11)]"
+        ],
+        "oklch": {
+          "light": [
+            0.565,
+            0.0943,
+            327.08
+          ],
+          "dark": [
+            0.6,
+            0.1038,
+            327.08
+          ]
+        }
+      }
+    }
+  },
+  "color.chart.categorical.9": {
+    "light": "#7a742b",
+    "dark": "#8a8330",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "golden walk slot 9: hue +8x137.5 deg, lightness solved to 3:1, chroma ceiling",
+        "inputs": [
+          "brand.hue=84.58 [stated]",
+          "walk.slots=12 [default (DT-WALK-1)]",
+          "walk.angle=137.5 [default (DT-WALK-1)]",
+          "walk.lightness=0.6 [default (prototype (richdocs measured bands 0.58-0.65))]",
+          "walk.chromaCeiling=floor [default (DT-WALK-2)]",
+          "target.graphic=3.0 [default (WCAG 2.2 SC 1.4.11)]"
+        ],
+        "oklch": {
+          "light": [
+            0.55,
+            0.0943,
+            104.58
+          ],
+          "dark": [
+            0.6,
+            0.1038,
+            104.58
+          ]
+        }
+      }
+    }
+  },
+  "color.chart.categorical.10": {
+    "light": "#3978a4",
+    "dark": "#4187b9",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "golden walk slot 10: hue +9x137.5 deg, lightness solved to 3:1, chroma ceiling",
+        "inputs": [
+          "brand.hue=84.58 [stated]",
+          "walk.slots=12 [default (DT-WALK-1)]",
+          "walk.angle=137.5 [default (DT-WALK-1)]",
+          "walk.lightness=0.6 [default (prototype (richdocs measured bands 0.58-0.65))]",
+          "walk.chromaCeiling=floor [default (DT-WALK-2)]",
+          "target.graphic=3.0 [default (WCAG 2.2 SC 1.4.11)]"
+        ],
+        "oklch": {
+          "light": [
+            0.55,
+            0.0943,
+            242.08
+          ],
+          "dark": [
+            0.6,
+            0.1038,
+            242.08
+          ]
+        }
+      }
+    }
+  },
+  "color.chart.categorical.11": {
+    "light": "#a65e5f",
+    "dark": "#b66567",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "golden walk slot 11: hue +10x137.5 deg, lightness solved to 3:1, chroma ceiling",
+        "inputs": [
+          "brand.hue=84.58 [stated]",
+          "walk.slots=12 [default (DT-WALK-1)]",
+          "walk.angle=137.5 [default (DT-WALK-1)]",
+          "walk.lightness=0.6 [default (prototype (richdocs measured bands 0.58-0.65))]",
+          "walk.chromaCeiling=floor [default (DT-WALK-2)]",
+          "target.graphic=3.0 [default (WCAG 2.2 SC 1.4.11)]"
+        ],
+        "oklch": {
+          "light": [
+            0.565,
+            0.0943,
+            19.58
+          ],
+          "dark": [
+            0.6,
+            0.1038,
+            19.58
+          ]
+        }
+      }
+    }
+  },
+  "color.chart.categorical.12": {
+    "light": "#3a805a",
+    "dark": "#439367",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "golden walk slot 12: hue +11x137.5 deg, lightness solved to 3:1, chroma ceiling",
+        "inputs": [
+          "brand.hue=84.58 [stated]",
+          "walk.slots=12 [default (DT-WALK-1)]",
+          "walk.angle=137.5 [default (DT-WALK-1)]",
+          "walk.lightness=0.6 [default (prototype (richdocs measured bands 0.58-0.65))]",
+          "walk.chromaCeiling=floor [default (DT-WALK-2)]",
+          "target.graphic=3.0 [default (WCAG 2.2 SC 1.4.11)]"
+        ],
+        "oklch": {
+          "light": [
+            0.545,
+            0.0943,
+            157.08
+          ],
+          "dark": [
+            0.6,
+            0.1038,
+            157.08
+          ]
+        }
+      }
+    }
+  },
+  "color.chart.sequential.1": {
+    "light": "#ffd06c",
+    "dark": "#3c2b00",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "evenly spaced lightness at a fixed hue, chroma capped",
+        "inputs": [
+          "prototype"
+        ],
+        "oklch": {
+          "light": [
+            0.88,
+            0.1292,
+            84.58
+          ],
+          "dark": [
+            0.3,
+            0.0618,
+            84.58
+          ]
+        }
+      }
+    }
+  },
+  "color.chart.sequential.2": {
+    "light": "#e1a900",
+    "dark": "#664b00",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "evenly spaced lightness at a fixed hue, chroma capped",
+        "inputs": [
+          "prototype"
+        ],
+        "oklch": {
+          "light": [
+            0.765,
+            0.1569,
+            84.58
+          ],
+          "dark": [
+            0.43,
+            0.0883,
+            84.58
+          ]
+        }
+      }
+    }
+  },
+  "color.chart.sequential.3": {
+    "light": "#b58700",
+    "dark": "#946e00",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "evenly spaced lightness at a fixed hue, chroma capped",
+        "inputs": [
+          "prototype"
+        ],
+        "oklch": {
+          "light": [
+            0.65,
+            0.1334,
+            84.58
+          ],
+          "dark": [
+            0.56,
+            0.1149,
+            84.58
+          ]
+        }
+      }
+    }
+  },
+  "color.chart.sequential.4": {
+    "light": "#8b6700",
+    "dark": "#c49300",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "evenly spaced lightness at a fixed hue, chroma capped",
+        "inputs": [
+          "prototype"
+        ],
+        "oklch": {
+          "light": [
+            0.535,
+            0.1098,
+            84.58
+          ],
+          "dark": [
+            0.69,
+            0.1416,
+            84.58
+          ]
+        }
+      }
+    }
+  },
+  "color.chart.sequential.5": {
+    "light": "#634800",
+    "dark": "#f6b900",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "evenly spaced lightness at a fixed hue, chroma capped",
+        "inputs": [
+          "prototype"
+        ],
+        "oklch": {
+          "light": [
+            0.42,
+            0.0863,
+            84.58
+          ],
+          "dark": [
+            0.82,
+            0.1682,
+            84.58
+          ]
+        }
+      }
+    }
+  },
+  "color.chart.diverging.positive.1": {
+    "light": "#ffd06c",
+    "dark": "#3c2b00",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "evenly spaced lightness at a fixed hue, chroma capped",
+        "inputs": [
+          "prototype"
+        ],
+        "oklch": {
+          "light": [
+            0.88,
+            0.1292,
+            84.58
+          ],
+          "dark": [
+            0.3,
+            0.0618,
+            84.58
+          ]
+        }
+      }
+    }
+  },
+  "color.chart.diverging.positive.2": {
+    "light": "#b58700",
+    "dark": "#946e00",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "evenly spaced lightness at a fixed hue, chroma capped",
+        "inputs": [
+          "prototype"
+        ],
+        "oklch": {
+          "light": [
+            0.65,
+            0.1334,
+            84.58
+          ],
+          "dark": [
+            0.56,
+            0.1149,
+            84.58
+          ]
+        }
+      }
+    }
+  },
+  "color.chart.diverging.positive.3": {
+    "light": "#634800",
+    "dark": "#f6b900",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "evenly spaced lightness at a fixed hue, chroma capped",
+        "inputs": [
+          "prototype"
+        ],
+        "oklch": {
+          "light": [
+            0.42,
+            0.0863,
+            84.58
+          ],
+          "dark": [
+            0.82,
+            0.1682,
+            84.58
+          ]
+        }
+      }
+    }
+  },
+  "color.chart.diverging.negative.1": {
+    "light": "#ffc8c3",
+    "dark": "#5d0009",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "evenly spaced lightness at a fixed hue, chroma capped",
+        "inputs": [
+          "prototype"
+        ],
+        "oklch": {
+          "light": [
+            0.88,
+            0.0635,
+            25.0
+          ],
+          "dark": [
+            0.3,
+            0.122,
+            25.0
+          ]
+        }
+      }
+    }
+  },
+  "color.chart.diverging.negative.2": {
+    "light": "#e85854",
+    "dark": "#c8393a",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "evenly spaced lightness at a fixed hue, chroma capped",
+        "inputs": [
+          "prototype"
+        ],
+        "oklch": {
+          "light": [
+            0.65,
+            0.18,
+            25.0
+          ],
+          "dark": [
+            0.56,
+            0.18,
+            25.0
+          ]
+        }
+      }
+    }
+  },
+  "color.chart.diverging.negative.3": {
+    "light": "#940014",
+    "dark": "#ffaba3",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "evenly spaced lightness at a fixed hue, chroma capped",
+        "inputs": [
+          "prototype"
+        ],
+        "oklch": {
+          "light": [
+            0.42,
+            0.1705,
+            25.0
+          ],
+          "dark": [
+            0.82,
+            0.1009,
+            25.0
+          ]
+        }
+      }
+    }
+  },
+  "color.chart.diverging.alt-positive.1": {
+    "light": "#83f68a",
+    "dark": "#003909",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "evenly spaced lightness at a fixed hue, chroma capped",
+        "inputs": [
+          "prototype"
+        ],
+        "oklch": {
+          "light": [
+            0.88,
+            0.18,
+            145.0
+          ],
+          "dark": [
+            0.3,
+            0.0947,
+            145.0
+          ]
+        }
+      }
+    }
+  },
+  "color.chart.diverging.alt-positive.2": {
+    "light": "#31aa40",
+    "dark": "#008d24",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "evenly spaced lightness at a fixed hue, chroma capped",
+        "inputs": [
+          "prototype"
+        ],
+        "oklch": {
+          "light": [
+            0.65,
+            0.18,
+            145.0
+          ],
+          "dark": [
+            0.56,
+            0.1762,
+            145.0
+          ]
+        }
+      }
+    }
+  },
+  "color.chart.diverging.alt-positive.3": {
+    "light": "#005e15",
+    "dark": "#6fe276",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "evenly spaced lightness at a fixed hue, chroma capped",
+        "inputs": [
+          "prototype"
+        ],
+        "oklch": {
+          "light": [
+            0.42,
+            0.1323,
+            145.0
+          ],
+          "dark": [
+            0.82,
+            0.18,
+            145.0
+          ]
+        }
+      }
+    }
+  },
+  "color.chart.muted.1": {
+    "light": "#717171",
+    "dark": "#636363",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "greys from border.bold to text.subtle",
+        "inputs": [
+          "prototype"
+        ],
+        "oklch": {
+          "light": [
+            0.55,
+            0.0,
+            0.0
+          ],
+          "dark": [
+            0.5,
+            0.0,
+            0.0
+          ]
+        }
+      }
+    }
+  },
+  "color.chart.muted.2": {
+    "light": "#555555",
+    "dark": "#808080",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "greys from border.bold to text.subtle",
+        "inputs": [
+          "prototype"
+        ],
+        "oklch": {
+          "light": [
+            0.45,
+            0.0,
+            0.0
+          ],
+          "dark": [
+            0.6,
+            0.0,
+            0.0
+          ]
+        }
+      }
+    }
+  },
+  "color.chart.muted.3": {
+    "light": "#3a3a3a",
+    "dark": "#9e9e9e",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "greys from border.bold to text.subtle",
+        "inputs": [
+          "prototype"
+        ],
+        "oklch": {
+          "light": [
+            0.35,
+            0.0,
+            0.0
+          ],
+          "dark": [
+            0.7,
+            0.0,
+            0.0
+          ]
+        }
+      }
+    }
+  },
+  "color.chart.muted.4": {
+    "light": "#222222",
+    "dark": "#bebebe",
+    "$extensions": {
+      "dev.agentic-dotfiles.curation": {
+        "origin": "imputed",
+        "rule": "greys from border.bold to text.subtle",
+        "inputs": [
+          "prototype"
+        ],
+        "oklch": {
+          "light": [
+            0.25,
+            0.0,
+            0.0
+          ],
+          "dark": [
+            0.8,
+            0.0,
+            0.0
+          ]
+        }
+      }
+    }
+  }
+}

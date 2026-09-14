@@ -1,0 +1,241 @@
+{
+  "defaultTheme": "light",
+  "fonts": {
+    "display": "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+    "body": "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+    "mono": "ui-monospace, 'SF Mono', Menlo, Consolas, monospace"
+  },
+  "themes": {
+    "light": {
+      "bg": "#dedede",
+      "fg": "#000000",
+      "muted": "#222222",
+      "accent": "#993900",
+      "surface": "#eeeeee",
+      "border": "#bfbfbf",
+      "onAccent": "#ffffff",
+      "link": "#993900",
+      "radius": "12px",
+      "pill": "999px"
+    },
+    "dark": {
+      "bg": "#0b0b0b",
+      "fg": "#ffffff",
+      "muted": "#bebebe",
+      "accent": "#ff6503",
+      "surface": "#161616",
+      "border": "#2d2d2d",
+      "onAccent": "#000000",
+      "link": "#ff6503",
+      "radius": "12px",
+      "pill": "999px"
+    }
+  },
+  "canvas": {
+    "cytoscape": {
+      "light": {
+        "nodeFill": "#d3c3ba",
+        "nodeBorder": "#c44c00",
+        "nodeLabel": "#000000",
+        "nodeFillAlt": "#f0ab8f",
+        "edge": "#717171",
+        "edgeLabel": "#222222",
+        "edgeLabelBg": "#dedede",
+        "compoundBg": "#cecece",
+        "compoundBorder": "#b1b1b1",
+        "selected": "#c44c00",
+        "shape": "round-rectangle",
+        "roundness": 8
+      },
+      "dark": {
+        "nodeFill": "#32190a",
+        "nodeBorder": "#ff6503",
+        "nodeLabel": "#ffffff",
+        "nodeFillAlt": "#3d1200",
+        "edge": "#636363",
+        "edgeLabel": "#bebebe",
+        "edgeLabelBg": "#0b0b0b",
+        "compoundBg": "#030303",
+        "compoundBorder": "#272727",
+        "selected": "#ff6503",
+        "shape": "round-rectangle",
+        "roundness": 8
+      }
+    },
+    "plotly": {
+      "light": {
+        "paper": "#eeeeee",
+        "plot": "#dedede",
+        "font": "#000000",
+        "grid": "#bfbfbf",
+        "series": [
+          "#a36348",
+          "#188173",
+          "#8d6499",
+          "#84722b",
+          "#2e7a9f",
+          "#a55e69",
+          "#477f51",
+          "#706ca9"
+        ],
+        "seriesAlt": [
+          "#2e7a9f",
+          "#a55e69",
+          "#477f51",
+          "#706ca9",
+          "#9b6836",
+          "#008086",
+          "#996089",
+          "#6f7834"
+        ],
+        "muted": [
+          "#717171",
+          "#555555",
+          "#3a3a3a",
+          "#222222"
+        ],
+        "sequential": [
+          "#ffcab4",
+          "#ff9162",
+          "#ea5c00",
+          "#b44500",
+          "#822f00"
+        ],
+        "diverging": {
+          "good": [
+            "#ffcab4",
+            "#ea5c00",
+            "#822f00"
+          ],
+          "zero": "#cecece",
+          "bad": [
+            "#ffc8c3",
+            "#e85854",
+            "#940014"
+          ],
+          "label": "brand \u2194 danger"
+        },
+        "divergingAlt": {
+          "good": [
+            "#83f68a",
+            "#31aa40",
+            "#005e15"
+          ],
+          "zero": "#cecece",
+          "bad": [
+            "#ffc8c3",
+            "#e85854",
+            "#940014"
+          ],
+          "label": "success \u2194 danger"
+        }
+      },
+      "dark": {
+        "paper": "#161616",
+        "plot": "#0b0b0b",
+        "font": "#ffffff",
+        "grid": "#2d2d2d",
+        "series": [
+          "#b36b4d",
+          "#1d9483",
+          "#9a6ca8",
+          "#937f2f",
+          "#348ab3",
+          "#b46571",
+          "#52915d",
+          "#7b77bb"
+        ],
+        "seriesAlt": [
+          "#348ab3",
+          "#b46571",
+          "#52915d",
+          "#7b77bb",
+          "#ab723a",
+          "#009299",
+          "#a86795",
+          "#7e873a"
+        ],
+        "muted": [
+          "#636363",
+          "#808080",
+          "#9e9e9e",
+          "#bebebe"
+        ],
+        "sequential": [
+          "#501a00",
+          "#863100",
+          "#c04a00",
+          "#fd6400",
+          "#ffad8c"
+        ],
+        "diverging": {
+          "good": [
+            "#501a00",
+            "#c04a00",
+            "#ffad8c"
+          ],
+          "zero": "#030303",
+          "bad": [
+            "#5d0009",
+            "#c8393a",
+            "#ffaba3"
+          ],
+          "label": "brand \u2194 danger"
+        },
+        "divergingAlt": {
+          "good": [
+            "#003909",
+            "#008d24",
+            "#6fe276"
+          ],
+          "zero": "#030303",
+          "bad": [
+            "#5d0009",
+            "#c8393a",
+            "#ffaba3"
+          ],
+          "label": "success \u2194 danger"
+        }
+      }
+    }
+  },
+  "categoryColours": {
+    "Compute": "#a36348",
+    "Storage": "#188173",
+    "Database": "#8d6499",
+    "Networking": "#84722b",
+    "Security": "#2e7a9f",
+    "Integration": "#a55e69",
+    "General": "#477f51"
+  },
+  "status": {
+    "light": {
+      "colours": {
+        "good": "#006718",
+        "warning": "#755200",
+        "serious": "#ac1922",
+        "critical": "#ac1922"
+      },
+      "labels": {
+        "good": "Good",
+        "warning": "Warning",
+        "serious": "Serious",
+        "critical": "Critical"
+      }
+    },
+    "dark": {
+      "colours": {
+        "good": "#189a30",
+        "warning": "#a77600",
+        "serious": "#de4e4b",
+        "critical": "#de4e4b"
+      },
+      "labels": {
+        "good": "Good",
+        "warning": "Warning",
+        "serious": "Serious",
+        "critical": "Critical"
+      }
+    }
+  }
+}
