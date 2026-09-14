@@ -5,7 +5,8 @@ Each ADR carries a **Lens** — apply it to the next decision instead of re-deri
 
 ## Development contract
 
-Prose skill + eval suite + one TypeScript gate script.
+Prose skill + eval suite.
+The prose gate is the external [`@jpeakai/prose-gates`](https://www.npmjs.com/package/@jpeakai/prose-gates) package (ADR-19), so this skill ships no scripts.
 Doc gates before handoff, run from repo root:
 
 ```sh
@@ -14,12 +15,7 @@ bun run .claude/skills/mermaidjs-diagrams/scripts/mermaid_complexity.ts .claude/
 uvx --from md-toc md_toc --in-place --no-list-coherence github --header-levels 4 .claude/skills/gooddocs/README.md
 ```
 
-Script changes run the standard loop (`.claude/rules/claude_skills/scripts.md`):
-
-```sh
-make -C .claude/skills/gooddocs/scripts fix
-make -C .claude/skills/gooddocs/scripts ci
-```
+Prose-gate rule changes land upstream in [jpeakai/jpai-prose-gates](https://github.com/jpeakai/jpai-prose-gates), then the pinned version in SKILL.md step 1b is bumped.
 
 All files ≤ 500 lines (`.claude/rules/claude_skills/index.md`).
 
@@ -34,7 +30,6 @@ All files ≤ 500 lines (`.claude/rules/claude_skills/index.md`).
 | `resources/voice.md` | Maintainer voice fingerprint — loaded only on `voice` |
 | `resources/slop_smells.md` | Curated AI-slop smell catalog + capture-THE-WHY guidance (lazy; maintainer-grown) |
 | `resources/prose_style.md` | Sentence-level global-audience style: no em-dash, Australian English, short coherent clauses, ESL/translator empathy, inclusive language, standardised domain language (lazy; write/restructure) |
-| `scripts/prose_gates.ts` | Deterministic prose gate (PG001 wrap, PG002 length, PG003 semicolon list, PG004/PG005 glyphs, PG006-PG009 disguised lists) over mdast; audits markdown-tagged fences recursively; `--fix` reflows sentence-per-line |
 | `CLAUDE.md` | This file — rationale and decision log |
 | `../../workflows/gooddocs-audit.js` | Reusable named **dynamic workflow** wrapping AUDIT (+ safe-fix) for loop/schedule use; reads this skill's doctrine at runtime |
 
@@ -238,6 +233,19 @@ All files ≤ 500 lines (`.claude/rules/claude_skills/index.md`).
   Each new disguised-list variant becomes a deterministic PG rule (PG006-PG009 so far) rather than a remembered judgment call.
 - **Consequences:** An audit is never "clean" while known structure smells stand; the PG family grows one small named check per failure mode; template bodies inside markdown-tagged fences are audited recursively so templates meet the same bar.
 - **Lens:** When the maintainer corrects the same shape failure twice, encode it as a deterministic gate rule in the same change — and let audit both detect and (mechanically) repair shape, reserving standalone restructure for outline-scale work.
+
+### ADR-19: the prose gate is an external package, not a bundled script
+
+- **Status:** Accepted (2026-09; supersedes the delivery clause of ADR-17)
+- **Context:** `scripts/prose_gates.ts` was copied into every skill location and meta repo that needed it, so each copy drifted on its own.
+  The gate now publishes as [`@jpeakai/prose-gates`](https://www.npmjs.com/package/@jpeakai/prose-gates), and its `--fix` grew past sentence reflow to every fix it can prove safe.
+- **Decision:** Remove `scripts/` from this skill.
+  Audit step 1b runs `bunx @jpeakai/prose-gates@<pinned>`, and PG rules are added upstream rather than here.
+- **Consequences:** Step 1b needs registry access to npmjs.org on first run (Tier A).
+  The skill carries no lockfile or test suite of its own.
+  ADR-18's "new variant becomes a PG rule" now means a change in the package repo plus a pin bump here.
+- **Lens:** A deterministic gate with more than one consumer lives in one published package.
+  A skill pins a version of it and never vendors the source.
 
 ## Extension checklist
 
