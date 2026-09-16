@@ -14,8 +14,9 @@ from argparse import Namespace
 from datetime import UTC, datetime
 from pathlib import Path
 
-import md2html
 import pytest
+
+import md2html
 from md2html import git_context, output_report, serve_commands
 
 DOC_MD = "# Title\n\nSome `</script>` text.\n\n```mermaid\ngraph LR; a-->b\n```\n"

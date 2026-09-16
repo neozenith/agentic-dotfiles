@@ -1,7 +1,7 @@
 # Contrast Tooling Surface
 
 The full CLI surface of the two contrast tools — flags, output fields, and the
-exit-code contract. The *mandate* to run them lives in `SKILL.md` ("Required
+exit-code contract. The *mandate* to run them lives in `mermaidjs-diagrams.md` ("Required
 for every diagram"); this file is the reference you open when the recipe there
 isn't enough. The conceptual palette rules live in `color_theming.md`.
 
@@ -21,7 +21,7 @@ bun run .claude/skills/mermaidjs-diagrams/scripts/mermaid_contrast.ts docs/ --su
 bun run .claude/skills/mermaidjs-diagrams/scripts/mermaid_contrast.ts docs/ --quiet     # failures only
 bun run .claude/skills/mermaidjs-diagrams/scripts/mermaid_contrast.ts docs/ --json
 
-# Force a render context (see SKILL.md "Required for every diagram")
+# Force a render context (see mermaidjs-diagrams.md "Required for every diagram")
 bun run .claude/skills/mermaidjs-diagrams/scripts/mermaid_contrast.ts docs/ --profile mkdocs-material
 bun run .claude/skills/mermaidjs-diagrams/scripts/mermaid_contrast.ts docs/ --profile github
 

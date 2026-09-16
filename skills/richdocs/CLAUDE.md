@@ -35,9 +35,9 @@ make -C .claude/skills/richdocs/scripts ci    # gate: must exit 0 before handoff
 | `scripts/Makefile` | fix/ci contract per `.claude/rules/claude_skills/scripts.md` |
 | `assets/stencils.json.zip` | vendored draw.io icon packs (~3.4 MB; see `assets/NOTICE`) |
 | `assets/design-tokens.json` | default neutral brandpack (schema in `rich-blocks.md`) |
-| `resources/adr-log.md` | the **ADR log** (ADR-001…018) — decision lenses; split out of this file for the 500-line invariant |
+| `resources/adr-log.md` | the **ADR log** (ADR-001…020) — decision lenses; split out of this file for the 500-line invariant |
 | `resources/learned/` | self-curated adjudications/facts (statefulness Pathway 2) — read before re-litigating a past failure |
-| `vendor/mermaidjs-diagrams/` | wholesale vendored mermaid toolchain (parse/complexity + contrast gates, theming references) — refresh per ADR-007, never cherry-pick |
+| `vendor/mermaidjs-diagrams/` | wholesale vendored mermaid toolchain (parse/complexity + contrast gates, theming references) — refresh per ADR-007, never cherry-pick; its entrypoint is `mermaidjs-diagrams.md`, never a second `SKILL.md` |
 
 ## Invariants
 
@@ -55,7 +55,7 @@ make -C .claude/skills/richdocs/scripts ci    # gate: must exit 0 before handoff
 
 ## ADR log
 
-The full decision log (ADR-001 … ADR-018), each entry carrying its **Lens**, lives in
+The full decision log (ADR-001 … ADR-020), each entry carrying its **Lens**, lives in
 [`resources/adr-log.md`](resources/adr-log.md). Read it before changing anything and
 apply each ADR's Lens to the next related decision. It was promoted to its own node to
 keep this file under the 500-line invariant (`.claude/rules/claude_skills/index.md`); it

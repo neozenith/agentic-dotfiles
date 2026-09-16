@@ -31,7 +31,10 @@ BIND_HOST = "127.0.0.1"
 class NoStoreHandler(SimpleHTTPRequestHandler):
     """SimpleHTTPRequestHandler that forbids caching on every response."""
 
-    extensions_map = {
+    # RUF012 wants ClassVar here, but the base class declares extensions_map as an
+    # instance variable, and mypy --strict rejects narrowing that to a class one.
+    # The two tools disagree; the base class wins.
+    extensions_map = {  # noqa: RUF012
         **SimpleHTTPRequestHandler.extensions_map,
         ".mjs": "text/javascript",
         ".js": "text/javascript",

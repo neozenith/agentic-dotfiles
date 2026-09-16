@@ -421,6 +421,6 @@ explicit. "It failed" is an invitation to damage working work.*
 
 ## Related
 
-- `../SKILL.md` — public-facing skill surface (what this skill does).
+- `../mermaidjs-diagrams.md` — public-facing skill surface (what this skill does).
 - `../resources/render_troubleshooting.md` — the triage procedure ADR-002 automates.
 - `../README.md` — ultra-short feature pitch for drive-by readers.

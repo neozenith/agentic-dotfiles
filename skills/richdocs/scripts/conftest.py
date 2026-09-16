@@ -9,12 +9,13 @@ from __future__ import annotations
 
 import importlib
 
-import md2html
-import showcase
-import themecheck
 import pytest
+
+import md2html
 import serve
+import showcase
 import stencil
+import themecheck
 
 
 @pytest.fixture(autouse=True, scope="session")

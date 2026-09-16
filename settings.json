@@ -90,6 +90,6 @@
     "feature-dev@claude-code-plugins": true,
     "frontend-slides@frontend-slides": true
   },
-  "outputStyle": "Explanatory",
+  "outputStyle": "Concise",
   "enableAllProjectMcpServers": true
 }
