@@ -170,6 +170,19 @@ def test_showcase_js_has_no_template_placeholders() -> None:
     assert "{{" not in showcase.SHOWCASE_CSS.read_text(encoding="utf-8")
 
 
+def test_gallery_carries_the_oklch_palette_scene(tmp_path: Path) -> None:
+    """The brand palette is shown in OKLCH, and redrawn with the other deck.gl scenes."""
+    showcase.main(_args(tmp_path))
+    html = (tmp_path / "showcase.html").read_text(encoding="utf-8")
+    assert 'id="sc-oklch"' in html
+    assert 'id="sc-oklch-readout"' in html
+    js = showcase.SHOWCASE_JS.read_text(encoding="utf-8")
+    start = js.index("function drawDeck()")
+    draw_deck = js[start:js.index("\n}\n", start)]
+    assert "renderOklch();" in draw_deck
+    assert "targetChroma" in js
+
+
 def test_build_parser_defaults() -> None:
     args = showcase.build_parser().parse_args([])
     assert args.theme is None
