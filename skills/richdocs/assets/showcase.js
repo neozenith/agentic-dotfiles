@@ -580,8 +580,66 @@ function drawGeo() {
   });
 }
 
+// ── deck.gl: the brand palette in OKLCH ──────────────────────────────────────
+// Every categorical series colour plus the accent, each at its own OKLCH
+// coordinates. The gamut rings sit at the palette's own lightnesses, and the
+// target circle is the ACCENT's chroma: a spoke marks every series colour that
+// falls short of the brand's intensity (ADR-014: clipping is ceiling < target,
+// never inferable from the hex alone, so the target must be stated).
+var oklchBlock = { el: null, payload: null };
+
+function oklchPayload(t, m) {
+  var th = t.themes[m];
+  var plot = (t.canvas && t.canvas.plotly && t.canvas.plotly[m]) || {};
+  var seen = {}, data = [];
+  function add(hex, label) {
+    if (!hex) return;
+    var key = String(hex).toLowerCase();
+    if (seen[key]) return;
+    seen[key] = true;
+    data.push({ hex: hex, label: label });
+  }
+  add(th.accent, "accent");
+  (plot.series || []).forEach(function (h, i) { add(h, "series " + (i + 1)); });
+  (plot.seriesAlt || []).forEach(function (h, i) { add(h, "series alt " + (i + 1)); });
+
+  var accent = rdRgbToOklch(rdHexToRgb(th.accent));
+  var series = data.slice(1).map(function (d) { return rdRgbToOklch(rdHexToRgb(d.hex)); });
+  var ls = [accent.L].concat(series.map(function (c) { return c.L; }));
+  var lo = Math.min.apply(null, ls), hi = Math.max.apply(null, ls);
+  var rings = [lo, accent.L, hi]
+    .map(function (x) { return Math.round(x * 100) / 100; })
+    .filter(function (x, i, a) { return a.indexOf(x) === i; })
+    .sort(function (a, b) { return a - b; });
+  var target = Math.round(accent.C * 1000) / 1000;
+  var short = series.filter(function (c) { return c.C < accent.C - 0.005; }).length;
+
+  return {
+    payload: {
+      view: "orbit", space: "oklch", height: 480, gamut: rings, targetChroma: target,
+      layers: [{ type: "PointCloudLayer", id: "oklch-palette", pointSize: 13, data: data }]
+    },
+    readout: series.length + " series colours · accent L " + accent.L.toFixed(2)
+      + " C " + accent.C.toFixed(3) + " H " + accent.H.toFixed(0) + "° · "
+      + short + " of " + series.length + " below the accent's chroma"
+  };
+}
+
+function renderOklch() {
+  if (typeof deck === "undefined") return;
+  oklchBlock.el = document.getElementById("sc-oklch");
+  if (!oklchBlock.el) return;
+  var t = brand().tokens, m = mode();
+  var built = oklchPayload(t, m);
+  oklchBlock.payload = built.payload;
+  try { rdRenderDeckGL(oklchBlock, t, m); } catch (e) { oklchBlock.el.textContent = "deckgl error: " + e.message; }
+  var readout = document.getElementById("sc-oklch-readout");
+  if (readout) readout.textContent = built.readout;
+}
+
 function drawDeck() {
   return loadScript("deckgl", SC.cdn.deckgl).then(function () {
+    renderOklch();
     renderEmb();
     return drawGeo();
   });

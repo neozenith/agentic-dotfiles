@@ -496,6 +496,9 @@ def cmd_install(args: argparse.Namespace) -> None:
         target.mkdir(parents=True, exist_ok=True)
         (target / "design-tokens.json").write_text(
             (PROFILES / name / "design-tokens.json").read_text(encoding="utf-8"), encoding="utf-8")
+        # The showcase scopes each brand's CSS under :root[data-brand=...]; a brand with no
+        # theme.css emits no scope, which richdocs' own gallery test treats as missing.
+        (target / "theme.css").write_text(":root {\n  color-scheme: light dark;\n}\n", encoding="utf-8")
         log.info("installed %-15s -> %s", name, target)
 
 
