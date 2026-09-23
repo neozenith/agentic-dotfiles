@@ -1249,8 +1249,12 @@ function runGenerator(b) {
     var mod = "rd_gen_" + b.name.replace(/[^A-Za-z0-9_]/g, "_");
     if (!g.written) { p.FS.writeFile("/home/pyodide/" + mod + ".py", g.source); g.written = true; }
     p.globals.set("_rd_seed", JSON.stringify(b.seedLive));
+    // An optional context (the producer's own, e.g. hand edits to keep) rides as a second argument.
+    var hasCtx = g.manifest.context !== undefined;
+    p.globals.set("_rd_ctx", JSON.stringify(g.manifest.context || null));
     return JSON.parse(p.runPython("import json\nimport " + mod + " as _rd_m\n"
-      + "json.dumps(_rd_m." + g.manifest.entry + "(json.loads(_rd_seed)))"));
+      + "json.dumps(_rd_m." + g.manifest.entry + "(json.loads(_rd_seed)"
+      + (hasCtx ? ", json.loads(_rd_ctx)" : "") + "))"));
   });
 }
 

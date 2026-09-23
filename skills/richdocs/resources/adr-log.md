@@ -16,7 +16,10 @@ apply to the next related decision.
 - **Decision:** a theme directory may hold `generator.json` (`entry`, `seed`,
   `params`: each `{key, default, source, min?, max?, step?, keywords?}`, and an
   optional `resolved`) plus `generator.py`, whose `entry(seed)` returns
-  `{"tokens", "lineage"?, "resolved"?}`. `resolved` maps a parameter to the
+  `{"tokens", "lineage"?, "resolved"?}`. An optional `context` in the manifest
+  is passed verbatim as a second argument, so a producer can hand its own state
+  back to itself (the token pipeline passes its stated hand edits, so live tuning
+  keeps them). `resolved` maps a parameter to the
   number its keyword (`cusp`, `brand`, `auto`) produced, per mode if they differ,
   so a keyword-mode control shows a real value.
   `showcase.py` embeds both and crashes on a manifest with no module or a
