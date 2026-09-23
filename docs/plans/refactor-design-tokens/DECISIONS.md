@@ -801,3 +801,77 @@ ceiling never costs contrast.
   logged as low stakes.
 - DT-WALK-1's "12 slots cost nothing over 7" still holds: the floor is set by the 210° hue, which is
   already in the first seven.
+
+---
+
+## DT-PROV-1 — each value keeps what curation derived; a value that differs is stated
+
+- **Status:** decided 2026-09-24 (user-directed, option A of three, chosen through
+  `concise-decisions` on a real hue-osakanights scenario). Unblocks DT-CONTRAST-1's report and
+  DT-BUILD-1's idempotent, additive curation.
+
+### The maintainer's reasoning, verbatim
+
+> *"I am ok if ir keeps as _metadata original derived values. Then if the current value matches
+> the metadata value it was not custom modified and could be rederived from seed.json."*
+
+### The rule
+
+Every IR role records, per mode, under `$extensions.dev.agentic-dotfiles.curation`:
+
+| Key | Holds |
+|---|---|
+| `derived` | the value the rule produced on the last run |
+| `origin` | `imputed` or `stated`, per mode |
+
+On every run over an existing `ir.json`:
+
+| The current value… | Curation… |
+|---|---|
+| equals `derived` | treats it as unedited and **rederives** it from the seed's current inputs |
+| differs from `derived`, or is already `stated` | treats it as a **hand edit**: marks it `stated`, keeps it, and reports what the rule would give |
+| is absent | imputes it |
+
+Stated values are final and **feed every value derived after them**: edit a ground, and every
+value solved against that ground follows it. Provenance is per mode, so editing dark leaves light
+derivable. To release a stated value, delete it (or its `origin` entry) and run curation again.
+
+### Verified on hue-osakanights
+
+On a scratch copy, one run after hand-editing `color.link` light (`#5c4295` → `#4a2f8a`) and
+`color.surface` dark (→ `#1a1a2e`), and changing the seed's `L-light-bg` 0.97 → 0.95:
+
+```text
+held    color.link light #4a2f8a stated (rule would give #5c4295)
+held    color.surface dark #1a1a2e stated (rule would give #0b0b0b)
+updated color.surface light #f5f5f5 -> #eeeeee
+updated color.border.bold dark #636363 -> #676767     (solved against the edited ground)
+… 23 more updated; a second run changes nothing
+```
+
+### Rejected alternatives
+
+- **B: never change a present value, `--rederive <group>` on request.** It needs the same
+  `derived` record to detect edits and staleness, then adds a manual step to every seed change.
+- **C: report only, delete a role to re-impute it.** Without provenance it cannot tell an edit
+  from an imputed value, so DT-CONTRAST-1's report cannot classify a miss.
+
+### Lens
+
+- **Given** the IR is the hand-edited root of a profile (DT-BUILD-1) and curation re-runs every
+  time the seed changes,
+- **we prefer** recording each value's derived value and treating any difference as a stated
+  edit, **over** re-deriving only on request or a report-only curation,
+- **because** an edit then protects itself with no extra step, every value never touched still
+  follows the seed, and the contrast report can tell a defect in the defaults from a choice,
+- **unless** the IR stops being hand-edited (generated only, never tuned), at which point the
+  `derived` record is redundant and curation could simply regenerate.
+
+### Consequences
+
+- **DT-CONTRAST-1's report is now implementable:** a miss on an `imputed` value is a defect in
+  the defaults; a miss on a `stated` value is information.
+- **The prototype's `curate` is now idempotent and additive** (`curate_profile()` in
+  `prototype/pipeline.py`); before this it rebuilt `ir.json` from the seed and lost hand edits.
+- The showcase's Tune seed drawer still generates from the seed alone; whether it should respect
+  IR edits is a separate question.

@@ -235,8 +235,11 @@ def cmd_init_seeds(_: argparse.Namespace) -> None:
 # Curation: seed -> IR
 # --------------------------------------------------------------------------------------------------
 class Curator:
-    def __init__(self, seed: dict[str, Any]) -> None:
+    def __init__(self, seed: dict[str, Any], stated: dict[str, dict[str, str]] | None = None) -> None:
         self.p = resolve_params(seed)
+        # DT-PROV-1: values the IR states (hand edits), per role per mode. They are final: put()
+        # keeps them in place of what the rule derives, and every later stage reads them.
+        self.stated = stated or {}
         # What each keyword or implied default resolved to, for the showcase's controls.
         self.resolved: dict[str, Any] = {}
         self.ir: dict[str, dict[str, Any]] = {}
@@ -249,14 +252,25 @@ class Curator:
 
     def put(self, role: str, values: dict[str, str], rule: str, inputs: list[str],
             lch: dict[str, LCH] | None = None, alias: str | None = None, roles: list[str] | None = None) -> None:
-        ext: dict[str, Any] = {"origin": "imputed", "rule": rule, "inputs": inputs}
+        # DT-PROV-1: `derived` is what the rule produced. A value equal to it was not edited and is
+        # rederived on the next run; a value that differs is stated, and kept.
+        pinned = self.stated.get(role, {})
+        ext: dict[str, Any] = {
+            "origin": {m: "stated" if m in pinned else "imputed" for m in values},
+            "derived": dict(values),
+            "rule": rule,
+            "inputs": inputs,
+        }
         if roles or alias:
             ext["roles"] = roles or [alias]
         if lch:
             ext["oklch"] = {m: [round(x, 4) for x in lch[m]] for m in lch}
+        for m, hexs in pinned.items():
+            if "oklch" in ext and len(hexs) == 7:
+                ext["oklch"][m] = [round(x, 4) for x in oklch_of(hexs)]
         if alias:
             ext["alias"] = alias
-        self.ir[role] = {**values, "$extensions": {EXT: ext}}
+        self.ir[role] = {**values, **pinned, "$extensions": {EXT: ext}}
 
     def val(self, role: str, mode: str) -> str:
         return self.ir[role][mode]
@@ -489,12 +503,63 @@ def profile_names(args: argparse.Namespace) -> list[str]:
     return names
 
 
+def stated_values(ir: dict[str, Any]) -> dict[str, dict[str, str]]:
+    """DT-PROV-1: every value in an existing IR that is not what curation derived for it.
+
+    A value already marked stated stays stated. A value with no `derived` record predates
+    DT-PROV-1; the prototype wrote every such value itself, so it counts as derived.
+    """
+    stated: dict[str, dict[str, str]] = {}
+    for role, node in ir.items():
+        if role.startswith("$"):
+            continue
+        ext = node.get("$extensions", {}).get(EXT, {})
+        origin, derived = ext.get("origin", {}), ext.get("derived", {})
+        for m in MODES:
+            if m not in node:
+                continue
+            was_stated = isinstance(origin, dict) and origin.get(m) == "stated"
+            if was_stated or (m in derived and node[m] != derived[m]):
+                stated.setdefault(role, {})[m] = node[m]
+    return stated
+
+
+def curate_profile(folder: Path) -> list[str]:
+    """Curate one profile in place: idempotent and additive (DT-BUILD-1, DT-PROV-1).
+
+    Stated values are kept and feed every value derived after them; unedited values are rederived
+    from the seed; absent roles are imputed. Returns the report lines.
+    """
+    seed = json.loads((folder / "seed.json").read_text(encoding="utf-8"))
+    ir_path = folder / "ir.json"
+    old = json.loads(ir_path.read_text(encoding="utf-8")) if ir_path.exists() else {}
+    stated = stated_values(old)
+    ir = Curator(seed, stated).run()
+    report = []
+    for role in (k for k in ir if not k.startswith("$")):
+        for m in MODES:
+            before, after = old.get(role, {}).get(m), ir[role][m]
+            if role in stated and m in stated[role]:
+                derived = ir[role]["$extensions"][EXT]["derived"][m]
+                note = "" if derived == after else f" (rule would give {derived})"
+                report.append(f"held    {role} {m} {after} stated{note}")
+            elif before is None:
+                report.append(f"new     {role} {m} {after}")
+            elif before != after:
+                report.append(f"updated {role} {m} {before} -> {after}")
+    ir_path.write_text(json.dumps(ir, indent=2) + "\n", encoding="utf-8")
+    return report
+
+
 def cmd_curate(args: argparse.Namespace) -> None:
     for name in profile_names(args):
-        seed = json.loads((PROFILES / name / "seed.json").read_text(encoding="utf-8"))
-        ir = Curator(seed).run()
-        (PROFILES / name / "ir.json").write_text(json.dumps(ir, indent=2) + "\n", encoding="utf-8")
-        log.info("curated %-16s %d roles", name, len(ir) - 1)
+        report = curate_profile(PROFILES / name)
+        count = {k: sum(r.startswith(k) for r in report) for k in ("held", "updated", "new")}
+        log.info("curated %-16s held %d stated, updated %d, imputed %d new", name,
+                 count["held"], count["updated"], count["new"])
+        for line in report:
+            if not line.startswith("new"):
+                log.info("  %s", line)
 
 
 # --------------------------------------------------------------------------------------------------

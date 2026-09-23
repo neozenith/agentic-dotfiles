@@ -1,6 +1,6 @@
 # Open questions
 
-One question remains. Everything settled is in
+No decision question remains open (DT-PROV-1 closed 2026-09-24). Everything settled is in
 [`DECISIONS.md`](DECISIONS.md); do not reopen those without evidence.
 
 **How to ask these.** Route every one through the `concise-decisions` skill and its Claude Code
@@ -53,7 +53,12 @@ parameter is the user's choice, reported as information and never as a failure.
 
 ---
 
-## DT-PROV-1 — how does curation tell an imputed value from a stated one?
+## ~~DT-PROV-1~~ — closed 2026-09-24 by DT-PROV-1 in DECISIONS.md
+
+Each IR value keeps what curation derived for it; a value that differs is a stated hand edit.
+The original question is kept below for its history.
+
+### DT-PROV-1 (as asked) — how does curation tell an imputed value from a stated one?
 
 **Parked by the maintainer**, not deferred by ranking: *"too early to answer this. we should define
 the curation process of generating from seed to ir before we can contemplate what re-computing

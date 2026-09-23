@@ -134,7 +134,14 @@
     "dark": "#030303",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#e4e4e4",
+          "dark": "#030303"
+        },
         "rule": "reference + absolute offset",
         "inputs": [
           "L-light-bg=0.97 [default (DT-REF-1 (revised 2026-09-24, was 0.90))]",
@@ -161,7 +168,14 @@
     "dark": "#0b0b0b",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#f5f5f5",
+          "dark": "#0b0b0b"
+        },
         "rule": "mode reference",
         "inputs": [
           "L-light-bg=0.97 [default (DT-REF-1 (revised 2026-09-24, was 0.90))]",
@@ -187,7 +201,14 @@
     "dark": "#161616",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#ffffff",
+          "dark": "#161616"
+        },
         "rule": "reference + absolute offset",
         "inputs": [
           "L-light-bg=0.97 [default (DT-REF-1 (revised 2026-09-24, was 0.90))]",
@@ -214,7 +235,14 @@
     "dark": "#ffffff",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#010101",
+          "dark": "#ffffff"
+        },
         "rule": "reference + offset toward text",
         "inputs": [
           "L-light-bg=0.97 [default (DT-REF-1 (revised 2026-09-24, was 0.90))]",
@@ -241,7 +269,14 @@
     "dark": "#bebebe",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#333333",
+          "dark": "#bebebe"
+        },
         "rule": "reference + offset toward text",
         "inputs": [
           "L-light-bg=0.97 [default (DT-REF-1 (revised 2026-09-24, was 0.90))]",
@@ -268,7 +303,14 @@
     "dark": "#636363",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#828282",
+          "dark": "#636363"
+        },
         "rule": "grey nearest reference + offset toward text reaching the target on every ground",
         "inputs": [
           "L-light-bg=0.97 [default (DT-REF-1 (revised 2026-09-24, was 0.90))]",
@@ -296,7 +338,14 @@
     "dark": "#7f7f7f",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#666666",
+          "dark": "#7f7f7f"
+        },
         "rule": "nearest the ground reaching the target on every ground",
         "inputs": [
           "target.text.subtlest=4.5 [default (prototype)]"
@@ -321,7 +370,14 @@
     "dark": "#ffffff24",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#01010124",
+          "dark": "#ffffff24"
+        },
         "rule": "color.text at alpha",
         "inputs": [
           "alpha.border=0.14 [default (DT-BORDER-1)]"
@@ -337,7 +393,14 @@
     "dark": "#ffc000",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#ffc000",
+          "dark": "#ffc000"
+        },
         "rule": "light: the stated accent, verbatim; dark: lightness solved: inverse text reaches target, and 3:1 on every ground",
         "inputs": [
           "brand.hue=84.575 [stated]",
@@ -367,7 +430,14 @@
     "dark": "#000000",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#000000",
+          "dark": "#000000"
+        },
         "rule": "black or white, whichever has more contrast on the brand fill",
         "inputs": [],
         "roles": [
@@ -381,7 +451,14 @@
     "dark": "#322809",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#f7ecce",
+          "dark": "#322809"
+        },
         "rule": "brand fill at alpha over color.surface",
         "inputs": [
           "alpha.brand.subtlest=0.16 [default (prototype (richdocs rdMix 0.84))]"
@@ -398,7 +475,14 @@
     "dark": "#ffc000",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#a67c00",
+          "dark": "#ffc000"
+        },
         "rule": "the mode's accent, lightness solved to reach the target on every ground",
         "inputs": [
           "brand.hue=84.575 [stated]",
@@ -427,7 +511,14 @@
     "dark": "#ffc000",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#826100",
+          "dark": "#ffc000"
+        },
         "rule": "the mode's accent, lightness solved to reach the target on every ground",
         "inputs": [
           "brand.hue=84.575 [stated]",
@@ -456,7 +547,14 @@
     "dark": "#2d1f00",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#ecd19a",
+          "dark": "#2d1f00"
+        },
         "rule": "secondary at reduced chroma, offset from the ground toward text",
         "inputs": [
           "secondary.hue=None [default (DT-ACCENT-1 (defaults to brand.hue))]",
@@ -485,7 +583,14 @@
     "dark": "#3c2b00",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#dbc18b",
+          "dark": "#3c2b00"
+        },
         "rule": "secondary at reduced chroma, offset from the ground toward text",
         "inputs": [
           "secondary.hue=None [default (DT-ACCENT-1 (defaults to brand.hue))]",
@@ -514,7 +619,14 @@
     "dark": "#ffc000",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#a67c00",
+          "dark": "#ffc000"
+        },
         "rule": "secondary hue reaching 3:1 on every ground",
         "inputs": [
           "secondary.hue=None [default (DT-ACCENT-1 (defaults to brand.hue))]",
@@ -543,7 +655,14 @@
     "dark": "#ffc000",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#a67c00",
+          "dark": "#ffc000"
+        },
         "rule": "alias",
         "inputs": [],
         "roles": [
@@ -558,7 +677,14 @@
     "dark": "#ffffff",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#010101",
+          "dark": "#ffffff"
+        },
         "rule": "alias",
         "inputs": [],
         "roles": [
@@ -573,7 +699,14 @@
     "dark": "#de4e4b",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#be2e31",
+          "dark": "#de4e4b"
+        },
         "rule": "conventional hue reaching the target on every ground",
         "inputs": [
           "status.hue.danger=25.0 [default (prototype)]",
@@ -600,7 +733,14 @@
     "dark": "#a77600",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#875f00",
+          "dark": "#a77600"
+        },
         "rule": "conventional hue reaching the target on every ground",
         "inputs": [
           "status.hue.warning=80.0 [default (prototype)]",
@@ -627,7 +767,14 @@
     "dark": "#189a30",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#00771d",
+          "dark": "#189a30"
+        },
         "rule": "conventional hue reaching the target on every ground",
         "inputs": [
           "status.hue.success=145.0 [default (prototype)]",
@@ -654,7 +801,14 @@
     "dark": "#e3c890",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#9f7d2f",
+          "dark": "#e3c890"
+        },
         "rule": "golden walk slot 1: hue +0x137.5 deg, lightness solved to 3:1, chroma ceiling",
         "inputs": [
           "brand.hue=84.575 [stated]",
@@ -685,7 +839,14 @@
     "dark": "#91d7f0",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#1d8cab",
+          "dark": "#91d7f0"
+        },
         "rule": "golden walk slot 2: hue +1x137.5 deg, lightness solved to 3:1, chroma ceiling",
         "inputs": [
           "brand.hue=84.575 [stated]",
@@ -716,7 +877,14 @@
     "dark": "#f7b6c9",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#b96b85",
+          "dark": "#f7b6c9"
+        },
         "rule": "golden walk slot 3: hue +2x137.5 deg, lightness solved to 3:1, chroma ceiling",
         "inputs": [
           "brand.hue=84.575 [stated]",
@@ -747,7 +915,14 @@
     "dark": "#b3d8a5",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#618e4f",
+          "dark": "#b3d8a5"
+        },
         "rule": "golden walk slot 4: hue +3x137.5 deg, lightness solved to 3:1, chroma ceiling",
         "inputs": [
           "brand.hue=84.575 [stated]",
@@ -778,7 +953,14 @@
     "dark": "#bbc8ff",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#717ec2",
+          "dark": "#bbc8ff"
+        },
         "rule": "golden walk slot 5: hue +4x137.5 deg, lightness solved to 3:1, chroma ceiling",
         "inputs": [
           "brand.hue=84.575 [stated]",
@@ -809,7 +991,14 @@
     "dark": "#f5bd9c",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#b47146",
+          "dark": "#f5bd9c"
+        },
         "rule": "golden walk slot 6: hue +5x137.5 deg, lightness solved to 3:1, chroma ceiling",
         "inputs": [
           "brand.hue=84.575 [stated]",
@@ -840,7 +1029,14 @@
     "dark": "#8ddcd6",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#00938c",
+          "dark": "#8ddcd6"
+        },
         "rule": "golden walk slot 7: hue +6x137.5 deg, lightness solved to 3:1, chroma ceiling",
         "inputs": [
           "brand.hue=84.575 [stated]",
@@ -871,7 +1067,14 @@
     "dark": "#e7bae6",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#a66ea6",
+          "dark": "#e7bae6"
+        },
         "rule": "golden walk slot 8: hue +7x137.5 deg, lightness solved to 3:1, chroma ceiling",
         "inputs": [
           "brand.hue=84.575 [stated]",
@@ -902,7 +1105,14 @@
     "dark": "#d3ce93",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#8b8432",
+          "dark": "#d3ce93"
+        },
         "rule": "golden walk slot 9: hue +8x137.5 deg, lightness solved to 3:1, chroma ceiling",
         "inputs": [
           "brand.hue=84.575 [stated]",
@@ -933,7 +1143,14 @@
     "dark": "#9ed2fa",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#4288b9",
+          "dark": "#9ed2fa"
+        },
         "rule": "golden walk slot 10: hue +9x137.5 deg, lightness solved to 3:1, chroma ceiling",
         "inputs": [
           "brand.hue=84.575 [stated]",
@@ -964,7 +1181,14 @@
     "dark": "#fab7b6",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#bb6b6c",
+          "dark": "#fab7b6"
+        },
         "rule": "golden walk slot 11: hue +10x137.5 deg, lightness solved to 3:1, chroma ceiling",
         "inputs": [
           "brand.hue=84.575 [stated]",
@@ -995,7 +1219,14 @@
     "dark": "#a1dbb7",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#419065",
+          "dark": "#a1dbb7"
+        },
         "rule": "golden walk slot 12: hue +11x137.5 deg, lightness solved to 3:1, chroma ceiling",
         "inputs": [
           "brand.hue=84.575 [stated]",
@@ -1026,7 +1257,14 @@
     "dark": "#3c2b00",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#ffd06d",
+          "dark": "#3c2b00"
+        },
         "rule": "evenly spaced lightness at a fixed hue, chroma capped",
         "inputs": [
           "prototype",
@@ -1053,7 +1291,14 @@
     "dark": "#664b00",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#e1a900",
+          "dark": "#664b00"
+        },
         "rule": "evenly spaced lightness at a fixed hue, chroma capped",
         "inputs": [
           "prototype",
@@ -1080,7 +1325,14 @@
     "dark": "#946e00",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#b58700",
+          "dark": "#946e00"
+        },
         "rule": "evenly spaced lightness at a fixed hue, chroma capped",
         "inputs": [
           "prototype",
@@ -1107,7 +1359,14 @@
     "dark": "#c49300",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#8b6700",
+          "dark": "#c49300"
+        },
         "rule": "evenly spaced lightness at a fixed hue, chroma capped",
         "inputs": [
           "prototype",
@@ -1134,7 +1393,14 @@
     "dark": "#f6b900",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#634800",
+          "dark": "#f6b900"
+        },
         "rule": "evenly spaced lightness at a fixed hue, chroma capped",
         "inputs": [
           "prototype",
@@ -1161,7 +1427,14 @@
     "dark": "#3c2b00",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#ffd06d",
+          "dark": "#3c2b00"
+        },
         "rule": "evenly spaced lightness at a fixed hue, chroma capped",
         "inputs": [
           "prototype",
@@ -1188,7 +1461,14 @@
     "dark": "#946e00",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#b58700",
+          "dark": "#946e00"
+        },
         "rule": "evenly spaced lightness at a fixed hue, chroma capped",
         "inputs": [
           "prototype",
@@ -1215,7 +1495,14 @@
     "dark": "#f6b900",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#634800",
+          "dark": "#f6b900"
+        },
         "rule": "evenly spaced lightness at a fixed hue, chroma capped",
         "inputs": [
           "prototype",
@@ -1242,7 +1529,14 @@
     "dark": "#5d0009",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#ffc8c3",
+          "dark": "#5d0009"
+        },
         "rule": "evenly spaced lightness at a fixed hue, chroma capped",
         "inputs": [
           "prototype",
@@ -1269,7 +1563,14 @@
     "dark": "#c8393a",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#e85854",
+          "dark": "#c8393a"
+        },
         "rule": "evenly spaced lightness at a fixed hue, chroma capped",
         "inputs": [
           "prototype",
@@ -1296,7 +1597,14 @@
     "dark": "#ffaba3",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#940014",
+          "dark": "#ffaba3"
+        },
         "rule": "evenly spaced lightness at a fixed hue, chroma capped",
         "inputs": [
           "prototype",
@@ -1323,7 +1631,14 @@
     "dark": "#003909",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#83f68a",
+          "dark": "#003909"
+        },
         "rule": "evenly spaced lightness at a fixed hue, chroma capped",
         "inputs": [
           "prototype",
@@ -1350,7 +1665,14 @@
     "dark": "#008d24",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#31aa40",
+          "dark": "#008d24"
+        },
         "rule": "evenly spaced lightness at a fixed hue, chroma capped",
         "inputs": [
           "prototype",
@@ -1377,7 +1699,14 @@
     "dark": "#6fe276",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#005e15",
+          "dark": "#6fe276"
+        },
         "rule": "evenly spaced lightness at a fixed hue, chroma capped",
         "inputs": [
           "prototype",
@@ -1404,7 +1733,14 @@
     "dark": "#636363",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#868686",
+          "dark": "#636363"
+        },
         "rule": "greys from border.bold to text.subtle",
         "inputs": [
           "prototype",
@@ -1433,7 +1769,14 @@
     "dark": "#808080",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#696969",
+          "dark": "#808080"
+        },
         "rule": "greys from border.bold to text.subtle",
         "inputs": [
           "prototype",
@@ -1462,7 +1805,14 @@
     "dark": "#9e9e9e",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#4d4d4d",
+          "dark": "#9e9e9e"
+        },
         "rule": "greys from border.bold to text.subtle",
         "inputs": [
           "prototype",
@@ -1491,7 +1841,14 @@
     "dark": "#bebebe",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
-        "origin": "imputed",
+        "origin": {
+          "light": "imputed",
+          "dark": "imputed"
+        },
+        "derived": {
+          "light": "#333333",
+          "dark": "#bebebe"
+        },
         "rule": "greys from border.bold to text.subtle",
         "inputs": [
           "prototype",
