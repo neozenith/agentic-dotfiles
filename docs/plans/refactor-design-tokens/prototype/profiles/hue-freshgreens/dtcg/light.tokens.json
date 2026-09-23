@@ -68,11 +68,11 @@
         "$value": {
           "colorSpace": "oklch",
           "components": [
-            0.62,
+            0.605,
             0.0,
             0.0
           ],
-          "hex": "#868686"
+          "hex": "#828282"
         }
       },
       "brand": {

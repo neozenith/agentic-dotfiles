@@ -60,7 +60,7 @@
         },
         "offset.border.bold": {
           "value": 0.35,
-          "source": "default (DT-BORDER-1)"
+          "source": "default (DT-BORDER-1 (search start; solved to 3:1))"
         },
         "target.graphic": {
           "value": 3.0,
@@ -264,20 +264,21 @@
     }
   },
   "color.border.bold": {
-    "light": "#868686",
+    "light": "#828282",
     "dark": "#636363",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
         "origin": "imputed",
-        "rule": "reference + offset toward text",
+        "rule": "grey nearest reference + offset toward text reaching the target on every ground",
         "inputs": [
           "L-light-bg=0.97 [default (DT-REF-1 (revised 2026-09-24, was 0.90))]",
           "L-dark-bg=0.15 [default (DT-REF-1)]",
-          "offset.border.bold=0.35 [default (DT-BORDER-1)]"
+          "offset.border.bold=0.35 [default (DT-BORDER-1 (search start; solved to 3:1))]",
+          "target.graphic=3.0 [default (WCAG 2.2 SC 1.4.11)]"
         ],
         "oklch": {
           "light": [
-            0.62,
+            0.605,
             0.0,
             0.0
           ],
@@ -1409,7 +1410,7 @@
           "prototype",
           "L-light-bg=0.97 [default (DT-REF-1 (revised 2026-09-24, was 0.90))]",
           "L-dark-bg=0.15 [default (DT-REF-1)]",
-          "offset.border.bold=0.35 [default (DT-BORDER-1)]",
+          "offset.border.bold=0.35 [default (DT-BORDER-1 (search start; solved to 3:1))]",
           "offset.text.subtle=0.65 [default (DT-REF-1)]"
         ],
         "oklch": {
@@ -1438,7 +1439,7 @@
           "prototype",
           "L-light-bg=0.97 [default (DT-REF-1 (revised 2026-09-24, was 0.90))]",
           "L-dark-bg=0.15 [default (DT-REF-1)]",
-          "offset.border.bold=0.35 [default (DT-BORDER-1)]",
+          "offset.border.bold=0.35 [default (DT-BORDER-1 (search start; solved to 3:1))]",
           "offset.text.subtle=0.65 [default (DT-REF-1)]"
         ],
         "oklch": {
@@ -1467,7 +1468,7 @@
           "prototype",
           "L-light-bg=0.97 [default (DT-REF-1 (revised 2026-09-24, was 0.90))]",
           "L-dark-bg=0.15 [default (DT-REF-1)]",
-          "offset.border.bold=0.35 [default (DT-BORDER-1)]",
+          "offset.border.bold=0.35 [default (DT-BORDER-1 (search start; solved to 3:1))]",
           "offset.text.subtle=0.65 [default (DT-REF-1)]"
         ],
         "oklch": {
@@ -1496,7 +1497,7 @@
           "prototype",
           "L-light-bg=0.97 [default (DT-REF-1 (revised 2026-09-24, was 0.90))]",
           "L-dark-bg=0.15 [default (DT-REF-1)]",
-          "offset.border.bold=0.35 [default (DT-BORDER-1)]",
+          "offset.border.bold=0.35 [default (DT-BORDER-1 (search start; solved to 3:1))]",
           "offset.text.subtle=0.65 [default (DT-REF-1)]"
         ],
         "oklch": {

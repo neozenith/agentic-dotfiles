@@ -570,6 +570,11 @@ color.border.bold   dark   L 0.50  #636363   3.43 / 3.28 / 3.01 : 1   hardest gr
 
 Reproduce with `scripts/build_q9_doc.py`.
 
+*Implemented 2026-09-24:* the prototype had applied the 0.35 offset directly, which passed at
+`L-light-bg` 0.90 and missed at 0.97 (`#868686`, 2.87:1 on `surface.sunken`). It now solves as
+decided: the offset is where the search starts. At 0.97 light resolves to `#828282`
+(3.02 / 3.52 / 3.84 : 1); dark is unchanged at `#636363`.
+
 ### The two findings that framed it
 
 - **The two roles are not a weak and a strong version of one thing.** WCAG 2.2 SC 1.4.11 requires

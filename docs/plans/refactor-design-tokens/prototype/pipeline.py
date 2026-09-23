@@ -55,7 +55,7 @@ DEFAULTS: dict[str, tuple[Any, str]] = {
     "offset.text.subtle": (0.65, "DT-REF-1"),
     "target.text.subtlest": (4.5, "prototype"),
     "alpha.border": (0.14, "DT-BORDER-1"),
-    "offset.border.bold": (0.35, "DT-BORDER-1"),
+    "offset.border.bold": (0.35, "DT-BORDER-1 (search start; solved to 3:1)"),
     "target.graphic": (3.0, "WCAG 2.2 SC 1.4.11"),
     "target.text.inverse": (7.0, "prototype (DT-CONTRAST-1: maximise)"),
     "target.link": (4.5, "prototype"),
@@ -290,7 +290,6 @@ class Curator:
             ("color.surface.raised", "offset.surface.raised", True),
             ("color.text", "offset.text", False),
             ("color.text.subtle", "offset.text.subtle", False),
-            ("color.border.bold", "offset.border.bold", False),
         ):
             lch = {}
             for m in MODES:
@@ -300,6 +299,19 @@ class Curator:
                 "reference + absolute offset" if absolute else "reference + offset toward text")
             self.put(role, {m: hex_of(lch[m]) for m in MODES}, rule,
                      self.cite("L-light-bg", "L-dark-bg", *([key] if key else [])), lch)
+
+        # DT-BORDER-1: an opaque grey solved to the lightness nearest the offset that reaches 3:1
+        # against every ground. The offset is where the search starts, not the answer.
+        lch = {}
+        for m in MODES:
+            anchor = self.bg(m) + self.sign(m) * self.v("offset.border.bold")
+            passes = self.on_all_grounds(m, self.v("target.graphic"))
+            lch[m] = next(grey(lt) for step in range(int(1 / STEP) + 1)
+                          for lt in sorted({anchor + step * STEP, anchor - step * STEP})
+                          if 0.0 <= lt <= 1.0 and passes(hex_of(grey(lt))))
+        self.put("color.border.bold", {m: hex_of(lch[m]) for m in MODES},
+                 "grey nearest reference + offset toward text reaching the target on every ground",
+                 self.cite("L-light-bg", "L-dark-bg", "offset.border.bold", "target.graphic"), lch)
 
         lch = {}
         for m in MODES:

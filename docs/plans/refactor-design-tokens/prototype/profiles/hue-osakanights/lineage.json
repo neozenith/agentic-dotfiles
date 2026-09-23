@@ -333,7 +333,7 @@
           "label": "color.border.bold",
           "group": "IR role",
           "colour": {
-            "light": "#868686",
+            "light": "#828282",
             "dark": "#636363"
           }
         },
@@ -810,6 +810,10 @@
         },
         {
           "source": "param:offset.border.bold",
+          "target": "color.border.bold"
+        },
+        {
+          "source": "param:target.graphic",
           "target": "color.border.bold"
         },
         {
@@ -1648,7 +1652,7 @@
           "label": "color.border.bold",
           "group": "IR role",
           "colour": {
-            "light": "#868686",
+            "light": "#828282",
             "dark": "#636363"
           }
         },
@@ -2134,7 +2138,7 @@
           "label": "cytoscape \u00b7 edge",
           "group": "cytoscape",
           "colour": {
-            "light": "#868686",
+            "light": "#828282",
             "dark": "#636363"
           }
         },
