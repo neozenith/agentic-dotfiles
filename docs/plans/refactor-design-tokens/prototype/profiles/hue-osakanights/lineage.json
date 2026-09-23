@@ -1,0 +1,2925 @@
+{
+  "sankeys": [
+    {
+      "title": "Seed \u2192 IR",
+      "caption": "Every parameter on the left is either stated in seed.json (`brand.hue`, `brand.chroma`, `brand.lightness`, `brand.dark.hue`, `brand.dark.chroma`, `brand.dark.lightness`, in the brand colour) or a default (grey). Each band is one recorded input of an IR role; roles that read other roles chain to the right. Contrast solves also read the three surfaces, which is not drawn.",
+      "nodes": [
+        {
+          "id": "param:brand.hue",
+          "label": "brand.hue = 295.044",
+          "group": "stated",
+          "colour": {
+            "light": "#5c4295",
+            "dark": "#c3b0fd"
+          }
+        },
+        {
+          "id": "param:brand.chroma",
+          "label": "brand.chroma = 0.131",
+          "group": "stated",
+          "colour": {
+            "light": "#5c4295",
+            "dark": "#c3b0fd"
+          }
+        },
+        {
+          "id": "param:brand.lightness",
+          "label": "brand.lightness = 0.45",
+          "group": "stated",
+          "colour": {
+            "light": "#5c4295",
+            "dark": "#c3b0fd"
+          }
+        },
+        {
+          "id": "param:brand.dark.hue",
+          "label": "brand.dark.hue = 295.159",
+          "group": "stated",
+          "colour": {
+            "light": "#5c4295",
+            "dark": "#c3b0fd"
+          }
+        },
+        {
+          "id": "param:brand.dark.chroma",
+          "label": "brand.dark.chroma = 0.109",
+          "group": "stated",
+          "colour": {
+            "light": "#5c4295",
+            "dark": "#c3b0fd"
+          }
+        },
+        {
+          "id": "param:brand.dark.lightness",
+          "label": "brand.dark.lightness = 0.801",
+          "group": "stated",
+          "colour": {
+            "light": "#5c4295",
+            "dark": "#c3b0fd"
+          }
+        },
+        {
+          "id": "param:L-dark-bg",
+          "label": "L-dark-bg = 0.15",
+          "group": "decided default",
+          "colour": {
+            "light": "#8a8a8a",
+            "dark": "#8a8a8a"
+          }
+        },
+        {
+          "id": "param:L-light-bg",
+          "label": "L-light-bg = 0.97",
+          "group": "decided default",
+          "colour": {
+            "light": "#8a8a8a",
+            "dark": "#8a8a8a"
+          }
+        },
+        {
+          "id": "param:offset.surface.sunken",
+          "label": "offset.surface.sunken = -0.05",
+          "group": "decided default",
+          "colour": {
+            "light": "#8a8a8a",
+            "dark": "#8a8a8a"
+          }
+        },
+        {
+          "id": "param:offset.surface.raised",
+          "label": "offset.surface.raised = 0.05",
+          "group": "decided default",
+          "colour": {
+            "light": "#8a8a8a",
+            "dark": "#8a8a8a"
+          }
+        },
+        {
+          "id": "param:offset.text",
+          "label": "offset.text = 0.9",
+          "group": "decided default",
+          "colour": {
+            "light": "#8a8a8a",
+            "dark": "#8a8a8a"
+          }
+        },
+        {
+          "id": "param:offset.text.subtle",
+          "label": "offset.text.subtle = 0.65",
+          "group": "decided default",
+          "colour": {
+            "light": "#8a8a8a",
+            "dark": "#8a8a8a"
+          }
+        },
+        {
+          "id": "param:target.text.subtlest",
+          "label": "target.text.subtlest = 4.5",
+          "group": "prototype default",
+          "colour": {
+            "light": "#8a8a8a",
+            "dark": "#8a8a8a"
+          }
+        },
+        {
+          "id": "param:alpha.border",
+          "label": "alpha.border = 0.14",
+          "group": "decided default",
+          "colour": {
+            "light": "#8a8a8a",
+            "dark": "#8a8a8a"
+          }
+        },
+        {
+          "id": "param:offset.border.bold",
+          "label": "offset.border.bold = 0.35",
+          "group": "decided default",
+          "colour": {
+            "light": "#8a8a8a",
+            "dark": "#8a8a8a"
+          }
+        },
+        {
+          "id": "param:target.graphic",
+          "label": "target.graphic = 3.0",
+          "group": "decided default",
+          "colour": {
+            "light": "#8a8a8a",
+            "dark": "#8a8a8a"
+          }
+        },
+        {
+          "id": "param:target.text.inverse",
+          "label": "target.text.inverse = 7.0",
+          "group": "prototype default",
+          "colour": {
+            "light": "#8a8a8a",
+            "dark": "#8a8a8a"
+          }
+        },
+        {
+          "id": "param:target.link",
+          "label": "target.link = 4.5",
+          "group": "prototype default",
+          "colour": {
+            "light": "#8a8a8a",
+            "dark": "#8a8a8a"
+          }
+        },
+        {
+          "id": "param:alpha.brand.subtlest",
+          "label": "alpha.brand.subtlest = 0.16",
+          "group": "prototype default",
+          "colour": {
+            "light": "#8a8a8a",
+            "dark": "#8a8a8a"
+          }
+        },
+        {
+          "id": "param:secondary.hue",
+          "label": "secondary.hue = None",
+          "group": "decided default",
+          "colour": {
+            "light": "#8a8a8a",
+            "dark": "#8a8a8a"
+          }
+        },
+        {
+          "id": "param:secondary.chromaRatio",
+          "label": "secondary.chromaRatio = 0.444",
+          "group": "decided default",
+          "colour": {
+            "light": "#8a8a8a",
+            "dark": "#8a8a8a"
+          }
+        },
+        {
+          "id": "param:offset.background.selected",
+          "label": "offset.background.selected = 0.1",
+          "group": "prototype default",
+          "colour": {
+            "light": "#8a8a8a",
+            "dark": "#8a8a8a"
+          }
+        },
+        {
+          "id": "param:walk.slots",
+          "label": "walk.slots = 12",
+          "group": "decided default",
+          "colour": {
+            "light": "#8a8a8a",
+            "dark": "#8a8a8a"
+          }
+        },
+        {
+          "id": "param:walk.angle",
+          "label": "walk.angle = 137.5",
+          "group": "decided default",
+          "colour": {
+            "light": "#8a8a8a",
+            "dark": "#8a8a8a"
+          }
+        },
+        {
+          "id": "param:walk.lightness",
+          "label": "walk.lightness = brand",
+          "group": "decided default",
+          "colour": {
+            "light": "#8a8a8a",
+            "dark": "#8a8a8a"
+          }
+        },
+        {
+          "id": "param:walk.chromaCeiling",
+          "label": "walk.chromaCeiling = floor",
+          "group": "decided default",
+          "colour": {
+            "light": "#8a8a8a",
+            "dark": "#8a8a8a"
+          }
+        },
+        {
+          "id": "param:status.hue.danger",
+          "label": "status.hue.danger = 25.0",
+          "group": "prototype default",
+          "colour": {
+            "light": "#8a8a8a",
+            "dark": "#8a8a8a"
+          }
+        },
+        {
+          "id": "param:status.hue.warning",
+          "label": "status.hue.warning = 80.0",
+          "group": "prototype default",
+          "colour": {
+            "light": "#8a8a8a",
+            "dark": "#8a8a8a"
+          }
+        },
+        {
+          "id": "param:status.hue.success",
+          "label": "status.hue.success = 145.0",
+          "group": "prototype default",
+          "colour": {
+            "light": "#8a8a8a",
+            "dark": "#8a8a8a"
+          }
+        },
+        {
+          "id": "param:status.chromaCap",
+          "label": "status.chromaCap = 0.18",
+          "group": "prototype default",
+          "colour": {
+            "light": "#8a8a8a",
+            "dark": "#8a8a8a"
+          }
+        },
+        {
+          "id": "param:target.status",
+          "label": "target.status = 4.5",
+          "group": "prototype default",
+          "colour": {
+            "light": "#8a8a8a",
+            "dark": "#8a8a8a"
+          }
+        },
+        {
+          "id": "color.surface.sunken",
+          "label": "color.surface.sunken",
+          "group": "IR role",
+          "colour": {
+            "light": "#e4e4e4",
+            "dark": "#030303"
+          }
+        },
+        {
+          "id": "color.surface",
+          "label": "color.surface",
+          "group": "IR role",
+          "colour": {
+            "light": "#f5f5f5",
+            "dark": "#0b0b0b"
+          }
+        },
+        {
+          "id": "color.surface.raised",
+          "label": "color.surface.raised",
+          "group": "IR role",
+          "colour": {
+            "light": "#ffffff",
+            "dark": "#161616"
+          }
+        },
+        {
+          "id": "color.text",
+          "label": "color.text",
+          "group": "IR role",
+          "colour": {
+            "light": "#010101",
+            "dark": "#ffffff"
+          }
+        },
+        {
+          "id": "color.text.subtle",
+          "label": "color.text.subtle",
+          "group": "IR role",
+          "colour": {
+            "light": "#333333",
+            "dark": "#bebebe"
+          }
+        },
+        {
+          "id": "color.border.bold",
+          "label": "color.border.bold",
+          "group": "IR role",
+          "colour": {
+            "light": "#868686",
+            "dark": "#636363"
+          }
+        },
+        {
+          "id": "color.text.subtlest",
+          "label": "color.text.subtlest",
+          "group": "IR role",
+          "colour": {
+            "light": "#666666",
+            "dark": "#7f7f7f"
+          }
+        },
+        {
+          "id": "color.border",
+          "label": "color.border",
+          "group": "IR role",
+          "colour": {
+            "light": "#010101",
+            "dark": "#ffffff"
+          }
+        },
+        {
+          "id": "color.background.brand.bold",
+          "label": "color.background.brand.bold",
+          "group": "IR role",
+          "colour": {
+            "light": "#5c4295",
+            "dark": "#c3b0fd"
+          }
+        },
+        {
+          "id": "color.text.inverse",
+          "label": "color.text.inverse",
+          "group": "IR role",
+          "colour": {
+            "light": "#ffffff",
+            "dark": "#000000"
+          }
+        },
+        {
+          "id": "color.background.brand.subtlest",
+          "label": "color.background.brand.subtlest",
+          "group": "IR role",
+          "colour": {
+            "light": "#dcd8e6",
+            "dark": "#292632"
+          }
+        },
+        {
+          "id": "color.border.brand",
+          "label": "color.border.brand",
+          "group": "IR role",
+          "colour": {
+            "light": "#5c4295",
+            "dark": "#c3b0fd"
+          }
+        },
+        {
+          "id": "color.link",
+          "label": "color.link",
+          "group": "IR role",
+          "colour": {
+            "light": "#5c4295",
+            "dark": "#c3b0fd"
+          }
+        },
+        {
+          "id": "color.background.selected",
+          "label": "color.background.selected",
+          "group": "IR role",
+          "colour": {
+            "light": "#d6cdf7",
+            "dark": "#241b3a"
+          }
+        },
+        {
+          "id": "color.background.selected.hovered",
+          "label": "color.background.selected.hovered",
+          "group": "IR role",
+          "colour": {
+            "light": "#c6bde7",
+            "dark": "#302748"
+          }
+        },
+        {
+          "id": "color.border.selected",
+          "label": "color.border.selected",
+          "group": "IR role",
+          "colour": {
+            "light": "#5c4295",
+            "dark": "#6d54a8"
+          }
+        },
+        {
+          "id": "color.border.focused",
+          "label": "color.border.focused",
+          "group": "IR role",
+          "colour": {
+            "light": "#5c4295",
+            "dark": "#6d54a8"
+          }
+        },
+        {
+          "id": "color.text.selected",
+          "label": "color.text.selected",
+          "group": "IR role",
+          "colour": {
+            "light": "#010101",
+            "dark": "#ffffff"
+          }
+        },
+        {
+          "id": "color.text.danger",
+          "label": "color.text.danger",
+          "group": "IR role",
+          "colour": {
+            "light": "#be2e31",
+            "dark": "#de4e4b"
+          }
+        },
+        {
+          "id": "color.text.warning",
+          "label": "color.text.warning",
+          "group": "IR role",
+          "colour": {
+            "light": "#875f00",
+            "dark": "#a77600"
+          }
+        },
+        {
+          "id": "color.text.success",
+          "label": "color.text.success",
+          "group": "IR role",
+          "colour": {
+            "light": "#00771d",
+            "dark": "#189a30"
+          }
+        },
+        {
+          "id": "color.chart.categorical.1",
+          "label": "color.chart.categorical.1",
+          "group": "IR role",
+          "colour": {
+            "light": "#584c7c",
+            "dark": "#c2b1f8"
+          }
+        },
+        {
+          "id": "color.chart.categorical.2",
+          "label": "color.chart.categorical.2",
+          "group": "IR role",
+          "colour": {
+            "light": "#704e1e",
+            "dark": "#e6b474"
+          }
+        },
+        {
+          "id": "color.chart.categorical.3",
+          "label": "color.chart.categorical.3",
+          "group": "IR role",
+          "colour": {
+            "light": "#00616d",
+            "dark": "#67d0e2"
+          }
+        },
+        {
+          "id": "color.chart.categorical.4",
+          "label": "color.chart.categorical.4",
+          "group": "IR role",
+          "colour": {
+            "light": "#75435d",
+            "dark": "#eea4ca"
+          }
+        },
+        {
+          "id": "color.chart.categorical.5",
+          "label": "color.chart.categorical.5",
+          "group": "IR role",
+          "colour": {
+            "light": "#4b5d2a",
+            "dark": "#afca82"
+          }
+        },
+        {
+          "id": "color.chart.categorical.6",
+          "label": "color.chart.categorical.6",
+          "group": "IR role",
+          "colour": {
+            "light": "#3e5581",
+            "dark": "#9cbeff"
+          }
+        },
+        {
+          "id": "color.chart.categorical.7",
+          "label": "color.chart.categorical.7",
+          "group": "IR role",
+          "colour": {
+            "light": "#7a4533",
+            "dark": "#f6a88d"
+          }
+        },
+        {
+          "id": "color.chart.categorical.8",
+          "label": "color.chart.categorical.8",
+          "group": "IR role",
+          "colour": {
+            "light": "#106355",
+            "dark": "#6fd3bd"
+          }
+        },
+        {
+          "id": "color.chart.categorical.9",
+          "label": "color.chart.categorical.9",
+          "group": "IR role",
+          "colour": {
+            "light": "#664773",
+            "dark": "#d7abeb"
+          }
+        },
+        {
+          "id": "color.chart.categorical.10",
+          "label": "color.chart.categorical.10",
+          "group": "IR role",
+          "colour": {
+            "light": "#64541a",
+            "dark": "#d5bd70"
+          }
+        },
+        {
+          "id": "color.chart.categorical.11",
+          "label": "color.chart.categorical.11",
+          "group": "IR role",
+          "colour": {
+            "light": "#1b5d78",
+            "dark": "#75caf2"
+          }
+        },
+        {
+          "id": "color.chart.categorical.12",
+          "label": "color.chart.categorical.12",
+          "group": "IR role",
+          "colour": {
+            "light": "#7a424d",
+            "dark": "#f6a3b2"
+          }
+        },
+        {
+          "id": "color.chart.sequential.1",
+          "label": "color.chart.sequential.1",
+          "group": "IR role",
+          "colour": {
+            "light": "#dad0ff",
+            "dark": "#351667"
+          }
+        },
+        {
+          "id": "color.chart.sequential.2",
+          "label": "color.chart.sequential.2",
+          "group": "IR role",
+          "colour": {
+            "light": "#b9a1fd",
+            "dark": "#573c8f"
+          }
+        },
+        {
+          "id": "color.chart.sequential.3",
+          "label": "color.chart.sequential.3",
+          "group": "IR role",
+          "colour": {
+            "light": "#967dd6",
+            "dark": "#7b62b8"
+          }
+        },
+        {
+          "id": "color.chart.sequential.4",
+          "label": "color.chart.sequential.4",
+          "group": "IR role",
+          "colour": {
+            "light": "#745bb0",
+            "dark": "#a28ae3"
+          }
+        },
+        {
+          "id": "color.chart.sequential.5",
+          "label": "color.chart.sequential.5",
+          "group": "IR role",
+          "colour": {
+            "light": "#54398c",
+            "dark": "#c8b7ff"
+          }
+        },
+        {
+          "id": "color.chart.diverging.positive.1",
+          "label": "color.chart.diverging.positive.1",
+          "group": "IR role",
+          "colour": {
+            "light": "#dad0ff",
+            "dark": "#351667"
+          }
+        },
+        {
+          "id": "color.chart.diverging.positive.2",
+          "label": "color.chart.diverging.positive.2",
+          "group": "IR role",
+          "colour": {
+            "light": "#967dd6",
+            "dark": "#7b62b8"
+          }
+        },
+        {
+          "id": "color.chart.diverging.positive.3",
+          "label": "color.chart.diverging.positive.3",
+          "group": "IR role",
+          "colour": {
+            "light": "#54398c",
+            "dark": "#c8b7ff"
+          }
+        },
+        {
+          "id": "color.chart.diverging.negative.1",
+          "label": "color.chart.diverging.negative.1",
+          "group": "IR role",
+          "colour": {
+            "light": "#ffc8c3",
+            "dark": "#5d0009"
+          }
+        },
+        {
+          "id": "color.chart.diverging.negative.2",
+          "label": "color.chart.diverging.negative.2",
+          "group": "IR role",
+          "colour": {
+            "light": "#e85854",
+            "dark": "#c8393a"
+          }
+        },
+        {
+          "id": "color.chart.diverging.negative.3",
+          "label": "color.chart.diverging.negative.3",
+          "group": "IR role",
+          "colour": {
+            "light": "#940014",
+            "dark": "#ffaba3"
+          }
+        },
+        {
+          "id": "color.chart.diverging.alt-positive.1",
+          "label": "color.chart.diverging.alt-positive.1",
+          "group": "IR role",
+          "colour": {
+            "light": "#83f68a",
+            "dark": "#003909"
+          }
+        },
+        {
+          "id": "color.chart.diverging.alt-positive.2",
+          "label": "color.chart.diverging.alt-positive.2",
+          "group": "IR role",
+          "colour": {
+            "light": "#31aa40",
+            "dark": "#008d24"
+          }
+        },
+        {
+          "id": "color.chart.diverging.alt-positive.3",
+          "label": "color.chart.diverging.alt-positive.3",
+          "group": "IR role",
+          "colour": {
+            "light": "#005e15",
+            "dark": "#6fe276"
+          }
+        },
+        {
+          "id": "color.chart.muted.1",
+          "label": "color.chart.muted.1",
+          "group": "IR role",
+          "colour": {
+            "light": "#868686",
+            "dark": "#636363"
+          }
+        },
+        {
+          "id": "color.chart.muted.2",
+          "label": "color.chart.muted.2",
+          "group": "IR role",
+          "colour": {
+            "light": "#696969",
+            "dark": "#808080"
+          }
+        },
+        {
+          "id": "color.chart.muted.3",
+          "label": "color.chart.muted.3",
+          "group": "IR role",
+          "colour": {
+            "light": "#4d4d4d",
+            "dark": "#9e9e9e"
+          }
+        },
+        {
+          "id": "color.chart.muted.4",
+          "label": "color.chart.muted.4",
+          "group": "IR role",
+          "colour": {
+            "light": "#333333",
+            "dark": "#bebebe"
+          }
+        }
+      ],
+      "links": [
+        {
+          "source": "param:L-light-bg",
+          "target": "color.surface.sunken"
+        },
+        {
+          "source": "param:L-dark-bg",
+          "target": "color.surface.sunken"
+        },
+        {
+          "source": "param:offset.surface.sunken",
+          "target": "color.surface.sunken"
+        },
+        {
+          "source": "param:L-light-bg",
+          "target": "color.surface"
+        },
+        {
+          "source": "param:L-dark-bg",
+          "target": "color.surface"
+        },
+        {
+          "source": "param:L-light-bg",
+          "target": "color.surface.raised"
+        },
+        {
+          "source": "param:L-dark-bg",
+          "target": "color.surface.raised"
+        },
+        {
+          "source": "param:offset.surface.raised",
+          "target": "color.surface.raised"
+        },
+        {
+          "source": "param:L-light-bg",
+          "target": "color.text"
+        },
+        {
+          "source": "param:L-dark-bg",
+          "target": "color.text"
+        },
+        {
+          "source": "param:offset.text",
+          "target": "color.text"
+        },
+        {
+          "source": "param:L-light-bg",
+          "target": "color.text.subtle"
+        },
+        {
+          "source": "param:L-dark-bg",
+          "target": "color.text.subtle"
+        },
+        {
+          "source": "param:offset.text.subtle",
+          "target": "color.text.subtle"
+        },
+        {
+          "source": "param:L-light-bg",
+          "target": "color.border.bold"
+        },
+        {
+          "source": "param:L-dark-bg",
+          "target": "color.border.bold"
+        },
+        {
+          "source": "param:offset.border.bold",
+          "target": "color.border.bold"
+        },
+        {
+          "source": "param:target.text.subtlest",
+          "target": "color.text.subtlest"
+        },
+        {
+          "source": "param:alpha.border",
+          "target": "color.border"
+        },
+        {
+          "source": "color.text",
+          "target": "color.border"
+        },
+        {
+          "source": "param:brand.hue",
+          "target": "color.background.brand.bold"
+        },
+        {
+          "source": "param:brand.chroma",
+          "target": "color.background.brand.bold"
+        },
+        {
+          "source": "param:brand.lightness",
+          "target": "color.background.brand.bold"
+        },
+        {
+          "source": "param:brand.dark.hue",
+          "target": "color.background.brand.bold"
+        },
+        {
+          "source": "param:brand.dark.chroma",
+          "target": "color.background.brand.bold"
+        },
+        {
+          "source": "param:brand.dark.lightness",
+          "target": "color.background.brand.bold"
+        },
+        {
+          "source": "param:target.text.inverse",
+          "target": "color.background.brand.bold"
+        },
+        {
+          "source": "param:target.graphic",
+          "target": "color.background.brand.bold"
+        },
+        {
+          "source": "color.background.brand.bold",
+          "target": "color.text.inverse"
+        },
+        {
+          "source": "param:alpha.brand.subtlest",
+          "target": "color.background.brand.subtlest"
+        },
+        {
+          "source": "color.background.brand.bold",
+          "target": "color.background.brand.subtlest"
+        },
+        {
+          "source": "color.surface",
+          "target": "color.background.brand.subtlest"
+        },
+        {
+          "source": "param:brand.hue",
+          "target": "color.border.brand"
+        },
+        {
+          "source": "param:brand.chroma",
+          "target": "color.border.brand"
+        },
+        {
+          "source": "param:brand.lightness",
+          "target": "color.border.brand"
+        },
+        {
+          "source": "param:brand.dark.hue",
+          "target": "color.border.brand"
+        },
+        {
+          "source": "param:brand.dark.chroma",
+          "target": "color.border.brand"
+        },
+        {
+          "source": "param:brand.dark.lightness",
+          "target": "color.border.brand"
+        },
+        {
+          "source": "param:target.graphic",
+          "target": "color.border.brand"
+        },
+        {
+          "source": "param:brand.hue",
+          "target": "color.link"
+        },
+        {
+          "source": "param:brand.chroma",
+          "target": "color.link"
+        },
+        {
+          "source": "param:brand.lightness",
+          "target": "color.link"
+        },
+        {
+          "source": "param:brand.dark.hue",
+          "target": "color.link"
+        },
+        {
+          "source": "param:brand.dark.chroma",
+          "target": "color.link"
+        },
+        {
+          "source": "param:brand.dark.lightness",
+          "target": "color.link"
+        },
+        {
+          "source": "param:target.link",
+          "target": "color.link"
+        },
+        {
+          "source": "param:secondary.hue",
+          "target": "color.background.selected"
+        },
+        {
+          "source": "param:secondary.chromaRatio",
+          "target": "color.background.selected"
+        },
+        {
+          "source": "param:brand.hue",
+          "target": "color.background.selected"
+        },
+        {
+          "source": "param:brand.chroma",
+          "target": "color.background.selected"
+        },
+        {
+          "source": "param:offset.background.selected",
+          "target": "color.background.selected"
+        },
+        {
+          "source": "param:secondary.hue",
+          "target": "color.background.selected.hovered"
+        },
+        {
+          "source": "param:secondary.chromaRatio",
+          "target": "color.background.selected.hovered"
+        },
+        {
+          "source": "param:brand.hue",
+          "target": "color.background.selected.hovered"
+        },
+        {
+          "source": "param:brand.chroma",
+          "target": "color.background.selected.hovered"
+        },
+        {
+          "source": "param:offset.background.selected",
+          "target": "color.background.selected.hovered"
+        },
+        {
+          "source": "param:secondary.hue",
+          "target": "color.border.selected"
+        },
+        {
+          "source": "param:secondary.chromaRatio",
+          "target": "color.border.selected"
+        },
+        {
+          "source": "param:brand.hue",
+          "target": "color.border.selected"
+        },
+        {
+          "source": "param:brand.chroma",
+          "target": "color.border.selected"
+        },
+        {
+          "source": "param:target.graphic",
+          "target": "color.border.selected"
+        },
+        {
+          "source": "color.border.selected",
+          "target": "color.border.focused"
+        },
+        {
+          "source": "color.text",
+          "target": "color.text.selected"
+        },
+        {
+          "source": "param:status.hue.danger",
+          "target": "color.text.danger"
+        },
+        {
+          "source": "param:status.chromaCap",
+          "target": "color.text.danger"
+        },
+        {
+          "source": "param:target.status",
+          "target": "color.text.danger"
+        },
+        {
+          "source": "param:status.hue.warning",
+          "target": "color.text.warning"
+        },
+        {
+          "source": "param:status.chromaCap",
+          "target": "color.text.warning"
+        },
+        {
+          "source": "param:target.status",
+          "target": "color.text.warning"
+        },
+        {
+          "source": "param:status.hue.success",
+          "target": "color.text.success"
+        },
+        {
+          "source": "param:status.chromaCap",
+          "target": "color.text.success"
+        },
+        {
+          "source": "param:target.status",
+          "target": "color.text.success"
+        },
+        {
+          "source": "param:brand.hue",
+          "target": "color.chart.categorical.1"
+        },
+        {
+          "source": "param:walk.slots",
+          "target": "color.chart.categorical.1"
+        },
+        {
+          "source": "param:walk.angle",
+          "target": "color.chart.categorical.1"
+        },
+        {
+          "source": "param:walk.lightness",
+          "target": "color.chart.categorical.1"
+        },
+        {
+          "source": "param:walk.chromaCeiling",
+          "target": "color.chart.categorical.1"
+        },
+        {
+          "source": "param:target.graphic",
+          "target": "color.chart.categorical.1"
+        },
+        {
+          "source": "param:brand.lightness",
+          "target": "color.chart.categorical.1"
+        },
+        {
+          "source": "param:brand.dark.lightness",
+          "target": "color.chart.categorical.1"
+        },
+        {
+          "source": "param:brand.hue",
+          "target": "color.chart.categorical.2"
+        },
+        {
+          "source": "param:walk.slots",
+          "target": "color.chart.categorical.2"
+        },
+        {
+          "source": "param:walk.angle",
+          "target": "color.chart.categorical.2"
+        },
+        {
+          "source": "param:walk.lightness",
+          "target": "color.chart.categorical.2"
+        },
+        {
+          "source": "param:walk.chromaCeiling",
+          "target": "color.chart.categorical.2"
+        },
+        {
+          "source": "param:target.graphic",
+          "target": "color.chart.categorical.2"
+        },
+        {
+          "source": "param:brand.lightness",
+          "target": "color.chart.categorical.2"
+        },
+        {
+          "source": "param:brand.dark.lightness",
+          "target": "color.chart.categorical.2"
+        },
+        {
+          "source": "param:brand.hue",
+          "target": "color.chart.categorical.3"
+        },
+        {
+          "source": "param:walk.slots",
+          "target": "color.chart.categorical.3"
+        },
+        {
+          "source": "param:walk.angle",
+          "target": "color.chart.categorical.3"
+        },
+        {
+          "source": "param:walk.lightness",
+          "target": "color.chart.categorical.3"
+        },
+        {
+          "source": "param:walk.chromaCeiling",
+          "target": "color.chart.categorical.3"
+        },
+        {
+          "source": "param:target.graphic",
+          "target": "color.chart.categorical.3"
+        },
+        {
+          "source": "param:brand.lightness",
+          "target": "color.chart.categorical.3"
+        },
+        {
+          "source": "param:brand.dark.lightness",
+          "target": "color.chart.categorical.3"
+        },
+        {
+          "source": "param:brand.hue",
+          "target": "color.chart.categorical.4"
+        },
+        {
+          "source": "param:walk.slots",
+          "target": "color.chart.categorical.4"
+        },
+        {
+          "source": "param:walk.angle",
+          "target": "color.chart.categorical.4"
+        },
+        {
+          "source": "param:walk.lightness",
+          "target": "color.chart.categorical.4"
+        },
+        {
+          "source": "param:walk.chromaCeiling",
+          "target": "color.chart.categorical.4"
+        },
+        {
+          "source": "param:target.graphic",
+          "target": "color.chart.categorical.4"
+        },
+        {
+          "source": "param:brand.lightness",
+          "target": "color.chart.categorical.4"
+        },
+        {
+          "source": "param:brand.dark.lightness",
+          "target": "color.chart.categorical.4"
+        },
+        {
+          "source": "param:brand.hue",
+          "target": "color.chart.categorical.5"
+        },
+        {
+          "source": "param:walk.slots",
+          "target": "color.chart.categorical.5"
+        },
+        {
+          "source": "param:walk.angle",
+          "target": "color.chart.categorical.5"
+        },
+        {
+          "source": "param:walk.lightness",
+          "target": "color.chart.categorical.5"
+        },
+        {
+          "source": "param:walk.chromaCeiling",
+          "target": "color.chart.categorical.5"
+        },
+        {
+          "source": "param:target.graphic",
+          "target": "color.chart.categorical.5"
+        },
+        {
+          "source": "param:brand.lightness",
+          "target": "color.chart.categorical.5"
+        },
+        {
+          "source": "param:brand.dark.lightness",
+          "target": "color.chart.categorical.5"
+        },
+        {
+          "source": "param:brand.hue",
+          "target": "color.chart.categorical.6"
+        },
+        {
+          "source": "param:walk.slots",
+          "target": "color.chart.categorical.6"
+        },
+        {
+          "source": "param:walk.angle",
+          "target": "color.chart.categorical.6"
+        },
+        {
+          "source": "param:walk.lightness",
+          "target": "color.chart.categorical.6"
+        },
+        {
+          "source": "param:walk.chromaCeiling",
+          "target": "color.chart.categorical.6"
+        },
+        {
+          "source": "param:target.graphic",
+          "target": "color.chart.categorical.6"
+        },
+        {
+          "source": "param:brand.lightness",
+          "target": "color.chart.categorical.6"
+        },
+        {
+          "source": "param:brand.dark.lightness",
+          "target": "color.chart.categorical.6"
+        },
+        {
+          "source": "param:brand.hue",
+          "target": "color.chart.categorical.7"
+        },
+        {
+          "source": "param:walk.slots",
+          "target": "color.chart.categorical.7"
+        },
+        {
+          "source": "param:walk.angle",
+          "target": "color.chart.categorical.7"
+        },
+        {
+          "source": "param:walk.lightness",
+          "target": "color.chart.categorical.7"
+        },
+        {
+          "source": "param:walk.chromaCeiling",
+          "target": "color.chart.categorical.7"
+        },
+        {
+          "source": "param:target.graphic",
+          "target": "color.chart.categorical.7"
+        },
+        {
+          "source": "param:brand.lightness",
+          "target": "color.chart.categorical.7"
+        },
+        {
+          "source": "param:brand.dark.lightness",
+          "target": "color.chart.categorical.7"
+        },
+        {
+          "source": "param:brand.hue",
+          "target": "color.chart.categorical.8"
+        },
+        {
+          "source": "param:walk.slots",
+          "target": "color.chart.categorical.8"
+        },
+        {
+          "source": "param:walk.angle",
+          "target": "color.chart.categorical.8"
+        },
+        {
+          "source": "param:walk.lightness",
+          "target": "color.chart.categorical.8"
+        },
+        {
+          "source": "param:walk.chromaCeiling",
+          "target": "color.chart.categorical.8"
+        },
+        {
+          "source": "param:target.graphic",
+          "target": "color.chart.categorical.8"
+        },
+        {
+          "source": "param:brand.lightness",
+          "target": "color.chart.categorical.8"
+        },
+        {
+          "source": "param:brand.dark.lightness",
+          "target": "color.chart.categorical.8"
+        },
+        {
+          "source": "param:brand.hue",
+          "target": "color.chart.categorical.9"
+        },
+        {
+          "source": "param:walk.slots",
+          "target": "color.chart.categorical.9"
+        },
+        {
+          "source": "param:walk.angle",
+          "target": "color.chart.categorical.9"
+        },
+        {
+          "source": "param:walk.lightness",
+          "target": "color.chart.categorical.9"
+        },
+        {
+          "source": "param:walk.chromaCeiling",
+          "target": "color.chart.categorical.9"
+        },
+        {
+          "source": "param:target.graphic",
+          "target": "color.chart.categorical.9"
+        },
+        {
+          "source": "param:brand.lightness",
+          "target": "color.chart.categorical.9"
+        },
+        {
+          "source": "param:brand.dark.lightness",
+          "target": "color.chart.categorical.9"
+        },
+        {
+          "source": "param:brand.hue",
+          "target": "color.chart.categorical.10"
+        },
+        {
+          "source": "param:walk.slots",
+          "target": "color.chart.categorical.10"
+        },
+        {
+          "source": "param:walk.angle",
+          "target": "color.chart.categorical.10"
+        },
+        {
+          "source": "param:walk.lightness",
+          "target": "color.chart.categorical.10"
+        },
+        {
+          "source": "param:walk.chromaCeiling",
+          "target": "color.chart.categorical.10"
+        },
+        {
+          "source": "param:target.graphic",
+          "target": "color.chart.categorical.10"
+        },
+        {
+          "source": "param:brand.lightness",
+          "target": "color.chart.categorical.10"
+        },
+        {
+          "source": "param:brand.dark.lightness",
+          "target": "color.chart.categorical.10"
+        },
+        {
+          "source": "param:brand.hue",
+          "target": "color.chart.categorical.11"
+        },
+        {
+          "source": "param:walk.slots",
+          "target": "color.chart.categorical.11"
+        },
+        {
+          "source": "param:walk.angle",
+          "target": "color.chart.categorical.11"
+        },
+        {
+          "source": "param:walk.lightness",
+          "target": "color.chart.categorical.11"
+        },
+        {
+          "source": "param:walk.chromaCeiling",
+          "target": "color.chart.categorical.11"
+        },
+        {
+          "source": "param:target.graphic",
+          "target": "color.chart.categorical.11"
+        },
+        {
+          "source": "param:brand.lightness",
+          "target": "color.chart.categorical.11"
+        },
+        {
+          "source": "param:brand.dark.lightness",
+          "target": "color.chart.categorical.11"
+        },
+        {
+          "source": "param:brand.hue",
+          "target": "color.chart.categorical.12"
+        },
+        {
+          "source": "param:walk.slots",
+          "target": "color.chart.categorical.12"
+        },
+        {
+          "source": "param:walk.angle",
+          "target": "color.chart.categorical.12"
+        },
+        {
+          "source": "param:walk.lightness",
+          "target": "color.chart.categorical.12"
+        },
+        {
+          "source": "param:walk.chromaCeiling",
+          "target": "color.chart.categorical.12"
+        },
+        {
+          "source": "param:target.graphic",
+          "target": "color.chart.categorical.12"
+        },
+        {
+          "source": "param:brand.lightness",
+          "target": "color.chart.categorical.12"
+        },
+        {
+          "source": "param:brand.dark.lightness",
+          "target": "color.chart.categorical.12"
+        },
+        {
+          "source": "param:brand.hue",
+          "target": "color.chart.sequential.1"
+        },
+        {
+          "source": "param:brand.chroma",
+          "target": "color.chart.sequential.1"
+        },
+        {
+          "source": "param:brand.hue",
+          "target": "color.chart.sequential.2"
+        },
+        {
+          "source": "param:brand.chroma",
+          "target": "color.chart.sequential.2"
+        },
+        {
+          "source": "param:brand.hue",
+          "target": "color.chart.sequential.3"
+        },
+        {
+          "source": "param:brand.chroma",
+          "target": "color.chart.sequential.3"
+        },
+        {
+          "source": "param:brand.hue",
+          "target": "color.chart.sequential.4"
+        },
+        {
+          "source": "param:brand.chroma",
+          "target": "color.chart.sequential.4"
+        },
+        {
+          "source": "param:brand.hue",
+          "target": "color.chart.sequential.5"
+        },
+        {
+          "source": "param:brand.chroma",
+          "target": "color.chart.sequential.5"
+        },
+        {
+          "source": "param:brand.hue",
+          "target": "color.chart.diverging.positive.1"
+        },
+        {
+          "source": "param:brand.chroma",
+          "target": "color.chart.diverging.positive.1"
+        },
+        {
+          "source": "param:brand.hue",
+          "target": "color.chart.diverging.positive.2"
+        },
+        {
+          "source": "param:brand.chroma",
+          "target": "color.chart.diverging.positive.2"
+        },
+        {
+          "source": "param:brand.hue",
+          "target": "color.chart.diverging.positive.3"
+        },
+        {
+          "source": "param:brand.chroma",
+          "target": "color.chart.diverging.positive.3"
+        },
+        {
+          "source": "param:status.hue.danger",
+          "target": "color.chart.diverging.negative.1"
+        },
+        {
+          "source": "param:status.chromaCap",
+          "target": "color.chart.diverging.negative.1"
+        },
+        {
+          "source": "param:status.hue.danger",
+          "target": "color.chart.diverging.negative.2"
+        },
+        {
+          "source": "param:status.chromaCap",
+          "target": "color.chart.diverging.negative.2"
+        },
+        {
+          "source": "param:status.hue.danger",
+          "target": "color.chart.diverging.negative.3"
+        },
+        {
+          "source": "param:status.chromaCap",
+          "target": "color.chart.diverging.negative.3"
+        },
+        {
+          "source": "param:status.hue.success",
+          "target": "color.chart.diverging.alt-positive.1"
+        },
+        {
+          "source": "param:status.chromaCap",
+          "target": "color.chart.diverging.alt-positive.1"
+        },
+        {
+          "source": "param:status.hue.success",
+          "target": "color.chart.diverging.alt-positive.2"
+        },
+        {
+          "source": "param:status.chromaCap",
+          "target": "color.chart.diverging.alt-positive.2"
+        },
+        {
+          "source": "param:status.hue.success",
+          "target": "color.chart.diverging.alt-positive.3"
+        },
+        {
+          "source": "param:status.chromaCap",
+          "target": "color.chart.diverging.alt-positive.3"
+        },
+        {
+          "source": "param:L-light-bg",
+          "target": "color.chart.muted.1"
+        },
+        {
+          "source": "param:L-dark-bg",
+          "target": "color.chart.muted.1"
+        },
+        {
+          "source": "param:offset.border.bold",
+          "target": "color.chart.muted.1"
+        },
+        {
+          "source": "param:offset.text.subtle",
+          "target": "color.chart.muted.1"
+        },
+        {
+          "source": "param:L-light-bg",
+          "target": "color.chart.muted.2"
+        },
+        {
+          "source": "param:L-dark-bg",
+          "target": "color.chart.muted.2"
+        },
+        {
+          "source": "param:offset.border.bold",
+          "target": "color.chart.muted.2"
+        },
+        {
+          "source": "param:offset.text.subtle",
+          "target": "color.chart.muted.2"
+        },
+        {
+          "source": "param:L-light-bg",
+          "target": "color.chart.muted.3"
+        },
+        {
+          "source": "param:L-dark-bg",
+          "target": "color.chart.muted.3"
+        },
+        {
+          "source": "param:offset.border.bold",
+          "target": "color.chart.muted.3"
+        },
+        {
+          "source": "param:offset.text.subtle",
+          "target": "color.chart.muted.3"
+        },
+        {
+          "source": "param:L-light-bg",
+          "target": "color.chart.muted.4"
+        },
+        {
+          "source": "param:L-dark-bg",
+          "target": "color.chart.muted.4"
+        },
+        {
+          "source": "param:offset.border.bold",
+          "target": "color.chart.muted.4"
+        },
+        {
+          "source": "param:offset.text.subtle",
+          "target": "color.chart.muted.4"
+        }
+      ]
+    },
+    {
+      "title": "IR \u2192 rendered theme",
+      "caption": "Each IR role on the left feeds the keys of the design-tokens.json this showcase renders. One role often feeds several surfaces; a composite (a translucent border over a ground) reads two roles. IR roles with no band are carried in the DTCG build but not yet consumed by richdocs.",
+      "nodes": [
+        {
+          "id": "color.surface.sunken",
+          "label": "color.surface.sunken",
+          "group": "IR role",
+          "colour": {
+            "light": "#e4e4e4",
+            "dark": "#030303"
+          }
+        },
+        {
+          "id": "color.surface",
+          "label": "color.surface",
+          "group": "IR role",
+          "colour": {
+            "light": "#f5f5f5",
+            "dark": "#0b0b0b"
+          }
+        },
+        {
+          "id": "color.surface.raised",
+          "label": "color.surface.raised",
+          "group": "IR role",
+          "colour": {
+            "light": "#ffffff",
+            "dark": "#161616"
+          }
+        },
+        {
+          "id": "color.text",
+          "label": "color.text",
+          "group": "IR role",
+          "colour": {
+            "light": "#010101",
+            "dark": "#ffffff"
+          }
+        },
+        {
+          "id": "color.text.subtle",
+          "label": "color.text.subtle",
+          "group": "IR role",
+          "colour": {
+            "light": "#333333",
+            "dark": "#bebebe"
+          }
+        },
+        {
+          "id": "color.border.bold",
+          "label": "color.border.bold",
+          "group": "IR role",
+          "colour": {
+            "light": "#868686",
+            "dark": "#636363"
+          }
+        },
+        {
+          "id": "color.border",
+          "label": "color.border",
+          "group": "IR role",
+          "colour": {
+            "light": "#010101",
+            "dark": "#ffffff"
+          }
+        },
+        {
+          "id": "color.background.brand.bold",
+          "label": "color.background.brand.bold",
+          "group": "IR role",
+          "colour": {
+            "light": "#5c4295",
+            "dark": "#c3b0fd"
+          }
+        },
+        {
+          "id": "color.text.inverse",
+          "label": "color.text.inverse",
+          "group": "IR role",
+          "colour": {
+            "light": "#ffffff",
+            "dark": "#000000"
+          }
+        },
+        {
+          "id": "color.background.brand.subtlest",
+          "label": "color.background.brand.subtlest",
+          "group": "IR role",
+          "colour": {
+            "light": "#dcd8e6",
+            "dark": "#292632"
+          }
+        },
+        {
+          "id": "color.border.brand",
+          "label": "color.border.brand",
+          "group": "IR role",
+          "colour": {
+            "light": "#5c4295",
+            "dark": "#c3b0fd"
+          }
+        },
+        {
+          "id": "color.link",
+          "label": "color.link",
+          "group": "IR role",
+          "colour": {
+            "light": "#5c4295",
+            "dark": "#c3b0fd"
+          }
+        },
+        {
+          "id": "color.background.selected",
+          "label": "color.background.selected",
+          "group": "IR role",
+          "colour": {
+            "light": "#d6cdf7",
+            "dark": "#241b3a"
+          }
+        },
+        {
+          "id": "color.border.selected",
+          "label": "color.border.selected",
+          "group": "IR role",
+          "colour": {
+            "light": "#5c4295",
+            "dark": "#6d54a8"
+          }
+        },
+        {
+          "id": "color.text.danger",
+          "label": "color.text.danger",
+          "group": "IR role",
+          "colour": {
+            "light": "#be2e31",
+            "dark": "#de4e4b"
+          }
+        },
+        {
+          "id": "color.text.warning",
+          "label": "color.text.warning",
+          "group": "IR role",
+          "colour": {
+            "light": "#875f00",
+            "dark": "#a77600"
+          }
+        },
+        {
+          "id": "color.text.success",
+          "label": "color.text.success",
+          "group": "IR role",
+          "colour": {
+            "light": "#00771d",
+            "dark": "#189a30"
+          }
+        },
+        {
+          "id": "color.chart.categorical.1",
+          "label": "color.chart.categorical.1",
+          "group": "IR role",
+          "colour": {
+            "light": "#584c7c",
+            "dark": "#c2b1f8"
+          }
+        },
+        {
+          "id": "color.chart.categorical.2",
+          "label": "color.chart.categorical.2",
+          "group": "IR role",
+          "colour": {
+            "light": "#704e1e",
+            "dark": "#e6b474"
+          }
+        },
+        {
+          "id": "color.chart.categorical.3",
+          "label": "color.chart.categorical.3",
+          "group": "IR role",
+          "colour": {
+            "light": "#00616d",
+            "dark": "#67d0e2"
+          }
+        },
+        {
+          "id": "color.chart.categorical.4",
+          "label": "color.chart.categorical.4",
+          "group": "IR role",
+          "colour": {
+            "light": "#75435d",
+            "dark": "#eea4ca"
+          }
+        },
+        {
+          "id": "color.chart.categorical.5",
+          "label": "color.chart.categorical.5",
+          "group": "IR role",
+          "colour": {
+            "light": "#4b5d2a",
+            "dark": "#afca82"
+          }
+        },
+        {
+          "id": "color.chart.categorical.6",
+          "label": "color.chart.categorical.6",
+          "group": "IR role",
+          "colour": {
+            "light": "#3e5581",
+            "dark": "#9cbeff"
+          }
+        },
+        {
+          "id": "color.chart.categorical.7",
+          "label": "color.chart.categorical.7",
+          "group": "IR role",
+          "colour": {
+            "light": "#7a4533",
+            "dark": "#f6a88d"
+          }
+        },
+        {
+          "id": "color.chart.categorical.8",
+          "label": "color.chart.categorical.8",
+          "group": "IR role",
+          "colour": {
+            "light": "#106355",
+            "dark": "#6fd3bd"
+          }
+        },
+        {
+          "id": "color.chart.categorical.9",
+          "label": "color.chart.categorical.9",
+          "group": "IR role",
+          "colour": {
+            "light": "#664773",
+            "dark": "#d7abeb"
+          }
+        },
+        {
+          "id": "color.chart.categorical.10",
+          "label": "color.chart.categorical.10",
+          "group": "IR role",
+          "colour": {
+            "light": "#64541a",
+            "dark": "#d5bd70"
+          }
+        },
+        {
+          "id": "color.chart.categorical.11",
+          "label": "color.chart.categorical.11",
+          "group": "IR role",
+          "colour": {
+            "light": "#1b5d78",
+            "dark": "#75caf2"
+          }
+        },
+        {
+          "id": "color.chart.categorical.12",
+          "label": "color.chart.categorical.12",
+          "group": "IR role",
+          "colour": {
+            "light": "#7a424d",
+            "dark": "#f6a3b2"
+          }
+        },
+        {
+          "id": "color.chart.sequential.1",
+          "label": "color.chart.sequential.1",
+          "group": "IR role",
+          "colour": {
+            "light": "#dad0ff",
+            "dark": "#351667"
+          }
+        },
+        {
+          "id": "color.chart.sequential.2",
+          "label": "color.chart.sequential.2",
+          "group": "IR role",
+          "colour": {
+            "light": "#b9a1fd",
+            "dark": "#573c8f"
+          }
+        },
+        {
+          "id": "color.chart.sequential.3",
+          "label": "color.chart.sequential.3",
+          "group": "IR role",
+          "colour": {
+            "light": "#967dd6",
+            "dark": "#7b62b8"
+          }
+        },
+        {
+          "id": "color.chart.sequential.4",
+          "label": "color.chart.sequential.4",
+          "group": "IR role",
+          "colour": {
+            "light": "#745bb0",
+            "dark": "#a28ae3"
+          }
+        },
+        {
+          "id": "color.chart.sequential.5",
+          "label": "color.chart.sequential.5",
+          "group": "IR role",
+          "colour": {
+            "light": "#54398c",
+            "dark": "#c8b7ff"
+          }
+        },
+        {
+          "id": "color.chart.diverging.positive.1",
+          "label": "color.chart.diverging.positive.1",
+          "group": "IR role",
+          "colour": {
+            "light": "#dad0ff",
+            "dark": "#351667"
+          }
+        },
+        {
+          "id": "color.chart.diverging.positive.2",
+          "label": "color.chart.diverging.positive.2",
+          "group": "IR role",
+          "colour": {
+            "light": "#967dd6",
+            "dark": "#7b62b8"
+          }
+        },
+        {
+          "id": "color.chart.diverging.positive.3",
+          "label": "color.chart.diverging.positive.3",
+          "group": "IR role",
+          "colour": {
+            "light": "#54398c",
+            "dark": "#c8b7ff"
+          }
+        },
+        {
+          "id": "color.chart.diverging.negative.1",
+          "label": "color.chart.diverging.negative.1",
+          "group": "IR role",
+          "colour": {
+            "light": "#ffc8c3",
+            "dark": "#5d0009"
+          }
+        },
+        {
+          "id": "color.chart.diverging.negative.2",
+          "label": "color.chart.diverging.negative.2",
+          "group": "IR role",
+          "colour": {
+            "light": "#e85854",
+            "dark": "#c8393a"
+          }
+        },
+        {
+          "id": "color.chart.diverging.negative.3",
+          "label": "color.chart.diverging.negative.3",
+          "group": "IR role",
+          "colour": {
+            "light": "#940014",
+            "dark": "#ffaba3"
+          }
+        },
+        {
+          "id": "color.chart.diverging.alt-positive.1",
+          "label": "color.chart.diverging.alt-positive.1",
+          "group": "IR role",
+          "colour": {
+            "light": "#83f68a",
+            "dark": "#003909"
+          }
+        },
+        {
+          "id": "color.chart.diverging.alt-positive.2",
+          "label": "color.chart.diverging.alt-positive.2",
+          "group": "IR role",
+          "colour": {
+            "light": "#31aa40",
+            "dark": "#008d24"
+          }
+        },
+        {
+          "id": "color.chart.diverging.alt-positive.3",
+          "label": "color.chart.diverging.alt-positive.3",
+          "group": "IR role",
+          "colour": {
+            "light": "#005e15",
+            "dark": "#6fe276"
+          }
+        },
+        {
+          "id": "color.chart.muted.1",
+          "label": "color.chart.muted.1",
+          "group": "IR role",
+          "colour": {
+            "light": "#868686",
+            "dark": "#636363"
+          }
+        },
+        {
+          "id": "color.chart.muted.2",
+          "label": "color.chart.muted.2",
+          "group": "IR role",
+          "colour": {
+            "light": "#696969",
+            "dark": "#808080"
+          }
+        },
+        {
+          "id": "color.chart.muted.3",
+          "label": "color.chart.muted.3",
+          "group": "IR role",
+          "colour": {
+            "light": "#4d4d4d",
+            "dark": "#9e9e9e"
+          }
+        },
+        {
+          "id": "color.chart.muted.4",
+          "label": "color.chart.muted.4",
+          "group": "IR role",
+          "colour": {
+            "light": "#333333",
+            "dark": "#bebebe"
+          }
+        },
+        {
+          "id": "out:themes.bg",
+          "label": "themes \u00b7 bg",
+          "group": "themes",
+          "colour": {
+            "light": "#f5f5f5",
+            "dark": "#0b0b0b"
+          }
+        },
+        {
+          "id": "out:themes.fg",
+          "label": "themes \u00b7 fg",
+          "group": "themes",
+          "colour": {
+            "light": "#010101",
+            "dark": "#ffffff"
+          }
+        },
+        {
+          "id": "out:themes.muted",
+          "label": "themes \u00b7 muted",
+          "group": "themes",
+          "colour": {
+            "light": "#333333",
+            "dark": "#bebebe"
+          }
+        },
+        {
+          "id": "out:themes.accent",
+          "label": "themes \u00b7 accent",
+          "group": "themes",
+          "colour": {
+            "light": "#5c4295",
+            "dark": "#c3b0fd"
+          }
+        },
+        {
+          "id": "out:themes.surface",
+          "label": "themes \u00b7 surface",
+          "group": "themes",
+          "colour": {
+            "light": "#ffffff",
+            "dark": "#161616"
+          }
+        },
+        {
+          "id": "out:themes.border",
+          "label": "themes \u00b7 border",
+          "group": "themes",
+          "colour": {
+            "light": "#d3d3d3",
+            "dark": "#2d2d2d"
+          }
+        },
+        {
+          "id": "out:themes.onAccent",
+          "label": "themes \u00b7 onAccent",
+          "group": "themes",
+          "colour": {
+            "light": "#ffffff",
+            "dark": "#000000"
+          }
+        },
+        {
+          "id": "out:themes.link",
+          "label": "themes \u00b7 link",
+          "group": "themes",
+          "colour": {
+            "light": "#5c4295",
+            "dark": "#c3b0fd"
+          }
+        },
+        {
+          "id": "out:cytoscape.nodeFill",
+          "label": "cytoscape \u00b7 nodeFill",
+          "group": "cytoscape",
+          "colour": {
+            "light": "#dcd8e6",
+            "dark": "#292632"
+          }
+        },
+        {
+          "id": "out:cytoscape.nodeBorder",
+          "label": "cytoscape \u00b7 nodeBorder",
+          "group": "cytoscape",
+          "colour": {
+            "light": "#5c4295",
+            "dark": "#c3b0fd"
+          }
+        },
+        {
+          "id": "out:cytoscape.nodeLabel",
+          "label": "cytoscape \u00b7 nodeLabel",
+          "group": "cytoscape",
+          "colour": {
+            "light": "#010101",
+            "dark": "#ffffff"
+          }
+        },
+        {
+          "id": "out:cytoscape.nodeFillAlt",
+          "label": "cytoscape \u00b7 nodeFillAlt",
+          "group": "cytoscape",
+          "colour": {
+            "light": "#d6cdf7",
+            "dark": "#241b3a"
+          }
+        },
+        {
+          "id": "out:cytoscape.edge",
+          "label": "cytoscape \u00b7 edge",
+          "group": "cytoscape",
+          "colour": {
+            "light": "#868686",
+            "dark": "#636363"
+          }
+        },
+        {
+          "id": "out:cytoscape.edgeLabel",
+          "label": "cytoscape \u00b7 edgeLabel",
+          "group": "cytoscape",
+          "colour": {
+            "light": "#333333",
+            "dark": "#bebebe"
+          }
+        },
+        {
+          "id": "out:cytoscape.edgeLabelBg",
+          "label": "cytoscape \u00b7 edgeLabelBg",
+          "group": "cytoscape",
+          "colour": {
+            "light": "#f5f5f5",
+            "dark": "#0b0b0b"
+          }
+        },
+        {
+          "id": "out:cytoscape.compoundBg",
+          "label": "cytoscape \u00b7 compoundBg",
+          "group": "cytoscape",
+          "colour": {
+            "light": "#e4e4e4",
+            "dark": "#030303"
+          }
+        },
+        {
+          "id": "out:cytoscape.compoundBorder",
+          "label": "cytoscape \u00b7 compoundBorder",
+          "group": "cytoscape",
+          "colour": {
+            "light": "#c4c4c4",
+            "dark": "#272727"
+          }
+        },
+        {
+          "id": "out:cytoscape.selected",
+          "label": "cytoscape \u00b7 selected",
+          "group": "cytoscape",
+          "colour": {
+            "light": "#5c4295",
+            "dark": "#6d54a8"
+          }
+        },
+        {
+          "id": "out:plotly.paper",
+          "label": "plotly \u00b7 paper",
+          "group": "plotly",
+          "colour": {
+            "light": "#ffffff",
+            "dark": "#161616"
+          }
+        },
+        {
+          "id": "out:plotly.plot",
+          "label": "plotly \u00b7 plot",
+          "group": "plotly",
+          "colour": {
+            "light": "#f5f5f5",
+            "dark": "#0b0b0b"
+          }
+        },
+        {
+          "id": "out:plotly.font",
+          "label": "plotly \u00b7 font",
+          "group": "plotly",
+          "colour": {
+            "light": "#010101",
+            "dark": "#ffffff"
+          }
+        },
+        {
+          "id": "out:plotly.grid",
+          "label": "plotly \u00b7 grid",
+          "group": "plotly",
+          "colour": {
+            "light": "#d3d3d3",
+            "dark": "#2d2d2d"
+          }
+        },
+        {
+          "id": "out:plotly.series.1",
+          "label": "plotly \u00b7 series \u00b7 1",
+          "group": "plotly",
+          "colour": {
+            "light": "#584c7c",
+            "dark": "#c2b1f8"
+          }
+        },
+        {
+          "id": "out:plotly.series.2",
+          "label": "plotly \u00b7 series \u00b7 2",
+          "group": "plotly",
+          "colour": {
+            "light": "#704e1e",
+            "dark": "#e6b474"
+          }
+        },
+        {
+          "id": "out:plotly.series.3",
+          "label": "plotly \u00b7 series \u00b7 3",
+          "group": "plotly",
+          "colour": {
+            "light": "#00616d",
+            "dark": "#67d0e2"
+          }
+        },
+        {
+          "id": "out:plotly.series.4",
+          "label": "plotly \u00b7 series \u00b7 4",
+          "group": "plotly",
+          "colour": {
+            "light": "#75435d",
+            "dark": "#eea4ca"
+          }
+        },
+        {
+          "id": "out:plotly.series.5",
+          "label": "plotly \u00b7 series \u00b7 5",
+          "group": "plotly",
+          "colour": {
+            "light": "#4b5d2a",
+            "dark": "#afca82"
+          }
+        },
+        {
+          "id": "out:plotly.series.6",
+          "label": "plotly \u00b7 series \u00b7 6",
+          "group": "plotly",
+          "colour": {
+            "light": "#3e5581",
+            "dark": "#9cbeff"
+          }
+        },
+        {
+          "id": "out:plotly.series.7",
+          "label": "plotly \u00b7 series \u00b7 7",
+          "group": "plotly",
+          "colour": {
+            "light": "#7a4533",
+            "dark": "#f6a88d"
+          }
+        },
+        {
+          "id": "out:plotly.series.8",
+          "label": "plotly \u00b7 series \u00b7 8",
+          "group": "plotly",
+          "colour": {
+            "light": "#106355",
+            "dark": "#6fd3bd"
+          }
+        },
+        {
+          "id": "out:plotly.series.9",
+          "label": "plotly \u00b7 series \u00b7 9",
+          "group": "plotly",
+          "colour": {
+            "light": "#664773",
+            "dark": "#d7abeb"
+          }
+        },
+        {
+          "id": "out:plotly.series.10",
+          "label": "plotly \u00b7 series \u00b7 10",
+          "group": "plotly",
+          "colour": {
+            "light": "#64541a",
+            "dark": "#d5bd70"
+          }
+        },
+        {
+          "id": "out:plotly.series.11",
+          "label": "plotly \u00b7 series \u00b7 11",
+          "group": "plotly",
+          "colour": {
+            "light": "#1b5d78",
+            "dark": "#75caf2"
+          }
+        },
+        {
+          "id": "out:plotly.series.12",
+          "label": "plotly \u00b7 series \u00b7 12",
+          "group": "plotly",
+          "colour": {
+            "light": "#7a424d",
+            "dark": "#f6a3b2"
+          }
+        },
+        {
+          "id": "out:plotly.muted.1",
+          "label": "plotly \u00b7 muted \u00b7 1",
+          "group": "plotly",
+          "colour": {
+            "light": "#868686",
+            "dark": "#636363"
+          }
+        },
+        {
+          "id": "out:plotly.muted.2",
+          "label": "plotly \u00b7 muted \u00b7 2",
+          "group": "plotly",
+          "colour": {
+            "light": "#696969",
+            "dark": "#808080"
+          }
+        },
+        {
+          "id": "out:plotly.muted.3",
+          "label": "plotly \u00b7 muted \u00b7 3",
+          "group": "plotly",
+          "colour": {
+            "light": "#4d4d4d",
+            "dark": "#9e9e9e"
+          }
+        },
+        {
+          "id": "out:plotly.muted.4",
+          "label": "plotly \u00b7 muted \u00b7 4",
+          "group": "plotly",
+          "colour": {
+            "light": "#333333",
+            "dark": "#bebebe"
+          }
+        },
+        {
+          "id": "out:plotly.sequential.1",
+          "label": "plotly \u00b7 sequential \u00b7 1",
+          "group": "plotly",
+          "colour": {
+            "light": "#dad0ff",
+            "dark": "#351667"
+          }
+        },
+        {
+          "id": "out:plotly.sequential.2",
+          "label": "plotly \u00b7 sequential \u00b7 2",
+          "group": "plotly",
+          "colour": {
+            "light": "#b9a1fd",
+            "dark": "#573c8f"
+          }
+        },
+        {
+          "id": "out:plotly.sequential.3",
+          "label": "plotly \u00b7 sequential \u00b7 3",
+          "group": "plotly",
+          "colour": {
+            "light": "#967dd6",
+            "dark": "#7b62b8"
+          }
+        },
+        {
+          "id": "out:plotly.sequential.4",
+          "label": "plotly \u00b7 sequential \u00b7 4",
+          "group": "plotly",
+          "colour": {
+            "light": "#745bb0",
+            "dark": "#a28ae3"
+          }
+        },
+        {
+          "id": "out:plotly.sequential.5",
+          "label": "plotly \u00b7 sequential \u00b7 5",
+          "group": "plotly",
+          "colour": {
+            "light": "#54398c",
+            "dark": "#c8b7ff"
+          }
+        },
+        {
+          "id": "out:plotly.diverging.good.1",
+          "label": "plotly \u00b7 diverging \u00b7 good \u00b7 1",
+          "group": "plotly",
+          "colour": {
+            "light": "#dad0ff",
+            "dark": "#351667"
+          }
+        },
+        {
+          "id": "out:plotly.diverging.good.2",
+          "label": "plotly \u00b7 diverging \u00b7 good \u00b7 2",
+          "group": "plotly",
+          "colour": {
+            "light": "#967dd6",
+            "dark": "#7b62b8"
+          }
+        },
+        {
+          "id": "out:plotly.diverging.good.3",
+          "label": "plotly \u00b7 diverging \u00b7 good \u00b7 3",
+          "group": "plotly",
+          "colour": {
+            "light": "#54398c",
+            "dark": "#c8b7ff"
+          }
+        },
+        {
+          "id": "out:plotly.diverging.zero",
+          "label": "plotly \u00b7 diverging \u00b7 zero",
+          "group": "plotly",
+          "colour": {
+            "light": "#e4e4e4",
+            "dark": "#030303"
+          }
+        },
+        {
+          "id": "out:plotly.diverging.bad.1",
+          "label": "plotly \u00b7 diverging \u00b7 bad \u00b7 1",
+          "group": "plotly",
+          "colour": {
+            "light": "#ffc8c3",
+            "dark": "#5d0009"
+          }
+        },
+        {
+          "id": "out:plotly.diverging.bad.2",
+          "label": "plotly \u00b7 diverging \u00b7 bad \u00b7 2",
+          "group": "plotly",
+          "colour": {
+            "light": "#e85854",
+            "dark": "#c8393a"
+          }
+        },
+        {
+          "id": "out:plotly.diverging.bad.3",
+          "label": "plotly \u00b7 diverging \u00b7 bad \u00b7 3",
+          "group": "plotly",
+          "colour": {
+            "light": "#940014",
+            "dark": "#ffaba3"
+          }
+        },
+        {
+          "id": "out:plotly.divergingAlt.good.1",
+          "label": "plotly \u00b7 divergingAlt \u00b7 good \u00b7 1",
+          "group": "plotly",
+          "colour": {
+            "light": "#83f68a",
+            "dark": "#003909"
+          }
+        },
+        {
+          "id": "out:plotly.divergingAlt.good.2",
+          "label": "plotly \u00b7 divergingAlt \u00b7 good \u00b7 2",
+          "group": "plotly",
+          "colour": {
+            "light": "#31aa40",
+            "dark": "#008d24"
+          }
+        },
+        {
+          "id": "out:plotly.divergingAlt.good.3",
+          "label": "plotly \u00b7 divergingAlt \u00b7 good \u00b7 3",
+          "group": "plotly",
+          "colour": {
+            "light": "#005e15",
+            "dark": "#6fe276"
+          }
+        },
+        {
+          "id": "out:plotly.divergingAlt.zero",
+          "label": "plotly \u00b7 divergingAlt \u00b7 zero",
+          "group": "plotly",
+          "colour": {
+            "light": "#e4e4e4",
+            "dark": "#030303"
+          }
+        },
+        {
+          "id": "out:plotly.divergingAlt.bad.1",
+          "label": "plotly \u00b7 divergingAlt \u00b7 bad \u00b7 1",
+          "group": "plotly",
+          "colour": {
+            "light": "#ffc8c3",
+            "dark": "#5d0009"
+          }
+        },
+        {
+          "id": "out:plotly.divergingAlt.bad.2",
+          "label": "plotly \u00b7 divergingAlt \u00b7 bad \u00b7 2",
+          "group": "plotly",
+          "colour": {
+            "light": "#e85854",
+            "dark": "#c8393a"
+          }
+        },
+        {
+          "id": "out:plotly.divergingAlt.bad.3",
+          "label": "plotly \u00b7 divergingAlt \u00b7 bad \u00b7 3",
+          "group": "plotly",
+          "colour": {
+            "light": "#940014",
+            "dark": "#ffaba3"
+          }
+        },
+        {
+          "id": "out:categoryColours.Compute",
+          "label": "categoryColours \u00b7 Compute",
+          "group": "categoryColours",
+          "colour": {
+            "light": "#584c7c",
+            "dark": "#584c7c"
+          }
+        },
+        {
+          "id": "out:categoryColours.Storage",
+          "label": "categoryColours \u00b7 Storage",
+          "group": "categoryColours",
+          "colour": {
+            "light": "#704e1e",
+            "dark": "#704e1e"
+          }
+        },
+        {
+          "id": "out:categoryColours.Database",
+          "label": "categoryColours \u00b7 Database",
+          "group": "categoryColours",
+          "colour": {
+            "light": "#00616d",
+            "dark": "#00616d"
+          }
+        },
+        {
+          "id": "out:categoryColours.Networking",
+          "label": "categoryColours \u00b7 Networking",
+          "group": "categoryColours",
+          "colour": {
+            "light": "#75435d",
+            "dark": "#75435d"
+          }
+        },
+        {
+          "id": "out:categoryColours.Security",
+          "label": "categoryColours \u00b7 Security",
+          "group": "categoryColours",
+          "colour": {
+            "light": "#4b5d2a",
+            "dark": "#4b5d2a"
+          }
+        },
+        {
+          "id": "out:categoryColours.Integration",
+          "label": "categoryColours \u00b7 Integration",
+          "group": "categoryColours",
+          "colour": {
+            "light": "#3e5581",
+            "dark": "#3e5581"
+          }
+        },
+        {
+          "id": "out:categoryColours.General",
+          "label": "categoryColours \u00b7 General",
+          "group": "categoryColours",
+          "colour": {
+            "light": "#7a4533",
+            "dark": "#7a4533"
+          }
+        },
+        {
+          "id": "out:status.good",
+          "label": "status \u00b7 good",
+          "group": "status",
+          "colour": {
+            "light": "#00771d",
+            "dark": "#189a30"
+          }
+        },
+        {
+          "id": "out:status.warning",
+          "label": "status \u00b7 warning",
+          "group": "status",
+          "colour": {
+            "light": "#875f00",
+            "dark": "#a77600"
+          }
+        },
+        {
+          "id": "out:status.serious",
+          "label": "status \u00b7 serious",
+          "group": "status",
+          "colour": {
+            "light": "#be2e31",
+            "dark": "#de4e4b"
+          }
+        },
+        {
+          "id": "out:status.critical",
+          "label": "status \u00b7 critical",
+          "group": "status",
+          "colour": {
+            "light": "#be2e31",
+            "dark": "#de4e4b"
+          }
+        }
+      ],
+      "links": [
+        {
+          "source": "color.surface",
+          "target": "out:themes.bg"
+        },
+        {
+          "source": "color.text",
+          "target": "out:themes.fg"
+        },
+        {
+          "source": "color.text.subtle",
+          "target": "out:themes.muted"
+        },
+        {
+          "source": "color.background.brand.bold",
+          "target": "out:themes.accent"
+        },
+        {
+          "source": "color.surface.raised",
+          "target": "out:themes.surface"
+        },
+        {
+          "source": "color.border",
+          "target": "out:themes.border"
+        },
+        {
+          "source": "color.surface",
+          "target": "out:themes.border"
+        },
+        {
+          "source": "color.text.inverse",
+          "target": "out:themes.onAccent"
+        },
+        {
+          "source": "color.link",
+          "target": "out:themes.link"
+        },
+        {
+          "source": "color.background.brand.subtlest",
+          "target": "out:cytoscape.nodeFill"
+        },
+        {
+          "source": "color.border.brand",
+          "target": "out:cytoscape.nodeBorder"
+        },
+        {
+          "source": "color.text",
+          "target": "out:cytoscape.nodeLabel"
+        },
+        {
+          "source": "color.background.selected",
+          "target": "out:cytoscape.nodeFillAlt"
+        },
+        {
+          "source": "color.border.bold",
+          "target": "out:cytoscape.edge"
+        },
+        {
+          "source": "color.text.subtle",
+          "target": "out:cytoscape.edgeLabel"
+        },
+        {
+          "source": "color.surface",
+          "target": "out:cytoscape.edgeLabelBg"
+        },
+        {
+          "source": "color.surface.sunken",
+          "target": "out:cytoscape.compoundBg"
+        },
+        {
+          "source": "color.border",
+          "target": "out:cytoscape.compoundBorder"
+        },
+        {
+          "source": "color.surface.sunken",
+          "target": "out:cytoscape.compoundBorder"
+        },
+        {
+          "source": "color.border.selected",
+          "target": "out:cytoscape.selected"
+        },
+        {
+          "source": "color.surface.raised",
+          "target": "out:plotly.paper"
+        },
+        {
+          "source": "color.surface",
+          "target": "out:plotly.plot"
+        },
+        {
+          "source": "color.text",
+          "target": "out:plotly.font"
+        },
+        {
+          "source": "color.border",
+          "target": "out:plotly.grid"
+        },
+        {
+          "source": "color.surface",
+          "target": "out:plotly.grid"
+        },
+        {
+          "source": "color.chart.categorical.1",
+          "target": "out:plotly.series.1"
+        },
+        {
+          "source": "color.chart.categorical.2",
+          "target": "out:plotly.series.2"
+        },
+        {
+          "source": "color.chart.categorical.3",
+          "target": "out:plotly.series.3"
+        },
+        {
+          "source": "color.chart.categorical.4",
+          "target": "out:plotly.series.4"
+        },
+        {
+          "source": "color.chart.categorical.5",
+          "target": "out:plotly.series.5"
+        },
+        {
+          "source": "color.chart.categorical.6",
+          "target": "out:plotly.series.6"
+        },
+        {
+          "source": "color.chart.categorical.7",
+          "target": "out:plotly.series.7"
+        },
+        {
+          "source": "color.chart.categorical.8",
+          "target": "out:plotly.series.8"
+        },
+        {
+          "source": "color.chart.categorical.9",
+          "target": "out:plotly.series.9"
+        },
+        {
+          "source": "color.chart.categorical.10",
+          "target": "out:plotly.series.10"
+        },
+        {
+          "source": "color.chart.categorical.11",
+          "target": "out:plotly.series.11"
+        },
+        {
+          "source": "color.chart.categorical.12",
+          "target": "out:plotly.series.12"
+        },
+        {
+          "source": "color.chart.muted.1",
+          "target": "out:plotly.muted.1"
+        },
+        {
+          "source": "color.chart.muted.2",
+          "target": "out:plotly.muted.2"
+        },
+        {
+          "source": "color.chart.muted.3",
+          "target": "out:plotly.muted.3"
+        },
+        {
+          "source": "color.chart.muted.4",
+          "target": "out:plotly.muted.4"
+        },
+        {
+          "source": "color.chart.sequential.1",
+          "target": "out:plotly.sequential.1"
+        },
+        {
+          "source": "color.chart.sequential.2",
+          "target": "out:plotly.sequential.2"
+        },
+        {
+          "source": "color.chart.sequential.3",
+          "target": "out:plotly.sequential.3"
+        },
+        {
+          "source": "color.chart.sequential.4",
+          "target": "out:plotly.sequential.4"
+        },
+        {
+          "source": "color.chart.sequential.5",
+          "target": "out:plotly.sequential.5"
+        },
+        {
+          "source": "color.chart.diverging.positive.1",
+          "target": "out:plotly.diverging.good.1"
+        },
+        {
+          "source": "color.chart.diverging.positive.2",
+          "target": "out:plotly.diverging.good.2"
+        },
+        {
+          "source": "color.chart.diverging.positive.3",
+          "target": "out:plotly.diverging.good.3"
+        },
+        {
+          "source": "color.surface.sunken",
+          "target": "out:plotly.diverging.zero"
+        },
+        {
+          "source": "color.chart.diverging.negative.1",
+          "target": "out:plotly.diverging.bad.1"
+        },
+        {
+          "source": "color.chart.diverging.negative.2",
+          "target": "out:plotly.diverging.bad.2"
+        },
+        {
+          "source": "color.chart.diverging.negative.3",
+          "target": "out:plotly.diverging.bad.3"
+        },
+        {
+          "source": "color.chart.diverging.alt-positive.1",
+          "target": "out:plotly.divergingAlt.good.1"
+        },
+        {
+          "source": "color.chart.diverging.alt-positive.2",
+          "target": "out:plotly.divergingAlt.good.2"
+        },
+        {
+          "source": "color.chart.diverging.alt-positive.3",
+          "target": "out:plotly.divergingAlt.good.3"
+        },
+        {
+          "source": "color.surface.sunken",
+          "target": "out:plotly.divergingAlt.zero"
+        },
+        {
+          "source": "color.chart.diverging.negative.1",
+          "target": "out:plotly.divergingAlt.bad.1"
+        },
+        {
+          "source": "color.chart.diverging.negative.2",
+          "target": "out:plotly.divergingAlt.bad.2"
+        },
+        {
+          "source": "color.chart.diverging.negative.3",
+          "target": "out:plotly.divergingAlt.bad.3"
+        },
+        {
+          "source": "color.chart.categorical.1",
+          "target": "out:categoryColours.Compute"
+        },
+        {
+          "source": "color.chart.categorical.2",
+          "target": "out:categoryColours.Storage"
+        },
+        {
+          "source": "color.chart.categorical.3",
+          "target": "out:categoryColours.Database"
+        },
+        {
+          "source": "color.chart.categorical.4",
+          "target": "out:categoryColours.Networking"
+        },
+        {
+          "source": "color.chart.categorical.5",
+          "target": "out:categoryColours.Security"
+        },
+        {
+          "source": "color.chart.categorical.6",
+          "target": "out:categoryColours.Integration"
+        },
+        {
+          "source": "color.chart.categorical.7",
+          "target": "out:categoryColours.General"
+        },
+        {
+          "source": "color.text.success",
+          "target": "out:status.good"
+        },
+        {
+          "source": "color.text.warning",
+          "target": "out:status.warning"
+        },
+        {
+          "source": "color.text.danger",
+          "target": "out:status.serious"
+        },
+        {
+          "source": "color.text.danger",
+          "target": "out:status.critical"
+        }
+      ]
+    }
+  ]
+}

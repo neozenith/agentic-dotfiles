@@ -1,10 +1,11 @@
 #!/usr/bin/env -S uv run --no-project python
 """Prototype seed -> IR -> DTCG pipeline for the design-token refactor.
 
-A throwaway spike that walks the locked decisions end to end from a seed carrying ONLY a hue, so the
-defaults can be seen propagating before the real curation tool is designed. Stdlib only.
+A throwaway spike that walks the locked decisions end to end from a seed carrying only the brand accent
+(its OKLCH lightness, chroma and hue), so the defaults can be seen propagating before the real curation
+tool is designed. Stdlib only.
 
-    seed.json              {"brand.hue": 295.04}                 what the user states
+    seed.json              {"brand.hue": 295.044, ...}           what the user states
     ir.json                every role, both modes, with provenance what curation imputes
     dtcg/*.tokens.json     DTCG 2025.10 colour objects + resolver the only runtime artifact
     design-tokens.json     projection onto richdocs' current schema so showcase.py can render it
@@ -42,8 +43,12 @@ STEP = 0.005
 DEFAULTS: dict[str, tuple[Any, str]] = {
     "brand.hue": (None, "DT-ACCENT-1 (required)"),
     "brand.chroma": ("cusp", "prototype"),
+    "brand.lightness": ("cusp", "prototype (a stated value pins the light accent verbatim)"),
+    "brand.dark.hue": (None, "prototype (defaults to brand.hue)"),
+    "brand.dark.chroma": (None, "prototype (defaults to brand.chroma)"),
+    "brand.dark.lightness": (None, "prototype (stated: pins the dark accent verbatim; else solved)"),
     "L-dark-bg": (0.15, "DT-REF-1"),
-    "L-light-bg": (0.90, "DT-REF-1"),
+    "L-light-bg": (0.97, "DT-REF-1 (revised 2026-09-24, was 0.90)"),
     "offset.surface.sunken": (-0.05, "DT-REF-1"),
     "offset.surface.raised": (0.05, "DT-REF-1"),
     "offset.text": (0.90, "DT-REF-1"),
@@ -60,13 +65,49 @@ DEFAULTS: dict[str, tuple[Any, str]] = {
     "offset.background.selected": (0.10, "prototype"),
     "walk.slots": (12, "DT-WALK-1"),
     "walk.angle": (137.5, "DT-WALK-1"),
-    "walk.lightness": (0.60, "prototype (richdocs measured bands 0.58-0.65)"),
+    "walk.lightness": ("brand", "DT-WALK-2 (the seed's lightness: each mode's accent)"),
     "walk.chromaCeiling": ("floor", "DT-WALK-2"),
     "status.hue.danger": (25.0, "prototype"),
     "status.hue.warning": (80.0, "prototype"),
     "status.hue.success": (145.0, "prototype"),
     "status.chromaCap": (0.18, "prototype"),
     "target.status": (4.5, "prototype"),
+}
+
+# Live-control ranges for the richdocs showcase (generator.json). A key may take a number in
+# [min, max], one of its keywords, or both. `walk.slots` is fixed: the projection needs 12 slots.
+_HUE = {"min": 0, "max": 360, "step": 0.5}
+CONTROLS: dict[str, dict[str, Any]] = {
+    "brand.hue": _HUE,
+    "brand.chroma": {"keywords": ["cusp"], "min": 0.0, "max": 0.37, "step": 0.005},
+    "brand.lightness": {"keywords": ["cusp"], "min": 0.05, "max": 0.95, "step": 0.005},
+    "brand.dark.hue": {"keywords": [None], **_HUE},
+    "brand.dark.chroma": {"keywords": [None], "min": 0.0, "max": 0.37, "step": 0.005},
+    "brand.dark.lightness": {"keywords": [None], "min": 0.05, "max": 0.95, "step": 0.005},
+    "L-dark-bg": {"min": 0.0, "max": 0.5, "step": 0.005},
+    "L-light-bg": {"min": 0.5, "max": 1.0, "step": 0.005},
+    "offset.surface.sunken": {"min": -0.2, "max": 0.2, "step": 0.005},
+    "offset.surface.raised": {"min": -0.2, "max": 0.2, "step": 0.005},
+    "offset.text": {"min": 0.3, "max": 1.0, "step": 0.01},
+    "offset.text.subtle": {"min": 0.2, "max": 0.9, "step": 0.01},
+    "target.text.subtlest": {"min": 1.0, "max": 7.0, "step": 0.1},
+    "alpha.border": {"min": 0.0, "max": 0.5, "step": 0.01},
+    "offset.border.bold": {"min": 0.1, "max": 0.7, "step": 0.01},
+    "target.graphic": {"min": 1.0, "max": 7.0, "step": 0.1},
+    "target.text.inverse": {"min": 1.0, "max": 21.0, "step": 0.1},
+    "target.link": {"min": 1.0, "max": 7.0, "step": 0.1},
+    "alpha.brand.subtlest": {"min": 0.0, "max": 0.6, "step": 0.01},
+    "secondary.hue": {"keywords": [None], **_HUE},
+    "secondary.chromaRatio": {"min": 0.0, "max": 1.0, "step": 0.01},
+    "offset.background.selected": {"min": 0.0, "max": 0.4, "step": 0.005},
+    "walk.angle": {"min": 1.0, "max": 359.0, "step": 0.5},
+    "walk.lightness": {"keywords": ["brand"], "min": 0.2, "max": 0.9, "step": 0.005},
+    "walk.chromaCeiling": {"keywords": ["floor", "seed"], "min": 0.0, "max": 0.37, "step": 0.005},
+    "status.hue.danger": _HUE,
+    "status.hue.warning": _HUE,
+    "status.hue.success": _HUE,
+    "status.chromaCap": {"min": 0.0, "max": 0.37, "step": 0.005},
+    "target.status": {"min": 1.0, "max": 7.0, "step": 0.1},
 }
 
 # --------------------------------------------------------------------------------------------------
@@ -164,15 +205,30 @@ def resolve_params(seed: dict[str, Any]) -> dict[str, tuple[Any, str]]:
     return {k: ((seed[k], "stated") if k in seed else (v, f"default ({src})")) for k, (v, src) in DEFAULTS.items()}
 
 
+def exact_oklch(hexs: str) -> tuple[float, float, float]:
+    """A hex as OKLCH at the fewest decimals that still round-trip to exactly that hex."""
+    for places in range(3, 9):
+        lch = tuple(round(x, places) for x in oklch_of(hexs))
+        if hex_of(lch) == hexs:  # type: ignore[arg-type]
+            return lch  # type: ignore[return-value]
+    raise SystemExit(f"{hexs} does not round-trip through OKLCH")
+
+
 def cmd_init_seeds(_: argparse.Namespace) -> None:
     for theme in SOURCE_THEMES:
         tokens = json.loads((RICHDOCS_THEMES / theme / "design-tokens.json").read_text(encoding="utf-8"))
-        accent = tokens["themes"]["light"]["accent"]
-        hue = round(oklch_of(accent)[2], 2)
+        accents = {m: tokens["themes"][m]["accent"].lower() for m in MODES}
+        seed: dict[str, float] = {}
+        for m, prefix in (("light", "brand"), ("dark", "brand.dark")):
+            if m == "dark" and accents["dark"] == accents["light"]:
+                continue  # one accent for both modes: nothing more to state
+            lightness, chroma, hue = exact_oklch(accents[m])
+            seed |= {f"{prefix}.hue": hue, f"{prefix}.chroma": chroma, f"{prefix}.lightness": lightness}
         target = PROFILES / f"hue-{theme}"
         target.mkdir(parents=True, exist_ok=True)
-        (target / "seed.json").write_text(json.dumps({"brand.hue": hue}, indent=2) + "\n", encoding="utf-8")
-        log.info("seed hue-%-12s brand.hue %6.2f  (from %s light accent %s)", theme, hue, theme, accent)
+        (target / "seed.json").write_text(json.dumps(seed, indent=2) + "\n", encoding="utf-8")
+        log.info("seed hue-%-12s exactly %s accents light %s, dark %s", theme, theme, accents["light"],
+                 accents["dark"])
 
 
 # --------------------------------------------------------------------------------------------------
@@ -181,6 +237,8 @@ def cmd_init_seeds(_: argparse.Namespace) -> None:
 class Curator:
     def __init__(self, seed: dict[str, Any]) -> None:
         self.p = resolve_params(seed)
+        # What each keyword or implied default resolved to, for the showcase's controls.
+        self.resolved: dict[str, Any] = {}
         self.ir: dict[str, dict[str, Any]] = {}
 
     def v(self, key: str) -> Any:
@@ -190,8 +248,10 @@ class Curator:
         return [f"{k}={self.p[k][0]} [{self.p[k][1]}]" for k in keys]
 
     def put(self, role: str, values: dict[str, str], rule: str, inputs: list[str],
-            lch: dict[str, LCH] | None = None, alias: str | None = None) -> None:
+            lch: dict[str, LCH] | None = None, alias: str | None = None, roles: list[str] | None = None) -> None:
         ext: dict[str, Any] = {"origin": "imputed", "rule": rule, "inputs": inputs}
+        if roles or alias:
+            ext["roles"] = roles or [alias]
         if lch:
             ext["oklch"] = {m: [round(x, 4) for x in lch[m]] for m in lch}
         if alias:
@@ -253,41 +313,65 @@ class Curator:
 
         alpha = round(self.v("alpha.border") * 255)
         self.put("color.border", {m: f"{self.val('color.text', m)}{alpha:02x}" for m in MODES},
-                 "color.text at alpha", self.cite("alpha.border"))
+                 "color.text at alpha", self.cite("alpha.border"), roles=["color.text"])
 
     def brand(self) -> None:
         hue = float(self.v("brand.hue"))
         cusp_l = max((i * STEP for i in range(1, int(1 / STEP))), key=lambda lt: max_chroma(lt, hue))
         cusp_c = max_chroma(cusp_l, hue)
         chroma = cusp_c if self.v("brand.chroma") == "cusp" else float(self.v("brand.chroma"))
-        self.brand_hue, self.brand_c, self.cusp_l = hue, chroma, cusp_l
-        base = self.cite("brand.hue", "brand.chroma") + [f"cusp L={cusp_l:.3f} C={cusp_c:.4f} (derived)"]
+        brand_l = cusp_l if self.v("brand.lightness") == "cusp" else float(self.v("brand.lightness"))
+        self.brand_hue, self.brand_c, self.brand_l = hue, chroma, brand_l
+        # Each mode's accent: light is the brand.* accent; dark defaults to it, and any brand.dark.* key
+        # overrides one coordinate. A stated lightness pins that mode's fill verbatim (DT-CONTRAST-1).
+        dark = {k: self.v(f"brand.dark.{k}") for k in ("hue", "chroma", "lightness")}
+        self.accent = {
+            "light": (brand_l, chroma, hue),
+            "dark": (brand_l if dark["lightness"] is None else float(dark["lightness"]),
+                     chroma if dark["chroma"] is None else float(dark["chroma"]),
+                     hue if dark["hue"] is None else float(dark["hue"])),
+        }
+        pinned = {"light": self.v("brand.lightness") != "cusp", "dark": dark["lightness"] is not None}
+        self.resolved.update({"brand.lightness": brand_l, "brand.chroma": chroma,
+                              **{f"brand.dark.{k}": v for k, v in zip(("lightness", "chroma", "hue"),
+                                                                        self.accent["dark"])}})
+        stated_dark = [f"brand.dark.{k}" for k, v in dark.items() if v is not None]
+        base = self.cite("brand.hue", "brand.chroma", "brand.lightness", *stated_dark) + [
+            f"cusp L={cusp_l:.3f} C={cusp_c:.4f} (derived)"]
 
         def best_text(colour: str) -> str:
             return "#000000" if contrast(colour, "#000000") >= contrast(colour, "#ffffff") else "#ffffff"
 
-        lch = {m: self.solve(hue, chroma, cusp_l, lambda c, m=m: (
-            contrast(c, best_text(c)) >= self.v("target.text.inverse")
-            and self.on_all_grounds(m, self.v("target.graphic"))(c)), "brand fill") for m in MODES}
+        lch = {}
+        for m in MODES:
+            anchor, c, h = self.accent[m]
+            lch[m] = self.accent[m] if pinned[m] else self.solve(h, c, anchor, lambda col, m=m: (
+                contrast(col, best_text(col)) >= self.v("target.text.inverse")
+                and self.on_all_grounds(m, self.v("target.graphic"))(col)), "brand fill")
+        solved = "lightness solved: inverse text reaches target, and 3:1 on every ground"
+        rule = "; ".join(f"{m}: " + ("the stated accent, verbatim" if pinned[m] else solved) for m in MODES)
         self.put("color.background.brand.bold", {m: hex_of(lch[m]) for m in MODES},
-                 "brand hue nearest its cusp: inverse text reaches target, and 3:1 on every ground",
-                 base + self.cite("target.text.inverse", "target.graphic"), lch)
+                 rule, base + self.cite("target.text.inverse", "target.graphic"), lch)
         self.put("color.text.inverse", {m: best_text(self.val("color.background.brand.bold", m)) for m in MODES},
-                 "black or white, whichever has more contrast on the brand fill", ["color.background.brand.bold"])
+                 "black or white, whichever has more contrast on the brand fill", [],
+                 roles=["color.background.brand.bold"])
         self.put("color.background.brand.subtlest",
                  {m: composite(self.val("color.background.brand.bold", m)
                                + f"{round(self.v('alpha.brand.subtlest') * 255):02x}", self.val("color.surface", m))
                   for m in MODES},
-                 "brand fill at alpha over color.surface", self.cite("alpha.brand.subtlest"))
+                 "brand fill at alpha over color.surface", self.cite("alpha.brand.subtlest"),
+                 roles=["color.background.brand.bold", "color.surface"])
         for role, key in (("color.border.brand", "target.graphic"), ("color.link", "target.link")):
-            lch = {m: self.solve(hue, chroma, cusp_l, self.on_all_grounds(m, self.v(key)), role) for m in MODES}
+            lch = {m: self.solve(self.accent[m][2], self.accent[m][1], self.accent[m][0],
+                                 self.on_all_grounds(m, self.v(key)), role) for m in MODES}
             self.put(role, {m: hex_of(lch[m]) for m in MODES},
-                     "brand hue nearest its cusp reaching the target on every ground", base + self.cite(key), lch)
+                     "the mode's accent, lightness solved to reach the target on every ground",
+                     base + self.cite(key), lch)
 
     def secondary(self) -> None:
         hue = float(self.v("secondary.hue") if self.v("secondary.hue") is not None else self.brand_hue)
         chroma = self.brand_c * float(self.v("secondary.chromaRatio"))
-        inputs = self.cite("secondary.hue", "secondary.chromaRatio")
+        inputs = self.cite("secondary.hue", "secondary.chromaRatio", "brand.hue", "brand.chroma")
         for role, extra in (("color.background.selected", 0.0), ("color.background.selected.hovered", STEP * 10)):
             lch = {}
             for m in MODES:
@@ -296,7 +380,7 @@ class Curator:
             self.put(role, {m: hex_of(lch[m]) for m in MODES},
                      "secondary at reduced chroma, offset from the ground toward text",
                      inputs + self.cite("offset.background.selected"), lch)
-        lch = {m: self.solve(hue, self.brand_c, self.cusp_l, self.on_all_grounds(m, self.v("target.graphic")),
+        lch = {m: self.solve(hue, self.brand_c, self.brand_l, self.on_all_grounds(m, self.v("target.graphic")),
                              "selected border") for m in MODES}
         self.put("color.border.selected", {m: hex_of(lch[m]) for m in MODES},
                  "secondary hue reaching 3:1 on every ground", inputs + self.cite("target.graphic"), lch)
@@ -317,12 +401,18 @@ class Curator:
         n, angle = int(self.v("walk.slots")), float(self.v("walk.angle"))
         hues = [(self.brand_hue + i * angle) % 360 for i in range(n)]
         ceiling = self.v("walk.chromaCeiling")
+        follow = self.v("walk.lightness") == "brand"
         inputs = self.cite("brand.hue", "walk.slots", "walk.angle", "walk.lightness", "walk.chromaCeiling",
-                           "target.graphic")
+                           "target.graphic", *(["brand.chroma"] if ceiling == "seed" else []),
+                           *(["brand.lightness"] if follow else []),
+                           *(["brand.dark.lightness"] if follow and self.v("brand.dark.lightness") is not None
+                             else []))
         per_mode: dict[str, list[LCH]] = {}
         for m in MODES:
             test = self.on_all_grounds(m, self.v("target.graphic"))
-            anchor = float(self.v("walk.lightness"))
+            # DT-WALK-2: solved nearest the seed's lightness, i.e. that mode's accent lightness.
+            anchor = self.accent[m][0] if follow else float(self.v("walk.lightness"))
+            self.resolved.setdefault("walk.lightness", {})[m] = anchor
             if ceiling == "floor":
                 first = [self.solve(h, 1.0, anchor, test, "walk") for h in hues]
                 floor = min(max_chroma(lt, h) for lt, _c, h in first)
@@ -344,10 +434,12 @@ class Curator:
         danger = float(self.v("status.hue.danger"))
         success = float(self.v("status.hue.success"))
         cap = float(self.v("status.chromaCap"))
-        for name, hue, chroma, count in (("sequential", self.brand_hue, self.brand_c, 5),
-                                         ("diverging.positive", self.brand_hue, self.brand_c, 3),
-                                         ("diverging.negative", danger, cap, 3),
-                                         ("diverging.alt-positive", success, cap, 3)):
+        brand_keys = ("brand.hue", "brand.chroma")
+        for name, hue, chroma, count, keys in (
+                ("sequential", self.brand_hue, self.brand_c, 5, brand_keys),
+                ("diverging.positive", self.brand_hue, self.brand_c, 3, brand_keys),
+                ("diverging.negative", danger, cap, 3, ("status.hue.danger", "status.chromaCap")),
+                ("diverging.alt-positive", success, cap, 3, ("status.hue.success", "status.chromaCap"))):
             for i in range(count):
                 lch = {}
                 for m in MODES:
@@ -355,7 +447,8 @@ class Curator:
                     lightness = lo + (hi - lo) * (i / (count - 1))
                     lch[m] = (lightness, min(max_chroma(lightness, hue), chroma), hue)
                 self.put(f"color.chart.{name}.{i + 1}", {m: hex_of(lch[m]) for m in MODES},
-                         "evenly spaced lightness at a fixed hue, chroma capped", ["prototype"], lch)
+                         "evenly spaced lightness at a fixed hue, chroma capped",
+                         ["prototype", *self.cite(*keys)], lch)
         for i in range(4):
             lch = {}
             for m in MODES:
@@ -363,7 +456,8 @@ class Curator:
                 b = self.bg(m) + self.sign(m) * self.v("offset.text.subtle")
                 lch[m] = grey(a + (b - a) * i / 3)
             self.put(f"color.chart.muted.{i + 1}", {m: hex_of(lch[m]) for m in MODES},
-                     "greys from border.bold to text.subtle", ["prototype"], lch)
+                     "greys from border.bold to text.subtle",
+                     ["prototype", *self.cite("L-light-bg", "L-dark-bg", "offset.border.bold", "offset.text.subtle")], lch)
 
     def run(self) -> dict[str, Any]:
         self.neutrals()
@@ -440,20 +534,29 @@ def cmd_build(args: argparse.Namespace) -> None:
         (out / "profile.resolver.json").write_text(json.dumps(resolver, indent=2) + "\n", encoding="utf-8")
         (folder / "design-tokens.json").write_text(json.dumps(project_richdocs(ir), indent=2) + "\n",
                                                    encoding="utf-8")
-        log.info("built    %-16s dtcg/{light,dark}.tokens.json + resolver + richdocs projection", name)
+        seed = json.loads((folder / "seed.json").read_text(encoding="utf-8"))
+        (folder / "lineage.json").write_text(json.dumps(build_lineage(ir, seed), indent=2) + "\n", encoding="utf-8")
+        log.info("built    %-16s dtcg/{light,dark}.tokens.json + resolver + richdocs projection + lineage", name)
 
 
-def project_richdocs(ir: dict[str, Any]) -> dict[str, Any]:
-    """Map IR roles onto richdocs' current design-tokens.json keys. A stand-in until migration."""
+def project_richdocs(ir: dict[str, Any], ref: bool = False) -> dict[str, Any]:
+    """Map IR roles onto richdocs' current design-tokens.json keys. A stand-in until migration.
+
+    With `ref`, every colour leaf is `@role` (or `@a|@b` for a composite) instead of a hex, so the
+    same mapping yields the IR -> projection lineage without a second copy of it.
+    """
     def r(role: str, m: str) -> str:
-        return ir[role][m]
+        return f"@{role}" if ref else ir[role][m]
+
+    def over(fg: str, bg: str, m: str) -> str:
+        return f"@{fg}|@{bg}" if ref else composite(ir[fg][m], ir[bg][m])
 
     def seq(prefix: str, count: int, m: str) -> list[str]:
         return [r(f"{prefix}.{i}", m) for i in range(1, count + 1)]
 
     themes, cyto, plotly, status = {}, {}, {}, {}
     for m in MODES:
-        border = composite(r("color.border", m), r("color.surface", m))
+        border = over("color.border", "color.surface", m)
         themes[m] = {"bg": r("color.surface", m), "fg": r("color.text", m), "muted": r("color.text.subtle", m),
                      "accent": r("color.background.brand.bold", m), "surface": r("color.surface.raised", m),
                      "border": border, "onAccent": r("color.text.inverse", m), "link": r("color.link", m),
@@ -462,12 +565,12 @@ def project_richdocs(ir: dict[str, Any]) -> dict[str, Any]:
                    "nodeLabel": r("color.text", m), "nodeFillAlt": r("color.background.selected", m),
                    "edge": r("color.border.bold", m), "edgeLabel": r("color.text.subtle", m),
                    "edgeLabelBg": r("color.surface", m), "compoundBg": r("color.surface.sunken", m),
-                   "compoundBorder": composite(r("color.border", m), r("color.surface.sunken", m)),
+                   "compoundBorder": over("color.border", "color.surface.sunken", m),
                    "selected": r("color.border.selected", m), "shape": "round-rectangle", "roundness": 8}
         plotly[m] = {"paper": r("color.surface.raised", m), "plot": r("color.surface", m),
                      "font": r("color.text", m), "grid": border,
-                     "series": seq("color.chart.categorical", 8, m),
-                     "seriesAlt": [r(f"color.chart.categorical.{i}", m) for i in range(5, 13)],
+                     # Every walk slot: the categorical colours are one ordered list (DT-WALK-1, DT-CAT-1).
+                     "series": seq("color.chart.categorical", 12, m),
                      "muted": seq("color.chart.muted", 4, m),
                      "sequential": seq("color.chart.sequential", 5, m),
                      "diverging": {"good": seq("color.chart.diverging.positive", 3, m),
@@ -490,12 +593,122 @@ def project_richdocs(ir: dict[str, Any]) -> dict[str, Any]:
             "status": status}
 
 
+def _leaves(node: Any, path: tuple[str, ...] = ()) -> list[tuple[tuple[str, ...], Any]]:
+    if isinstance(node, dict):
+        return [x for k, v in node.items() for x in _leaves(v, (*path, k))]
+    if isinstance(node, list):
+        return [x for i, v in enumerate(node) for x in _leaves(v, (*path, str(i + 1)))]
+    return [(path, node)]
+
+
+def build_lineage(ir: dict[str, Any], seed: dict[str, Any]) -> dict[str, Any]:
+    """Two Sankeys, in richdocs' lineage.json contract: seed -> IR, and IR -> the rendered projection.
+
+    Each link is one recorded dependency (value 1), so a node's thickness is how many values it feeds
+    or reads. Role nodes are painted in their own colour per mode, so the diagram doubles as a palette.
+    """
+    params = ir["$extensions"][EXT]["params"]
+    roles = [k for k in ir if not k.startswith("$")]
+    grey_node = {"light": "#8a8a8a", "dark": "#8a8a8a"}
+
+    def role_colour(role: str) -> dict[str, str]:
+        return {m: ir[role][m][:7] for m in MODES}
+
+    # Seed -> IR: parameter -> role from each role's cited inputs, role -> role from recorded dependencies.
+    links: list[dict[str, str]] = []
+    used: set[str] = set()
+    for role in roles:
+        ext = ir[role]["$extensions"][EXT]
+        for cite in ext["inputs"]:
+            key = cite.split("=", 1)[0]
+            if key in params:
+                links.append({"source": f"param:{key}", "target": role})
+                used.add(key)
+        for dep in ext.get("roles", []):
+            links.append({"source": dep, "target": role})
+    nodes = []
+    for key in (k for k in params if k in used):
+        stated = params[key]["source"] == "stated"
+        tier = "stated" if stated else "prototype default" if "prototype" in params[key]["source"] else "decided default"
+        colour = role_colour("color.background.brand.bold") if stated else grey_node
+        nodes.append({"id": f"param:{key}", "label": f"{key} = {params[key]['value']}", "group": tier,
+                      "colour": colour})
+    nodes += [{"id": r, "label": r, "group": "IR role", "colour": role_colour(r)} for r in roles]
+    stated_keys = ", ".join(f"`{k}`" for k in seed) or "nothing"
+    seed_to_ir = {
+        "title": "Seed → IR",
+        "caption": (f"Every parameter on the left is either stated in seed.json ({stated_keys}, in the brand "
+                    "colour) or a default (grey). Each band is one recorded input of an IR role; roles that "
+                    "read other roles chain to the right. Contrast solves also read the three surfaces, which "
+                    "is not drawn."),
+        "nodes": nodes, "links": links,
+    }
+
+    # IR -> projection: the same mapping as project_richdocs, run in reference mode.
+    refs = dict(_leaves(project_richdocs(ir, ref=True)))
+    real = dict(_leaves(project_richdocs(ir)))
+    links, targets = [], {}
+    for path, value in refs.items():
+        if not (isinstance(value, str) and value.startswith("@")):
+            continue
+        mode_key = next((m for m in MODES if m in path), None)
+        if mode_key == "dark":
+            continue  # the mapping is identical per mode; each target carries both modes' colours
+        label_path = tuple(p for p in path if p not in MODES and p not in ("canvas", "colours"))
+        target = "out:" + ".".join(label_path)
+        dark_path = tuple("dark" if p == "light" else p for p in path)
+        targets[target] = {"id": target, "label": " · ".join(label_path), "group": label_path[0],
+                           "colour": {"light": real[path][:7], "dark": real.get(dark_path, real[path])[:7]}}
+        for src in value.split("|"):
+            links.append({"source": src[1:], "target": target})
+    sources = sorted({lk["source"] for lk in links}, key=roles.index)
+    ir_to_final = {
+        "title": "IR → rendered theme",
+        "caption": ("Each IR role on the left feeds the keys of the design-tokens.json this showcase renders. "
+                    "One role often feeds several surfaces; a composite (a translucent border over a ground) "
+                    "reads two roles. IR roles with no band are carried in the DTCG build but not yet consumed "
+                    "by richdocs."),
+        "nodes": [{"id": r, "label": r, "group": "IR role", "colour": role_colour(r)} for r in sources]
+                 + list(targets.values()),
+        "links": links,
+    }
+    return {"sankeys": [seed_to_ir, ir_to_final]}
+
+
+def generate(seed: dict[str, Any]) -> dict[str, Any]:
+    """richdocs' live-generator entry point (ADR-022): one seed in, a brandpack and its lineage out.
+
+    The showcase runs this very file in the browser under Pyodide, so the controls and the CLI share
+    one curation, not a port of it.
+    """
+    curator = Curator(seed)
+    ir = curator.run()
+    return {"tokens": project_richdocs(ir), "lineage": build_lineage(ir, seed), "resolved": curator.resolved}
+
+
+def generator_manifest(seed: dict[str, Any]) -> dict[str, Any]:
+    """The controls the showcase offers: every seed parameter with a range, its default and its source."""
+    return {
+        "entry": "generate",
+        "seed": seed,
+        "resolved": generate(seed)["resolved"],
+        "params": [{"key": k, "default": v, "source": src, **CONTROLS[k]}
+                   for k, (v, src) in DEFAULTS.items() if k in CONTROLS],
+    }
+
+
 def cmd_install(args: argparse.Namespace) -> None:
     for name in profile_names(args):
         target = PROJECT_THEMES / name
         target.mkdir(parents=True, exist_ok=True)
         (target / "design-tokens.json").write_text(
             (PROFILES / name / "design-tokens.json").read_text(encoding="utf-8"), encoding="utf-8")
+        (target / "lineage.json").write_text(
+            (PROFILES / name / "lineage.json").read_text(encoding="utf-8"), encoding="utf-8")
+        seed = json.loads((PROFILES / name / "seed.json").read_text(encoding="utf-8"))
+        (target / "generator.json").write_text(json.dumps(generator_manifest(seed), indent=2) + "\n",
+                                               encoding="utf-8")
+        (target / "generator.py").write_text(Path(__file__).read_text(encoding="utf-8"), encoding="utf-8")
         # The showcase scopes each brand's CSS under :root[data-brand=...]; a brand with no
         # theme.css emits no scope, which richdocs' own gallery test treats as missing.
         (target / "theme.css").write_text(":root {\n  color-scheme: light dark;\n}\n", encoding="utf-8")
@@ -614,7 +827,8 @@ def cmd_doc(args: argparse.Namespace) -> None:
     defaults += [f"| `{k}` | `{v}` | {src} |" for k, (v, src) in DEFAULTS.items()]
     doc = f"""# From a hue to a theme: prototype propagation
 
-Four seeds, each stating **only a hue**, taken from the light accent of one existing richdocs theme.
+Four seeds, each stating **only the brand accent**: the exact light accent of one existing richdocs theme,
+as OKLCH lightness, chroma and hue.
 Everything else is imputed by the prototype pipeline in `prototype/pipeline.py`, following the locked
 decisions in `DECISIONS.md` wherever one exists.
 
@@ -635,7 +849,7 @@ pipeline uses a **prototype default** so it can run, and says so.
 
 ## Showcase
 
-The gallery places each hue-only theme beside the theme its hue came from:
+The gallery places each generated theme beside the theme its accent came from:
 `tmp/richdocs/showcase.html`, generated by `showcase.py` after `pipeline.py install`.
 {"".join(profile_section(n) for n in names)}
 """
@@ -664,7 +878,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.set_defaults(func=_help(parser))
     sub = parser.add_subparsers(dest="cmd", required=False)
     for name, func, text in (
-        ("init-seeds", cmd_init_seeds, "Write hue-only seeds from the four richdocs themes' light accents"),
+        ("init-seeds", cmd_init_seeds, "Write seeds stating the four richdocs themes' exact light accents"),
         ("curate", cmd_curate, "seed.json -> ir.json"),
         ("build", cmd_build, "ir.json -> DTCG + richdocs projection"),
         ("install", cmd_install, "Copy projections into tmp/richdocs/theme/ for showcase.py"),

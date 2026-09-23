@@ -251,7 +251,11 @@ Both items below have moved on since this entry was written; see
 
 ## DT-REF-1 — the neutral ramp is one reference plus parameterised offsets, in OKLCH
 
-- **Status:** decided 2026-09-03 (user-directed, chosen after seeing all three rendered)
+- **Status:** decided 2026-09-03 (user-directed, chosen after seeing all three rendered);
+  **revised 2026-09-24:** `L-light-bg` defaults to **0.97**. Tuning live in the showcase, the maintainer
+  kept raising it from 0.90, which read as grey paper. The tables below record the 0.90 derivation;
+  at 0.97 `color.surface.raised` clamps to 1.00 (`#ffffff`), `color.surface` is `#f5f5f5` and
+  `color.surface.sunken` `#e4e4e4`. Every text pairing still clears AA.
 - **Colour space:** **OKLCH**, not HSL. Neutrals are chroma 0, hue 0 — pure greys. For an
   achromatic colour the OKLab transform collapses to `L = cbrt(Y)`, so relative luminance
   is exactly `Y = L³` and WCAG contrast is closed-form without a colour library.
@@ -729,6 +733,10 @@ parameter is informational.
 Each slot's lightness is **solved**, never stated: the value nearest the seed's lightness that keeps
 the slot at **3:1 against every ground** of the mode (WCAG 2.2 SC 1.4.11). On `osakanights` the solve
 moves dark-mode lightness by at most 0.05 and leaves light mode unchanged.
+
+*Clarified 2026-09-24 (maintainer):* "the seed's lightness" is **each mode's brand accent
+lightness**, so `walk.lightness` defaults to `"brand"`. The prototype had anchored on a stand-in 0.60.
+A number still overrides it.
 
 A stated lightness was rejected: the seed's lightness (0.45) puts all 12 dark-mode bars under 3:1, and
 a hue-only seed is exactly the default path DT-CONTRAST-1 says must maximise.

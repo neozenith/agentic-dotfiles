@@ -7,14 +7,14 @@
   },
   "themes": {
     "light": {
-      "bg": "#dedede",
-      "fg": "#000000",
-      "muted": "#222222",
-      "accent": "#4b6000",
-      "surface": "#eeeeee",
-      "border": "#bfbfbf",
-      "onAccent": "#ffffff",
-      "link": "#495f00",
+      "bg": "#f5f5f5",
+      "fg": "#010101",
+      "muted": "#333333",
+      "accent": "#a5c84d",
+      "surface": "#ffffff",
+      "border": "#d3d3d3",
+      "onAccent": "#000000",
+      "link": "#566f00",
       "radius": "12px",
       "pill": "999px"
     },
@@ -22,11 +22,11 @@
       "bg": "#0b0b0b",
       "fg": "#ffffff",
       "muted": "#bebebe",
-      "accent": "#c9fd00",
+      "accent": "#9bb856",
       "surface": "#161616",
       "border": "#2d2d2d",
       "onAccent": "#000000",
-      "link": "#c9fd00",
+      "link": "#9bb856",
       "radius": "12px",
       "pill": "999px"
     }
@@ -34,22 +34,22 @@
   "canvas": {
     "cytoscape": {
       "light": {
-        "nodeFill": "#c6caba",
-        "nodeBorder": "#617c00",
-        "nodeLabel": "#000000",
-        "nodeFillAlt": "#b1c97f",
-        "edge": "#717171",
-        "edgeLabel": "#222222",
-        "edgeLabelBg": "#dedede",
-        "compoundBg": "#cecece",
-        "compoundBorder": "#b1b1b1",
-        "selected": "#617c00",
+        "nodeFill": "#e8eeda",
+        "nodeBorder": "#6f8d00",
+        "nodeLabel": "#010101",
+        "nodeFillAlt": "#cbdcab",
+        "edge": "#868686",
+        "edgeLabel": "#333333",
+        "edgeLabelBg": "#f5f5f5",
+        "compoundBg": "#e4e4e4",
+        "compoundBorder": "#c4c4c4",
+        "selected": "#6f8d00",
         "shape": "round-rectangle",
         "roundness": 8
       },
       "dark": {
-        "nodeFill": "#2a3209",
-        "nodeBorder": "#c9fd00",
+        "nodeFill": "#222717",
+        "nodeBorder": "#9bb856",
         "nodeLabel": "#ffffff",
         "nodeFillAlt": "#1c2600",
         "edge": "#636363",
@@ -57,57 +57,51 @@
         "edgeLabelBg": "#0b0b0b",
         "compoundBg": "#030303",
         "compoundBorder": "#272727",
-        "selected": "#c9fd00",
+        "selected": "#a5c84d",
         "shape": "round-rectangle",
         "roundness": 8
       }
     },
     "plotly": {
       "light": {
-        "paper": "#eeeeee",
-        "plot": "#dedede",
-        "font": "#000000",
-        "grid": "#bfbfbf",
+        "paper": "#ffffff",
+        "plot": "#f5f5f5",
+        "font": "#010101",
+        "grid": "#d3d3d3",
         "series": [
-          "#677a3a",
-          "#5373a9",
-          "#a4624c",
-          "#1d806c",
-          "#89659d",
-          "#87712a",
-          "#267a9b",
-          "#a45e6e"
-        ],
-        "seriesAlt": [
-          "#89659d",
-          "#87712a",
-          "#267a9b",
-          "#a45e6e",
-          "#4d7e4c",
-          "#6b6eaa",
-          "#9d6639",
-          "#008082"
+          "#748a42",
+          "#5f83bf",
+          "#b96f57",
+          "#24927c",
+          "#9b73b1",
+          "#998032",
+          "#2d8baf",
+          "#b96b7c",
+          "#598f57",
+          "#797cc0",
+          "#b17442",
+          "#009092"
         ],
         "muted": [
-          "#717171",
-          "#555555",
-          "#3a3a3a",
-          "#222222"
+          "#868686",
+          "#696969",
+          "#4d4d4d",
+          "#333333"
         ],
         "sequential": [
-          "#bced00",
-          "#9cc500",
-          "#7c9e00",
+          "#c4e86e",
+          "#9fc246",
+          "#7d9e13",
           "#5e7900",
           "#425600"
         ],
         "diverging": {
           "good": [
-            "#bced00",
-            "#7c9e00",
+            "#c4e86e",
+            "#7d9e13",
             "#425600"
           ],
-          "zero": "#cecece",
+          "zero": "#e4e4e4",
           "bad": [
             "#ffc8c3",
             "#e85854",
@@ -121,7 +115,7 @@
             "#31aa40",
             "#005e15"
           ],
-          "zero": "#cecece",
+          "zero": "#e4e4e4",
           "bad": [
             "#ffc8c3",
             "#e85854",
@@ -136,24 +130,18 @@
         "font": "#ffffff",
         "grid": "#2d2d2d",
         "series": [
-          "#748a41",
-          "#5d80bd",
-          "#b46952",
-          "#25947e",
-          "#966dab",
-          "#977d2e",
-          "#2c8bb0",
-          "#b36577"
-        ],
-        "seriesAlt": [
-          "#966dab",
-          "#977d2e",
-          "#2c8bb0",
-          "#b36577",
-          "#599057",
-          "#7578bc",
-          "#ad703d",
-          "#009394"
+          "#9bb859",
+          "#7dabfa",
+          "#ee8d6e",
+          "#34c4a8",
+          "#c792e3",
+          "#c9a740",
+          "#3eb9e9",
+          "#ed879f",
+          "#78bf76",
+          "#9da1f8",
+          "#e59654",
+          "#00c3c5"
         ],
         "muted": [
           "#636363",
@@ -165,14 +153,14 @@
           "#273300",
           "#455900",
           "#658100",
-          "#87ab00",
-          "#abd800"
+          "#89aa29",
+          "#b1d459"
         ],
         "diverging": {
           "good": [
             "#273300",
             "#658100",
-            "#abd800"
+            "#b1d459"
           ],
           "zero": "#030303",
           "bad": [
@@ -200,21 +188,21 @@
     }
   },
   "categoryColours": {
-    "Compute": "#677a3a",
-    "Storage": "#5373a9",
-    "Database": "#a4624c",
-    "Networking": "#1d806c",
-    "Security": "#89659d",
-    "Integration": "#87712a",
-    "General": "#267a9b"
+    "Compute": "#748a42",
+    "Storage": "#5f83bf",
+    "Database": "#b96f57",
+    "Networking": "#24927c",
+    "Security": "#9b73b1",
+    "Integration": "#998032",
+    "General": "#2d8baf"
   },
   "status": {
     "light": {
       "colours": {
-        "good": "#006718",
-        "warning": "#755200",
-        "serious": "#ac1922",
-        "critical": "#ac1922"
+        "good": "#00771d",
+        "warning": "#875f00",
+        "serious": "#be2e31",
+        "critical": "#be2e31"
       },
       "labels": {
         "good": "Good",

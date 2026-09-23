@@ -1,6 +1,8 @@
 # Design-token refactor
 
-> **Status:** parked 2026-09-09, mid-way through curation. Requirements-only; no code written yet.
+> **Status:** 2026-09-24 — the seed → IR → DTCG pipeline is prototyped in [`prototype/`](prototype/) and
+> accepted by the maintainer. The richdocs theme showcase is its visual test suite: each generated
+> theme ships its lineage and its generator, so the seed can be tuned live in the browser.
 > **Read this file, then [`DECISIONS.md`](DECISIONS.md), then [`OPEN-QUESTIONS.md`](OPEN-QUESTIONS.md).**
 > Everything needed to resume is in this directory. Nothing assumes the prior session.
 
@@ -68,7 +70,7 @@ The work was framed as five topics. Two are closed, one is active, two are downs
 | **DT-BUILD-1** | Curation bakes every surface into the IR; build only serialises |
 | **DT-NEUTRAL-1** | Neutrals are pure greys (chroma 0, hue 0) stated as lightness |
 | **DT-CVD-1** | CVD safety is a very low priority and is not an objection to a design choice |
-| **DT-REF-1** | One reference per mode plus parameterised offsets, in **OKLCH**. Dark `bg` 0.15, light `bg` 0.90 |
+| **DT-REF-1** | One reference per mode plus parameterised offsets, in **OKLCH**. Dark `bg` 0.15, light `bg` 0.97 (revised from 0.90) |
 | **DT-ROLES-1** | Semantic role names follow **Atlassian's** `foundation · property · modifier` grammar |
 | **DT-ACCENT-1** | One required brand hue; the secondary is derived from it, overridable, and drives selected, active, focus and hover state |
 | **DT-WALK-1** | The categorical walk ships **12** pre-computed slots |

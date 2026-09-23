@@ -1,3 +1,8 @@
 {
-  "brand.hue": 295.04
+  "brand.hue": 295.044,
+  "brand.chroma": 0.131,
+  "brand.lightness": 0.45,
+  "brand.dark.hue": 295.159,
+  "brand.dark.chroma": 0.109,
+  "brand.dark.lightness": 0.801
 }

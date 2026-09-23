@@ -1,7 +1,9 @@
-# Prototype: from a hue to a theme
+# Prototype: from an accent to a theme
 
 A throwaway spike, not the curation tool. It walks the locked decisions end to end from seeds that state
-**only a hue**, so the defaults can be seen propagating before the real tool is designed.
+**only the brand accent**, as its exact OKLCH lightness, chroma and hue, so the defaults can be seen
+propagating before the real tool is designed. The `hue-` profile names predate that: they began as
+hue-only seeds.
 
 ## Run
 
@@ -28,10 +30,12 @@ profiles/hue-<theme>/
   dtcg/dark.tokens.json
   dtcg/profile.resolver.json    the mode modifier
   design-tokens.json            projection onto richdocs' current schema, for showcase.py
+  lineage.json                  two Sankeys for the showcase: seed -> IR, and IR -> projection
 ```
 
 `install` copies each projection into `tmp/richdocs/theme/<name>/`, where richdocs' project override
-lookup finds it. The showcase gallery then shows each hue-only theme beside its source theme.
+lookup finds it. The showcase gallery then shows each generated theme beside its source theme, and its **Tune seed**
+drawer re-runs this file in the browser, so any parameter can be changed live.
 
 ## What to play with next
 

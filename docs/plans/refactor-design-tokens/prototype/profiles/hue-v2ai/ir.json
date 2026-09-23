@@ -3,20 +3,36 @@
     "dev.agentic-dotfiles.curation": {
       "params": {
         "brand.hue": {
-          "value": 84.58,
+          "value": 84.575,
           "source": "stated"
         },
         "brand.chroma": {
-          "value": "cusp",
-          "source": "default (prototype)"
+          "value": 0.173,
+          "source": "stated"
+        },
+        "brand.lightness": {
+          "value": 0.842,
+          "source": "stated"
+        },
+        "brand.dark.hue": {
+          "value": null,
+          "source": "default (prototype (defaults to brand.hue))"
+        },
+        "brand.dark.chroma": {
+          "value": null,
+          "source": "default (prototype (defaults to brand.chroma))"
+        },
+        "brand.dark.lightness": {
+          "value": null,
+          "source": "default (prototype (stated: pins the dark accent verbatim; else solved))"
         },
         "L-dark-bg": {
           "value": 0.15,
           "source": "default (DT-REF-1)"
         },
         "L-light-bg": {
-          "value": 0.9,
-          "source": "default (DT-REF-1)"
+          "value": 0.97,
+          "source": "default (DT-REF-1 (revised 2026-09-24, was 0.90))"
         },
         "offset.surface.sunken": {
           "value": -0.05,
@@ -83,8 +99,8 @@
           "source": "default (DT-WALK-1)"
         },
         "walk.lightness": {
-          "value": 0.6,
-          "source": "default (prototype (richdocs measured bands 0.58-0.65))"
+          "value": "brand",
+          "source": "default (DT-WALK-2 (the seed's lightness: each mode's accent))"
         },
         "walk.chromaCeiling": {
           "value": "floor",
@@ -114,20 +130,20 @@
     }
   },
   "color.surface.sunken": {
-    "light": "#cecece",
+    "light": "#e4e4e4",
     "dark": "#030303",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
         "origin": "imputed",
         "rule": "reference + absolute offset",
         "inputs": [
-          "L-light-bg=0.9 [default (DT-REF-1)]",
+          "L-light-bg=0.97 [default (DT-REF-1 (revised 2026-09-24, was 0.90))]",
           "L-dark-bg=0.15 [default (DT-REF-1)]",
           "offset.surface.sunken=-0.05 [default (DT-REF-1)]"
         ],
         "oklch": {
           "light": [
-            0.85,
+            0.92,
             0.0,
             0.0
           ],
@@ -141,19 +157,19 @@
     }
   },
   "color.surface": {
-    "light": "#dedede",
+    "light": "#f5f5f5",
     "dark": "#0b0b0b",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
         "origin": "imputed",
         "rule": "mode reference",
         "inputs": [
-          "L-light-bg=0.9 [default (DT-REF-1)]",
+          "L-light-bg=0.97 [default (DT-REF-1 (revised 2026-09-24, was 0.90))]",
           "L-dark-bg=0.15 [default (DT-REF-1)]"
         ],
         "oklch": {
           "light": [
-            0.9,
+            0.97,
             0.0,
             0.0
           ],
@@ -167,20 +183,20 @@
     }
   },
   "color.surface.raised": {
-    "light": "#eeeeee",
+    "light": "#ffffff",
     "dark": "#161616",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
         "origin": "imputed",
         "rule": "reference + absolute offset",
         "inputs": [
-          "L-light-bg=0.9 [default (DT-REF-1)]",
+          "L-light-bg=0.97 [default (DT-REF-1 (revised 2026-09-24, was 0.90))]",
           "L-dark-bg=0.15 [default (DT-REF-1)]",
           "offset.surface.raised=0.05 [default (DT-REF-1)]"
         ],
         "oklch": {
           "light": [
-            0.95,
+            1.0,
             0.0,
             0.0
           ],
@@ -194,20 +210,20 @@
     }
   },
   "color.text": {
-    "light": "#000000",
+    "light": "#010101",
     "dark": "#ffffff",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
         "origin": "imputed",
         "rule": "reference + offset toward text",
         "inputs": [
-          "L-light-bg=0.9 [default (DT-REF-1)]",
+          "L-light-bg=0.97 [default (DT-REF-1 (revised 2026-09-24, was 0.90))]",
           "L-dark-bg=0.15 [default (DT-REF-1)]",
           "offset.text=0.9 [default (DT-REF-1)]"
         ],
         "oklch": {
           "light": [
-            0.0,
+            0.07,
             0.0,
             0.0
           ],
@@ -221,20 +237,20 @@
     }
   },
   "color.text.subtle": {
-    "light": "#222222",
+    "light": "#333333",
     "dark": "#bebebe",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
         "origin": "imputed",
         "rule": "reference + offset toward text",
         "inputs": [
-          "L-light-bg=0.9 [default (DT-REF-1)]",
+          "L-light-bg=0.97 [default (DT-REF-1 (revised 2026-09-24, was 0.90))]",
           "L-dark-bg=0.15 [default (DT-REF-1)]",
           "offset.text.subtle=0.65 [default (DT-REF-1)]"
         ],
         "oklch": {
           "light": [
-            0.25,
+            0.32,
             0.0,
             0.0
           ],
@@ -248,20 +264,20 @@
     }
   },
   "color.border.bold": {
-    "light": "#717171",
+    "light": "#868686",
     "dark": "#636363",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
         "origin": "imputed",
         "rule": "reference + offset toward text",
         "inputs": [
-          "L-light-bg=0.9 [default (DT-REF-1)]",
+          "L-light-bg=0.97 [default (DT-REF-1 (revised 2026-09-24, was 0.90))]",
           "L-dark-bg=0.15 [default (DT-REF-1)]",
           "offset.border.bold=0.35 [default (DT-BORDER-1)]"
         ],
         "oklch": {
           "light": [
-            0.55,
+            0.62,
             0.0,
             0.0
           ],
@@ -275,7 +291,7 @@
     }
   },
   "color.text.subtlest": {
-    "light": "#585858",
+    "light": "#666666",
     "dark": "#7f7f7f",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
@@ -286,7 +302,7 @@
         ],
         "oklch": {
           "light": [
-            0.46,
+            0.51,
             0.0,
             0.0
           ],
@@ -300,7 +316,7 @@
     }
   },
   "color.border": {
-    "light": "#00000024",
+    "light": "#01010124",
     "dark": "#ffffff24",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
@@ -308,54 +324,59 @@
         "rule": "color.text at alpha",
         "inputs": [
           "alpha.border=0.14 [default (DT-BORDER-1)]"
+        ],
+        "roles": [
+          "color.text"
         ]
       }
     }
   },
   "color.background.brand.bold": {
-    "light": "#725400",
-    "dark": "#febf00",
+    "light": "#ffc000",
+    "dark": "#ffc000",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
         "origin": "imputed",
-        "rule": "brand hue nearest its cusp: inverse text reaches target, and 3:1 on every ground",
+        "rule": "light: the stated accent, verbatim; dark: lightness solved: inverse text reaches target, and 3:1 on every ground",
         "inputs": [
-          "brand.hue=84.58 [stated]",
-          "brand.chroma=cusp [default (prototype)]",
+          "brand.hue=84.575 [stated]",
+          "brand.chroma=0.173 [stated]",
+          "brand.lightness=0.842 [stated]",
           "cusp L=0.840 C=0.1723 (derived)",
           "target.text.inverse=7.0 [default (prototype (DT-CONTRAST-1: maximise))]",
           "target.graphic=3.0 [default (WCAG 2.2 SC 1.4.11)]"
         ],
         "oklch": {
           "light": [
-            0.465,
-            0.0955,
-            84.58
+            0.842,
+            0.173,
+            84.575
           ],
           "dark": [
-            0.84,
-            0.1723,
-            84.58
+            0.842,
+            0.1727,
+            84.575
           ]
         }
       }
     }
   },
   "color.text.inverse": {
-    "light": "#ffffff",
+    "light": "#000000",
     "dark": "#000000",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
         "origin": "imputed",
         "rule": "black or white, whichever has more contrast on the brand fill",
-        "inputs": [
+        "inputs": [],
+        "roles": [
           "color.background.brand.bold"
         ]
       }
     }
   },
   "color.background.brand.subtlest": {
-    "light": "#cdc8ba",
+    "light": "#f7ecce",
     "dark": "#322809",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
@@ -363,68 +384,74 @@
         "rule": "brand fill at alpha over color.surface",
         "inputs": [
           "alpha.brand.subtlest=0.16 [default (prototype (richdocs rdMix 0.84))]"
+        ],
+        "roles": [
+          "color.background.brand.bold",
+          "color.surface"
         ]
       }
     }
   },
   "color.border.brand": {
-    "light": "#926c00",
-    "dark": "#febf00",
+    "light": "#a67c00",
+    "dark": "#ffc000",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
         "origin": "imputed",
-        "rule": "brand hue nearest its cusp reaching the target on every ground",
+        "rule": "the mode's accent, lightness solved to reach the target on every ground",
         "inputs": [
-          "brand.hue=84.58 [stated]",
-          "brand.chroma=cusp [default (prototype)]",
+          "brand.hue=84.575 [stated]",
+          "brand.chroma=0.173 [stated]",
+          "brand.lightness=0.842 [stated]",
           "cusp L=0.840 C=0.1723 (derived)",
           "target.graphic=3.0 [default (WCAG 2.2 SC 1.4.11)]"
         ],
         "oklch": {
           "light": [
-            0.555,
-            0.1139,
-            84.58
+            0.612,
+            0.1256,
+            84.575
           ],
           "dark": [
-            0.84,
-            0.1723,
-            84.58
+            0.842,
+            0.1727,
+            84.575
           ]
         }
       }
     }
   },
   "color.link": {
-    "light": "#705300",
-    "dark": "#febf00",
+    "light": "#826100",
+    "dark": "#ffc000",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
         "origin": "imputed",
-        "rule": "brand hue nearest its cusp reaching the target on every ground",
+        "rule": "the mode's accent, lightness solved to reach the target on every ground",
         "inputs": [
-          "brand.hue=84.58 [stated]",
-          "brand.chroma=cusp [default (prototype)]",
+          "brand.hue=84.575 [stated]",
+          "brand.chroma=0.173 [stated]",
+          "brand.lightness=0.842 [stated]",
           "cusp L=0.840 C=0.1723 (derived)",
           "target.link=4.5 [default (prototype)]"
         ],
         "oklch": {
           "light": [
-            0.46,
-            0.0945,
-            84.58
+            0.512,
+            0.1051,
+            84.575
           ],
           "dark": [
-            0.84,
-            0.1723,
-            84.58
+            0.842,
+            0.1727,
+            84.575
           ]
         }
       }
     }
   },
   "color.background.selected": {
-    "light": "#d5ba85",
+    "light": "#ecd19a",
     "dark": "#2d1f00",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
@@ -433,25 +460,27 @@
         "inputs": [
           "secondary.hue=None [default (DT-ACCENT-1 (defaults to brand.hue))]",
           "secondary.chromaRatio=0.444 [default (DT-ACCENT-1 (M3 chroma 16/36))]",
+          "brand.hue=84.575 [stated]",
+          "brand.chroma=0.173 [stated]",
           "offset.background.selected=0.1 [default (prototype)]"
         ],
         "oklch": {
           "light": [
-            0.8,
-            0.0765,
-            84.58
+            0.87,
+            0.0768,
+            84.575
           ],
           "dark": [
             0.25,
             0.0517,
-            84.58
+            84.575
           ]
         }
       }
     }
   },
   "color.background.selected.hovered": {
-    "light": "#c5ab75",
+    "light": "#dbc18b",
     "dark": "#3c2b00",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
@@ -460,26 +489,28 @@
         "inputs": [
           "secondary.hue=None [default (DT-ACCENT-1 (defaults to brand.hue))]",
           "secondary.chromaRatio=0.444 [default (DT-ACCENT-1 (M3 chroma 16/36))]",
+          "brand.hue=84.575 [stated]",
+          "brand.chroma=0.173 [stated]",
           "offset.background.selected=0.1 [default (prototype)]"
         ],
         "oklch": {
           "light": [
-            0.75,
-            0.0765,
-            84.58
+            0.82,
+            0.0768,
+            84.575
           ],
           "dark": [
             0.3,
             0.0618,
-            84.58
+            84.575
           ]
         }
       }
     }
   },
   "color.border.selected": {
-    "light": "#926c00",
-    "dark": "#febf00",
+    "light": "#a67c00",
+    "dark": "#ffc000",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
         "origin": "imputed",
@@ -487,49 +518,57 @@
         "inputs": [
           "secondary.hue=None [default (DT-ACCENT-1 (defaults to brand.hue))]",
           "secondary.chromaRatio=0.444 [default (DT-ACCENT-1 (M3 chroma 16/36))]",
+          "brand.hue=84.575 [stated]",
+          "brand.chroma=0.173 [stated]",
           "target.graphic=3.0 [default (WCAG 2.2 SC 1.4.11)]"
         ],
         "oklch": {
           "light": [
-            0.555,
-            0.1139,
-            84.58
+            0.612,
+            0.1256,
+            84.575
           ],
           "dark": [
-            0.84,
-            0.1723,
-            84.58
+            0.842,
+            0.1727,
+            84.575
           ]
         }
       }
     }
   },
   "color.border.focused": {
-    "light": "#926c00",
-    "dark": "#febf00",
+    "light": "#a67c00",
+    "dark": "#ffc000",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
         "origin": "imputed",
         "rule": "alias",
         "inputs": [],
+        "roles": [
+          "color.border.selected"
+        ],
         "alias": "color.border.selected"
       }
     }
   },
   "color.text.selected": {
-    "light": "#000000",
+    "light": "#010101",
     "dark": "#ffffff",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
         "origin": "imputed",
         "rule": "alias",
         "inputs": [],
+        "roles": [
+          "color.text"
+        ],
         "alias": "color.text"
       }
     }
   },
   "color.text.danger": {
-    "light": "#ac1922",
+    "light": "#be2e31",
     "dark": "#de4e4b",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
@@ -542,7 +581,7 @@
         ],
         "oklch": {
           "light": [
-            0.48,
+            0.53,
             0.18,
             25.0
           ],
@@ -556,7 +595,7 @@
     }
   },
   "color.text.warning": {
-    "light": "#755200",
+    "light": "#875f00",
     "dark": "#a77600",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
@@ -569,8 +608,8 @@
         ],
         "oklch": {
           "light": [
-            0.465,
-            0.0964,
+            0.515,
+            0.1068,
             80.0
           ],
           "dark": [
@@ -583,7 +622,7 @@
     }
   },
   "color.text.success": {
-    "light": "#006718",
+    "light": "#00771d",
     "dark": "#189a30",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
@@ -596,8 +635,8 @@
         ],
         "oklch": {
           "light": [
-            0.445,
-            0.1401,
+            0.495,
+            0.1558,
             145.0
           ],
           "dark": [
@@ -610,385 +649,399 @@
     }
   },
   "color.chart.categorical.1": {
-    "light": "#8d6e29",
-    "dark": "#9d7b2c",
+    "light": "#9f7d2f",
+    "dark": "#e3c890",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
         "origin": "imputed",
         "rule": "golden walk slot 1: hue +0x137.5 deg, lightness solved to 3:1, chroma ceiling",
         "inputs": [
-          "brand.hue=84.58 [stated]",
+          "brand.hue=84.575 [stated]",
           "walk.slots=12 [default (DT-WALK-1)]",
           "walk.angle=137.5 [default (DT-WALK-1)]",
-          "walk.lightness=0.6 [default (prototype (richdocs measured bands 0.58-0.65))]",
+          "walk.lightness=brand [default (DT-WALK-2 (the seed's lightness: each mode's accent))]",
           "walk.chromaCeiling=floor [default (DT-WALK-2)]",
-          "target.graphic=3.0 [default (WCAG 2.2 SC 1.4.11)]"
+          "target.graphic=3.0 [default (WCAG 2.2 SC 1.4.11)]",
+          "brand.lightness=0.842 [stated]"
         ],
         "oklch": {
           "light": [
-            0.555,
-            0.0943,
-            84.58
+            0.607,
+            0.1033,
+            84.575
           ],
           "dark": [
-            0.6,
-            0.1038,
-            84.58
+            0.842,
+            0.0784,
+            84.575
           ]
         }
       }
     }
   },
   "color.chart.categorical.2": {
-    "light": "#1b7d99",
-    "dark": "#1e8dac",
+    "light": "#1d8cab",
+    "dark": "#91d7f0",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
         "origin": "imputed",
         "rule": "golden walk slot 2: hue +1x137.5 deg, lightness solved to 3:1, chroma ceiling",
         "inputs": [
-          "brand.hue=84.58 [stated]",
+          "brand.hue=84.575 [stated]",
           "walk.slots=12 [default (DT-WALK-1)]",
           "walk.angle=137.5 [default (DT-WALK-1)]",
-          "walk.lightness=0.6 [default (prototype (richdocs measured bands 0.58-0.65))]",
+          "walk.lightness=brand [default (DT-WALK-2 (the seed's lightness: each mode's accent))]",
           "walk.chromaCeiling=floor [default (DT-WALK-2)]",
-          "target.graphic=3.0 [default (WCAG 2.2 SC 1.4.11)]"
+          "target.graphic=3.0 [default (WCAG 2.2 SC 1.4.11)]",
+          "brand.lightness=0.842 [stated]"
         ],
         "oklch": {
           "light": [
-            0.55,
-            0.0943,
-            222.08
+            0.597,
+            0.1033,
+            222.075
           ],
           "dark": [
-            0.6,
-            0.1038,
-            222.08
+            0.842,
+            0.0784,
+            222.075
           ]
         }
       }
     }
   },
   "color.chart.categorical.3": {
-    "light": "#a35d74",
-    "dark": "#b2647e",
+    "light": "#b96b85",
+    "dark": "#f7b6c9",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
         "origin": "imputed",
         "rule": "golden walk slot 3: hue +2x137.5 deg, lightness solved to 3:1, chroma ceiling",
         "inputs": [
-          "brand.hue=84.58 [stated]",
+          "brand.hue=84.575 [stated]",
           "walk.slots=12 [default (DT-WALK-1)]",
           "walk.angle=137.5 [default (DT-WALK-1)]",
-          "walk.lightness=0.6 [default (prototype (richdocs measured bands 0.58-0.65))]",
+          "walk.lightness=brand [default (DT-WALK-2 (the seed's lightness: each mode's accent))]",
           "walk.chromaCeiling=floor [default (DT-WALK-2)]",
-          "target.graphic=3.0 [default (WCAG 2.2 SC 1.4.11)]"
+          "target.graphic=3.0 [default (WCAG 2.2 SC 1.4.11)]",
+          "brand.lightness=0.842 [stated]"
         ],
         "oklch": {
           "light": [
-            0.565,
-            0.0943,
-            359.58
+            0.622,
+            0.1033,
+            359.575
           ],
           "dark": [
-            0.6,
-            0.1038,
-            359.58
+            0.842,
+            0.0784,
+            359.575
           ]
         }
       }
     }
   },
   "color.chart.categorical.4": {
-    "light": "#557d45",
-    "dark": "#628f4f",
+    "light": "#618e4f",
+    "dark": "#b3d8a5",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
         "origin": "imputed",
         "rule": "golden walk slot 4: hue +3x137.5 deg, lightness solved to 3:1, chroma ceiling",
         "inputs": [
-          "brand.hue=84.58 [stated]",
+          "brand.hue=84.575 [stated]",
           "walk.slots=12 [default (DT-WALK-1)]",
           "walk.angle=137.5 [default (DT-WALK-1)]",
-          "walk.lightness=0.6 [default (prototype (richdocs measured bands 0.58-0.65))]",
+          "walk.lightness=brand [default (DT-WALK-2 (the seed's lightness: each mode's accent))]",
           "walk.chromaCeiling=floor [default (DT-WALK-2)]",
-          "target.graphic=3.0 [default (WCAG 2.2 SC 1.4.11)]"
+          "target.graphic=3.0 [default (WCAG 2.2 SC 1.4.11)]",
+          "brand.lightness=0.842 [stated]"
         ],
         "oklch": {
           "light": [
-            0.545,
-            0.0943,
-            137.08
+            0.597,
+            0.1033,
+            137.075
           ],
           "dark": [
-            0.6,
-            0.1038,
-            137.08
+            0.842,
+            0.0784,
+            137.075
           ]
         }
       }
     }
   },
   "color.chart.categorical.5": {
-    "light": "#636eaa",
-    "dark": "#6e7bbe",
+    "light": "#717ec2",
+    "dark": "#bbc8ff",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
         "origin": "imputed",
         "rule": "golden walk slot 5: hue +4x137.5 deg, lightness solved to 3:1, chroma ceiling",
         "inputs": [
-          "brand.hue=84.58 [stated]",
+          "brand.hue=84.575 [stated]",
           "walk.slots=12 [default (DT-WALK-1)]",
           "walk.angle=137.5 [default (DT-WALK-1)]",
-          "walk.lightness=0.6 [default (prototype (richdocs measured bands 0.58-0.65))]",
+          "walk.lightness=brand [default (DT-WALK-2 (the seed's lightness: each mode's accent))]",
           "walk.chromaCeiling=floor [default (DT-WALK-2)]",
-          "target.graphic=3.0 [default (WCAG 2.2 SC 1.4.11)]"
+          "target.graphic=3.0 [default (WCAG 2.2 SC 1.4.11)]",
+          "brand.lightness=0.842 [stated]"
         ],
         "oklch": {
           "light": [
-            0.555,
-            0.0943,
-            274.58
+            0.612,
+            0.1033,
+            274.575
           ],
           "dark": [
-            0.6,
-            0.1038,
-            274.58
+            0.842,
+            0.0784,
+            274.575
           ]
         }
       }
     }
   },
   "color.chart.categorical.6": {
-    "light": "#a0643e",
-    "dark": "#b16d42",
+    "light": "#b47146",
+    "dark": "#f5bd9c",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
         "origin": "imputed",
         "rule": "golden walk slot 6: hue +5x137.5 deg, lightness solved to 3:1, chroma ceiling",
         "inputs": [
-          "brand.hue=84.58 [stated]",
+          "brand.hue=84.575 [stated]",
           "walk.slots=12 [default (DT-WALK-1)]",
           "walk.angle=137.5 [default (DT-WALK-1)]",
-          "walk.lightness=0.6 [default (prototype (richdocs measured bands 0.58-0.65))]",
+          "walk.lightness=brand [default (DT-WALK-2 (the seed's lightness: each mode's accent))]",
           "walk.chromaCeiling=floor [default (DT-WALK-2)]",
-          "target.graphic=3.0 [default (WCAG 2.2 SC 1.4.11)]"
+          "target.graphic=3.0 [default (WCAG 2.2 SC 1.4.11)]",
+          "brand.lightness=0.842 [stated]"
         ],
         "oklch": {
           "light": [
-            0.56,
-            0.0943,
-            52.08
+            0.612,
+            0.1033,
+            52.075
           ],
           "dark": [
-            0.6,
-            0.1038,
-            52.08
+            0.842,
+            0.0784,
+            52.075
           ]
         }
       }
     }
   },
   "color.chart.categorical.7": {
-    "light": "#00817c",
-    "dark": "#00948d",
+    "light": "#00938c",
+    "dark": "#8ddcd6",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
         "origin": "imputed",
         "rule": "golden walk slot 7: hue +6x137.5 deg, lightness solved to 3:1, chroma ceiling",
         "inputs": [
-          "brand.hue=84.58 [stated]",
+          "brand.hue=84.575 [stated]",
           "walk.slots=12 [default (DT-WALK-1)]",
           "walk.angle=137.5 [default (DT-WALK-1)]",
-          "walk.lightness=0.6 [default (prototype (richdocs measured bands 0.58-0.65))]",
+          "walk.lightness=brand [default (DT-WALK-2 (the seed's lightness: each mode's accent))]",
           "walk.chromaCeiling=floor [default (DT-WALK-2)]",
-          "target.graphic=3.0 [default (WCAG 2.2 SC 1.4.11)]"
+          "target.graphic=3.0 [default (WCAG 2.2 SC 1.4.11)]",
+          "brand.lightness=0.842 [stated]"
         ],
         "oklch": {
           "light": [
-            0.545,
-            0.0943,
-            189.58
+            0.597,
+            0.1033,
+            189.575
           ],
           "dark": [
-            0.6,
-            0.1038,
-            189.58
+            0.842,
+            0.0784,
+            189.575
           ]
         }
       }
     }
   },
   "color.chart.categorical.8": {
-    "light": "#936193",
-    "dark": "#a169a0",
+    "light": "#a66ea6",
+    "dark": "#e7bae6",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
         "origin": "imputed",
         "rule": "golden walk slot 8: hue +7x137.5 deg, lightness solved to 3:1, chroma ceiling",
         "inputs": [
-          "brand.hue=84.58 [stated]",
+          "brand.hue=84.575 [stated]",
           "walk.slots=12 [default (DT-WALK-1)]",
           "walk.angle=137.5 [default (DT-WALK-1)]",
-          "walk.lightness=0.6 [default (prototype (richdocs measured bands 0.58-0.65))]",
+          "walk.lightness=brand [default (DT-WALK-2 (the seed's lightness: each mode's accent))]",
           "walk.chromaCeiling=floor [default (DT-WALK-2)]",
-          "target.graphic=3.0 [default (WCAG 2.2 SC 1.4.11)]"
+          "target.graphic=3.0 [default (WCAG 2.2 SC 1.4.11)]",
+          "brand.lightness=0.842 [stated]"
         ],
         "oklch": {
           "light": [
-            0.565,
-            0.0943,
-            327.08
+            0.617,
+            0.1033,
+            327.075
           ],
           "dark": [
-            0.6,
-            0.1038,
-            327.08
+            0.842,
+            0.0784,
+            327.075
           ]
         }
       }
     }
   },
   "color.chart.categorical.9": {
-    "light": "#7a742b",
-    "dark": "#8a8330",
+    "light": "#8b8432",
+    "dark": "#d3ce93",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
         "origin": "imputed",
         "rule": "golden walk slot 9: hue +8x137.5 deg, lightness solved to 3:1, chroma ceiling",
         "inputs": [
-          "brand.hue=84.58 [stated]",
+          "brand.hue=84.575 [stated]",
           "walk.slots=12 [default (DT-WALK-1)]",
           "walk.angle=137.5 [default (DT-WALK-1)]",
-          "walk.lightness=0.6 [default (prototype (richdocs measured bands 0.58-0.65))]",
+          "walk.lightness=brand [default (DT-WALK-2 (the seed's lightness: each mode's accent))]",
           "walk.chromaCeiling=floor [default (DT-WALK-2)]",
-          "target.graphic=3.0 [default (WCAG 2.2 SC 1.4.11)]"
+          "target.graphic=3.0 [default (WCAG 2.2 SC 1.4.11)]",
+          "brand.lightness=0.842 [stated]"
         ],
         "oklch": {
           "light": [
-            0.55,
-            0.0943,
-            104.58
+            0.602,
+            0.1033,
+            104.575
           ],
           "dark": [
-            0.6,
-            0.1038,
-            104.58
+            0.842,
+            0.0784,
+            104.575
           ]
         }
       }
     }
   },
   "color.chart.categorical.10": {
-    "light": "#3978a4",
-    "dark": "#4187b9",
+    "light": "#4288b9",
+    "dark": "#9ed2fa",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
         "origin": "imputed",
         "rule": "golden walk slot 10: hue +9x137.5 deg, lightness solved to 3:1, chroma ceiling",
         "inputs": [
-          "brand.hue=84.58 [stated]",
+          "brand.hue=84.575 [stated]",
           "walk.slots=12 [default (DT-WALK-1)]",
           "walk.angle=137.5 [default (DT-WALK-1)]",
-          "walk.lightness=0.6 [default (prototype (richdocs measured bands 0.58-0.65))]",
+          "walk.lightness=brand [default (DT-WALK-2 (the seed's lightness: each mode's accent))]",
           "walk.chromaCeiling=floor [default (DT-WALK-2)]",
-          "target.graphic=3.0 [default (WCAG 2.2 SC 1.4.11)]"
+          "target.graphic=3.0 [default (WCAG 2.2 SC 1.4.11)]",
+          "brand.lightness=0.842 [stated]"
         ],
         "oklch": {
           "light": [
-            0.55,
-            0.0943,
-            242.08
+            0.602,
+            0.1033,
+            242.075
           ],
           "dark": [
-            0.6,
-            0.1038,
-            242.08
+            0.842,
+            0.0784,
+            242.075
           ]
         }
       }
     }
   },
   "color.chart.categorical.11": {
-    "light": "#a65e5f",
-    "dark": "#b66567",
+    "light": "#bb6b6c",
+    "dark": "#fab7b6",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
         "origin": "imputed",
         "rule": "golden walk slot 11: hue +10x137.5 deg, lightness solved to 3:1, chroma ceiling",
         "inputs": [
-          "brand.hue=84.58 [stated]",
+          "brand.hue=84.575 [stated]",
           "walk.slots=12 [default (DT-WALK-1)]",
           "walk.angle=137.5 [default (DT-WALK-1)]",
-          "walk.lightness=0.6 [default (prototype (richdocs measured bands 0.58-0.65))]",
+          "walk.lightness=brand [default (DT-WALK-2 (the seed's lightness: each mode's accent))]",
           "walk.chromaCeiling=floor [default (DT-WALK-2)]",
-          "target.graphic=3.0 [default (WCAG 2.2 SC 1.4.11)]"
+          "target.graphic=3.0 [default (WCAG 2.2 SC 1.4.11)]",
+          "brand.lightness=0.842 [stated]"
         ],
         "oklch": {
           "light": [
-            0.565,
-            0.0943,
-            19.58
+            0.617,
+            0.1033,
+            19.575
           ],
           "dark": [
-            0.6,
-            0.1038,
-            19.58
+            0.842,
+            0.0784,
+            19.575
           ]
         }
       }
     }
   },
   "color.chart.categorical.12": {
-    "light": "#3a805a",
-    "dark": "#439367",
+    "light": "#419065",
+    "dark": "#a1dbb7",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
         "origin": "imputed",
         "rule": "golden walk slot 12: hue +11x137.5 deg, lightness solved to 3:1, chroma ceiling",
         "inputs": [
-          "brand.hue=84.58 [stated]",
+          "brand.hue=84.575 [stated]",
           "walk.slots=12 [default (DT-WALK-1)]",
           "walk.angle=137.5 [default (DT-WALK-1)]",
-          "walk.lightness=0.6 [default (prototype (richdocs measured bands 0.58-0.65))]",
+          "walk.lightness=brand [default (DT-WALK-2 (the seed's lightness: each mode's accent))]",
           "walk.chromaCeiling=floor [default (DT-WALK-2)]",
-          "target.graphic=3.0 [default (WCAG 2.2 SC 1.4.11)]"
+          "target.graphic=3.0 [default (WCAG 2.2 SC 1.4.11)]",
+          "brand.lightness=0.842 [stated]"
         ],
         "oklch": {
           "light": [
-            0.545,
-            0.0943,
-            157.08
+            0.592,
+            0.1033,
+            157.075
           ],
           "dark": [
-            0.6,
-            0.1038,
-            157.08
+            0.842,
+            0.0784,
+            157.075
           ]
         }
       }
     }
   },
   "color.chart.sequential.1": {
-    "light": "#ffd06c",
+    "light": "#ffd06d",
     "dark": "#3c2b00",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
         "origin": "imputed",
         "rule": "evenly spaced lightness at a fixed hue, chroma capped",
         "inputs": [
-          "prototype"
+          "prototype",
+          "brand.hue=84.575 [stated]",
+          "brand.chroma=0.173 [stated]"
         ],
         "oklch": {
           "light": [
             0.88,
-            0.1292,
-            84.58
+            0.1291,
+            84.575
           ],
           "dark": [
             0.3,
             0.0618,
-            84.58
+            84.575
           ]
         }
       }
@@ -1002,18 +1055,20 @@
         "origin": "imputed",
         "rule": "evenly spaced lightness at a fixed hue, chroma capped",
         "inputs": [
-          "prototype"
+          "prototype",
+          "brand.hue=84.575 [stated]",
+          "brand.chroma=0.173 [stated]"
         ],
         "oklch": {
           "light": [
             0.765,
             0.1569,
-            84.58
+            84.575
           ],
           "dark": [
             0.43,
             0.0883,
-            84.58
+            84.575
           ]
         }
       }
@@ -1027,18 +1082,20 @@
         "origin": "imputed",
         "rule": "evenly spaced lightness at a fixed hue, chroma capped",
         "inputs": [
-          "prototype"
+          "prototype",
+          "brand.hue=84.575 [stated]",
+          "brand.chroma=0.173 [stated]"
         ],
         "oklch": {
           "light": [
             0.65,
             0.1334,
-            84.58
+            84.575
           ],
           "dark": [
             0.56,
             0.1149,
-            84.58
+            84.575
           ]
         }
       }
@@ -1052,18 +1109,20 @@
         "origin": "imputed",
         "rule": "evenly spaced lightness at a fixed hue, chroma capped",
         "inputs": [
-          "prototype"
+          "prototype",
+          "brand.hue=84.575 [stated]",
+          "brand.chroma=0.173 [stated]"
         ],
         "oklch": {
           "light": [
             0.535,
             0.1098,
-            84.58
+            84.575
           ],
           "dark": [
             0.69,
             0.1416,
-            84.58
+            84.575
           ]
         }
       }
@@ -1077,43 +1136,47 @@
         "origin": "imputed",
         "rule": "evenly spaced lightness at a fixed hue, chroma capped",
         "inputs": [
-          "prototype"
+          "prototype",
+          "brand.hue=84.575 [stated]",
+          "brand.chroma=0.173 [stated]"
         ],
         "oklch": {
           "light": [
             0.42,
             0.0863,
-            84.58
+            84.575
           ],
           "dark": [
             0.82,
             0.1682,
-            84.58
+            84.575
           ]
         }
       }
     }
   },
   "color.chart.diverging.positive.1": {
-    "light": "#ffd06c",
+    "light": "#ffd06d",
     "dark": "#3c2b00",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
         "origin": "imputed",
         "rule": "evenly spaced lightness at a fixed hue, chroma capped",
         "inputs": [
-          "prototype"
+          "prototype",
+          "brand.hue=84.575 [stated]",
+          "brand.chroma=0.173 [stated]"
         ],
         "oklch": {
           "light": [
             0.88,
-            0.1292,
-            84.58
+            0.1291,
+            84.575
           ],
           "dark": [
             0.3,
             0.0618,
-            84.58
+            84.575
           ]
         }
       }
@@ -1127,18 +1190,20 @@
         "origin": "imputed",
         "rule": "evenly spaced lightness at a fixed hue, chroma capped",
         "inputs": [
-          "prototype"
+          "prototype",
+          "brand.hue=84.575 [stated]",
+          "brand.chroma=0.173 [stated]"
         ],
         "oklch": {
           "light": [
             0.65,
             0.1334,
-            84.58
+            84.575
           ],
           "dark": [
             0.56,
             0.1149,
-            84.58
+            84.575
           ]
         }
       }
@@ -1152,18 +1217,20 @@
         "origin": "imputed",
         "rule": "evenly spaced lightness at a fixed hue, chroma capped",
         "inputs": [
-          "prototype"
+          "prototype",
+          "brand.hue=84.575 [stated]",
+          "brand.chroma=0.173 [stated]"
         ],
         "oklch": {
           "light": [
             0.42,
             0.0863,
-            84.58
+            84.575
           ],
           "dark": [
             0.82,
             0.1682,
-            84.58
+            84.575
           ]
         }
       }
@@ -1177,7 +1244,9 @@
         "origin": "imputed",
         "rule": "evenly spaced lightness at a fixed hue, chroma capped",
         "inputs": [
-          "prototype"
+          "prototype",
+          "status.hue.danger=25.0 [default (prototype)]",
+          "status.chromaCap=0.18 [default (prototype)]"
         ],
         "oklch": {
           "light": [
@@ -1202,7 +1271,9 @@
         "origin": "imputed",
         "rule": "evenly spaced lightness at a fixed hue, chroma capped",
         "inputs": [
-          "prototype"
+          "prototype",
+          "status.hue.danger=25.0 [default (prototype)]",
+          "status.chromaCap=0.18 [default (prototype)]"
         ],
         "oklch": {
           "light": [
@@ -1227,7 +1298,9 @@
         "origin": "imputed",
         "rule": "evenly spaced lightness at a fixed hue, chroma capped",
         "inputs": [
-          "prototype"
+          "prototype",
+          "status.hue.danger=25.0 [default (prototype)]",
+          "status.chromaCap=0.18 [default (prototype)]"
         ],
         "oklch": {
           "light": [
@@ -1252,7 +1325,9 @@
         "origin": "imputed",
         "rule": "evenly spaced lightness at a fixed hue, chroma capped",
         "inputs": [
-          "prototype"
+          "prototype",
+          "status.hue.success=145.0 [default (prototype)]",
+          "status.chromaCap=0.18 [default (prototype)]"
         ],
         "oklch": {
           "light": [
@@ -1277,7 +1352,9 @@
         "origin": "imputed",
         "rule": "evenly spaced lightness at a fixed hue, chroma capped",
         "inputs": [
-          "prototype"
+          "prototype",
+          "status.hue.success=145.0 [default (prototype)]",
+          "status.chromaCap=0.18 [default (prototype)]"
         ],
         "oklch": {
           "light": [
@@ -1302,7 +1379,9 @@
         "origin": "imputed",
         "rule": "evenly spaced lightness at a fixed hue, chroma capped",
         "inputs": [
-          "prototype"
+          "prototype",
+          "status.hue.success=145.0 [default (prototype)]",
+          "status.chromaCap=0.18 [default (prototype)]"
         ],
         "oklch": {
           "light": [
@@ -1320,18 +1399,22 @@
     }
   },
   "color.chart.muted.1": {
-    "light": "#717171",
+    "light": "#868686",
     "dark": "#636363",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
         "origin": "imputed",
         "rule": "greys from border.bold to text.subtle",
         "inputs": [
-          "prototype"
+          "prototype",
+          "L-light-bg=0.97 [default (DT-REF-1 (revised 2026-09-24, was 0.90))]",
+          "L-dark-bg=0.15 [default (DT-REF-1)]",
+          "offset.border.bold=0.35 [default (DT-BORDER-1)]",
+          "offset.text.subtle=0.65 [default (DT-REF-1)]"
         ],
         "oklch": {
           "light": [
-            0.55,
+            0.62,
             0.0,
             0.0
           ],
@@ -1345,18 +1428,22 @@
     }
   },
   "color.chart.muted.2": {
-    "light": "#555555",
+    "light": "#696969",
     "dark": "#808080",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
         "origin": "imputed",
         "rule": "greys from border.bold to text.subtle",
         "inputs": [
-          "prototype"
+          "prototype",
+          "L-light-bg=0.97 [default (DT-REF-1 (revised 2026-09-24, was 0.90))]",
+          "L-dark-bg=0.15 [default (DT-REF-1)]",
+          "offset.border.bold=0.35 [default (DT-BORDER-1)]",
+          "offset.text.subtle=0.65 [default (DT-REF-1)]"
         ],
         "oklch": {
           "light": [
-            0.45,
+            0.52,
             0.0,
             0.0
           ],
@@ -1370,18 +1457,22 @@
     }
   },
   "color.chart.muted.3": {
-    "light": "#3a3a3a",
+    "light": "#4d4d4d",
     "dark": "#9e9e9e",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
         "origin": "imputed",
         "rule": "greys from border.bold to text.subtle",
         "inputs": [
-          "prototype"
+          "prototype",
+          "L-light-bg=0.97 [default (DT-REF-1 (revised 2026-09-24, was 0.90))]",
+          "L-dark-bg=0.15 [default (DT-REF-1)]",
+          "offset.border.bold=0.35 [default (DT-BORDER-1)]",
+          "offset.text.subtle=0.65 [default (DT-REF-1)]"
         ],
         "oklch": {
           "light": [
-            0.35,
+            0.42,
             0.0,
             0.0
           ],
@@ -1395,18 +1486,22 @@
     }
   },
   "color.chart.muted.4": {
-    "light": "#222222",
+    "light": "#333333",
     "dark": "#bebebe",
     "$extensions": {
       "dev.agentic-dotfiles.curation": {
         "origin": "imputed",
         "rule": "greys from border.bold to text.subtle",
         "inputs": [
-          "prototype"
+          "prototype",
+          "L-light-bg=0.97 [default (DT-REF-1 (revised 2026-09-24, was 0.90))]",
+          "L-dark-bg=0.15 [default (DT-REF-1)]",
+          "offset.border.bold=0.35 [default (DT-BORDER-1)]",
+          "offset.text.subtle=0.65 [default (DT-REF-1)]"
         ],
         "oklch": {
           "light": [
-            0.25,
+            0.32,
             0.0,
             0.0
           ],

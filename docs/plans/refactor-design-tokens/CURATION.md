@@ -29,7 +29,7 @@ extrapolated into a full IR.
 | brand hue | **yes** | — | DT-ACCENT-1 |
 | secondary hue | no | the brand hue at reduced chroma; drives selected, active, focus and hover state | DT-ACCENT-1 |
 | `L-dark-bg` | no | **0.15** | DT-REF-1 |
-| `L-light-bg` | no | **0.90** | DT-REF-1 |
+| `L-light-bg` | no | **0.97** (was 0.90) | DT-REF-1, revised 2026-09-24 |
 | `offset.surface.sunken` | no | **−0.05** | DT-REF-1 |
 | `offset.surface.raised` | no | **+0.05** | DT-REF-1 |
 | `offset.text.subtle` | no | **+0.65** | DT-REF-1 |
@@ -57,12 +57,14 @@ modes), while **toward-text** offsets flip with the mode, which is what lets one
 
 ```text
 role                     dark L    hex     |  light L    hex
-color.surface.sunken       0.10  #030303   |     0.85  #cecece
-color.surface              0.15  #0b0b0b   |     0.90  #dedede
-color.surface.raised       0.20  #161616   |     0.95  #eeeeee
-color.text.subtle          0.80  #bebebe   |     0.25  #222222
-color.text                 1.00  #ffffff   |     0.00  #000000
+color.surface.sunken       0.10  #030303   |     0.92  #e4e4e4
+color.surface              0.15  #0b0b0b   |     0.97  #f5f5f5
+color.surface.raised       0.20  #161616   |     1.00  #ffffff   (clamped from 1.02)
+color.text.subtle          0.80  #bebebe   |     0.32  #333333
+color.text                 1.00  #ffffff   |     0.07  #010101
 ```
+
+Light values are at `L-light-bg` 0.97 (revised 2026-09-24 from 0.90).
 
 Verified by `scripts/verify_chosen_ref.py`: every pairing clears **AAA** (worst 9.69:1); both bg
 triples are clearly separated (dark 8-bit `[3, 11, 22]`, light `[206, 222, 238]`); light
