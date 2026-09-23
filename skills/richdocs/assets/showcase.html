@@ -211,19 +211,34 @@
     <div class="sc-panel"><div class="sc-mermaid" id="sc-mermaid"></div></div>
     <h3>Detail — subgraph clusters</h3>
     <div class="sc-panel"><div class="sc-mermaid" id="sc-mermaid-detail"></div></div>
+    <h3>Detail — category colours per cluster</h3>
+    <p style="font-size:.9rem">With category colours: each group takes the next categorical
+      slot, in order. The colour only separates groups; it carries no meaning of its own.</p>
+    <div class="sc-panel"><div class="sc-mermaid" id="sc-mermaid-detail-cat"></div></div>
     <h3>Entity relationships — the profile store</h3>
     <p style="font-size:.9rem">Keys, cardinalities and a self-referencing relationship: a role
       derived from another role.</p>
     <div class="sc-panel"><div class="sc-mermaid" id="sc-mermaid-er"></div></div>
+    <h3>Entity relationships — category colours per pipeline stage</h3>
+    <p style="font-size:.9rem">Authoring, curation and output entities each take a slot.</p>
+    <div class="sc-panel"><div class="sc-mermaid" id="sc-mermaid-er-cat"></div></div>
     <h3>Sequence — one live-tuning round trip</h3>
     <p style="font-size:.9rem">Numbered messages, activations, an optional branch, a loop, a
       note and parallel work.</p>
     <div class="sc-panel"><div class="sc-mermaid" id="sc-mermaid-seq"></div></div>
+    <h3>Sequence — category colours per runtime</h3>
+    <p style="font-size:.9rem">Participants grouped by where they run: the browser page and
+      the Python runtime.</p>
+    <div class="sc-panel"><div class="sc-mermaid" id="sc-mermaid-seq-cat"></div></div>
     <h3>Gantt — the refactor plan</h3>
     <p style="font-size:.9rem">Done, active, planned and critical tasks, dependencies and a
       milestone. Planned bars wear the brand fill; the rest are tints, so every label keeps
       its contrast.</p>
     <div class="sc-panel"><div class="sc-mermaid sc-mermaid-wide" id="sc-mermaid-gantt"></div></div>
+    <h3>Gantt — category colours per section</h3>
+    <p style="font-size:.9rem">Each section's bars take a slot: planned bars a tint, active
+      stronger, done fainter. Critical work keeps the status colour.</p>
+    <div class="sc-panel"><div class="sc-mermaid sc-mermaid-wide" id="sc-mermaid-gantt-cat"></div></div>
   </section>
 
   <section>
@@ -302,7 +317,9 @@
     <p>Icons are the vendored draw.io stencil pack. Each SVG carries its own
       <code>mxfile</code> source in a <code>content</code> attribute, so it re-opens in
       diagrams.net as first-class AWS & GCP shapes — not a flattened picture. Download one and
-      keep editing.</p>
+      keep editing. Related services sit in group containers, each taking the next category
+      colour; in diagrams.net they are real containers, so moving one moves its members. A
+      download carries the brand and mode you are viewing.</p>
     <div id="sc-archs"></div>
   </section>
 

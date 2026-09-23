@@ -137,6 +137,61 @@ def test_architecture_svg_is_drawio_editable() -> None:
     assert by_title  # both diagrams present and titled
 
 
+def test_every_architecture_groups_its_nodes_without_overlap() -> None:
+    """Group layout is validated at build time: known members, one group each, no overlap."""
+    for arch in showcase.ARCHITECTURES:
+        assert arch.groups, arch.title
+        boxes = showcase.group_boxes(arch)
+        assert set(boxes) == {g.id for g in arch.groups}
+
+
+def test_overlapping_groups_crash_the_build() -> None:
+    arch = showcase.Arch(
+        title="x",
+        caption="",
+        nodes=[showcase.Node("a", "a", "i", 0, 0), showcase.Node("b", "b", "i", 1, 1)],
+        edges=[],
+        groups=[
+            showcase.Group("g1", "one", ["a", "b"]),
+            showcase.Group("g2", "two", ["b"]),
+        ],
+    )
+    with pytest.raises(SystemExit, match="is in groups"):
+        showcase.group_boxes(arch)
+    arch = showcase.Arch(
+        title="x",
+        caption="",
+        nodes=[
+            showcase.Node("a", "a", "i", 0, 0),
+            showcase.Node("b", "b", "i", 2, 2),
+            showcase.Node("c", "c", "i", 1, 1),
+        ],
+        edges=[],
+        groups=[
+            showcase.Group("g1", "one", ["a", "b"]),
+            showcase.Group("g2", "two", ["c"]),
+        ],
+    )
+    with pytest.raises(SystemExit, match="overlap"):
+        showcase.group_boxes(arch)
+
+
+def test_groups_are_drawio_containers_in_category_colours() -> None:
+    """Members are children of a real container, and each group takes the next slot."""
+    stencils = showcase.load_stencils(showcase.DEFAULT_ZIP)
+    arch = showcase.ARCHITECTURES[0]
+    svg = showcase.compose_architecture_svg(arch, stencils)
+    xml = showcase._drawio_xml(arch)
+    for k, g in enumerate(arch.groups, start=1):
+        assert f'id="{g.id}"' in xml
+        assert f"strokeColor=var(--sc-cat-{k});" in xml
+        assert f'stroke="var(--sc-cat-{k})"' in svg
+        for m in g.members:
+            assert f'id="{m}"' in xml
+            assert f'parent="{g.id}"' in xml
+    assert "container=1" in xml
+
+
 # ── Assembly ────────────────────────────────────────────────────────────────
 def test_gallery_embeds_every_installed_brand(tmp_path: Path) -> None:
     showcase.main(_args(tmp_path))

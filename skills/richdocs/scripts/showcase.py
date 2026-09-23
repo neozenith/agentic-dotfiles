@@ -29,7 +29,7 @@ import html
 import json
 import re
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 from xml.sax.saxutils import quoteattr
@@ -79,11 +79,22 @@ class Node:
 
 
 @dataclass(frozen=True)
+class Group:
+    """A container of nodes. Groups take categorical slots in declaration order (1, 2, …),
+    for visual separation only, and must not overlap."""
+
+    id: str
+    label: str
+    members: list[str]
+
+
+@dataclass(frozen=True)
 class Arch:
     title: str
     caption: str
     nodes: list[Node]
     edges: list[tuple[str, str, str]]  # (source, target, label)
+    groups: list[Group] = field(default_factory=list)
 
 
 # Architecture diagrams composed from real draw.io stencils. The icon id doubles as
@@ -135,6 +146,12 @@ ARCHITECTURES: list[Arch] = [
             ("build", "ar", "push"),
             ("ar", "backend", "image"),
         ],
+        groups=[
+            Group("g-ingress", "Identity & ingress", ["sa", "iap"]),
+            Group("g-run", "Cloud Run service", ["backend", "agent", "dbt"]),
+            Group("g-data", "Data & AI", ["vertex", "fs", "bq", "gcs"]),
+            Group("g-delivery", "Delivery", ["build", "ar", "wif"]),
+        ],
     ),
     Arch(
         title="Scale-to-zero web app · AWS edge to compute",
@@ -180,6 +197,12 @@ ARCHITECTURES: list[Arch] = [
             ("ctl", "ecs", "desiredCount"),
             ("iam", "ecs", "task role"),
             ("vpc", "ecs", "runs in"),
+        ],
+        groups=[
+            Group("g-edge", "Edge", ["r53", "acm", "cf", "edge"]),
+            Group("g-serve", "Serving", ["s3", "vpc", "ecs", "sqs"]),
+            Group("g-platform", "Platform services", ["ecr", "ssm", "logs", "eb"]),
+            Group("g-control", "Control plane", ["iam", "ctl", "sch"]),
         ],
     ),
 ]
@@ -253,9 +276,68 @@ def scope_css(css: str, brand: str) -> str:
 
 
 # ── Stencil architecture → editable SVG ────────────────────────────────────
+GROUP_INSET = 10  # px between a group's edge and its cells' edges
+
+
+def group_boxes(arch: Arch) -> dict[str, tuple[int, int, int, int]]:
+    """Each group's (x, y, w, h) in drawio space: the grid cells its members occupy, inset.
+
+    Crashes on an unknown member, a node in two groups, or overlapping groups, so a bad
+    layout fails the build rather than drawing one group over another.
+    """
+    by_id = {n.id: n for n in arch.nodes}
+    seen: dict[str, str] = {}
+    boxes: dict[str, tuple[int, int, int, int]] = {}
+    for g in arch.groups:
+        for m in g.members:
+            if m not in by_id:
+                raise SystemExit(f"error: group {g.id!r} names unknown node {m!r}")
+            if m in seen:
+                raise SystemExit(
+                    f"error: node {m!r} is in groups {seen[m]!r} and {g.id!r}"
+                )
+            seen[m] = g.id
+        xs = [by_id[m].x for m in g.members]
+        ys = [by_id[m].y for m in g.members]
+        boxes[g.id] = (
+            min(xs) * CELL_W + GROUP_INSET,
+            min(ys) * CELL_H + GROUP_INSET,
+            (max(xs) - min(xs) + 1) * CELL_W - 2 * GROUP_INSET,
+            (max(ys) - min(ys) + 1) * CELL_H - 2 * GROUP_INSET,
+        )
+    ids = list(boxes)
+    for i, a in enumerate(ids):
+        ax, ay, aw, ah = boxes[a]
+        for b in ids[i + 1 :]:
+            bx, by, bw, bh = boxes[b]
+            if ax < bx + bw and bx < ax + aw and ay < by + bh and by < ay + ah:
+                raise SystemExit(
+                    f"error: groups {a!r} and {b!r} overlap in {arch.title!r}"
+                )
+    return boxes
+
+
 def _drawio_xml(arch: Arch) -> str:
-    """The mxfile source drawio needs to re-open the diagram as editable shapes."""
+    """The mxfile source drawio needs to re-open the diagram as editable shapes.
+
+    Groups are real drawio containers (members are their children, so moving a group
+    moves its members). Their colours are written as `var(--sc-cat-N…)`: the page's
+    download buttons resolve those to the active brand's colours.
+    """
     cells: list[str] = []
+    boxes = group_boxes(arch)
+    parent_of: dict[str, str] = {}
+    for k, g in enumerate(arch.groups, start=1):
+        gx, gy, gw, gh = boxes[g.id]
+        cells.append(
+            f'<mxCell id="{g.id}" value={quoteattr(g.label)} style="rounded=1;arcSize=6;'
+            "whiteSpace=wrap;html=1;container=1;collapsible=0;verticalAlign=top;align=left;"
+            f"spacingLeft=10;spacingTop=4;fontStyle=1;fontSize=12;fillColor=var(--sc-cat-{k}-fill);"
+            f'strokeColor=var(--sc-cat-{k});fontColor=var(--rd-fg);" vertex="1" parent="1">'
+            f'<mxGeometry x="{gx + 40}" y="{gy + 40}" width="{gw}" height="{gh}" as="geometry"/></mxCell>'
+        )
+        for m in g.members:
+            parent_of[m] = g.id
     for n in arch.nodes:
         dotted = n.icon.replace("/", ".")
         # Provider-aware round-trip: AWS stencils are the `resourceIcon` shape with a
@@ -273,10 +355,15 @@ def _drawio_xml(arch: Arch) -> str:
                 "sketch=0;outlineConnect=0;html=1;fontSize=12;verticalLabelPosition=bottom;"
                 f"verticalAlign=top;align=center;aspect=fixed;strokeColor=none;shape={dotted};"
             )
+        # A child's geometry is relative to its container's origin.
+        parent = parent_of.get(n.id, "1")
+        ox, oy = (
+            (boxes[parent][0] + 40, boxes[parent][1] + 40) if parent != "1" else (0, 0)
+        )
         cells.append(
             f'<mxCell id="{n.id}" value={quoteattr(n.label)} style="{style}" '
-            'vertex="1" parent="1">'
-            f'<mxGeometry x="{n.x * CELL_W + 40}" y="{n.y * CELL_H + 40}" '
+            f'vertex="1" parent="{parent}">'
+            f'<mxGeometry x="{n.x * CELL_W + 40 - ox}" y="{n.y * CELL_H + 40 - oy}" '
             f'width="{ICON}" height="{ICON}" as="geometry"/></mxCell>'
         )
     for i, (src, dst, label) in enumerate(arch.edges):
@@ -330,6 +417,25 @@ def compose_architecture_svg(arch: Arch, stencils: dict[str, dict[str, Any]]) ->
     parts: list[str] = []
     labels: list[tuple[float, float, str]] = []
 
+    # Group containers sit under everything. Each takes the next categorical slot: a faint
+    # tint of the slot, outlined in the slot (already solved to 3:1 against the grounds).
+    # Colours are CSS variables, so one SVG still serves every brand and mode.
+    halo_of: dict[str, str] = {}
+    boxes = group_boxes(arch)
+    for slot, g in enumerate(arch.groups, start=1):
+        gx, gy, gw, gh = boxes[g.id]
+        parts.append(
+            f'<rect x="{gx + pad}" y="{gy + pad}" width="{gw}" height="{gh}" rx="12" '
+            f'fill="var(--sc-cat-{slot}-fill)" stroke="var(--sc-cat-{slot})" stroke-width="1.5"/>'
+        )
+        parts.append(
+            f'<text x="{gx + pad + 12}" y="{gy + pad + 18}" font-size="11" font-weight="700" '
+            'fill="var(--sc-fg)" font-family="var(--rd-font-body)">'
+            f"{html.escape(g.label)}</text>"
+        )
+        for m in g.members:
+            halo_of[m] = f"var(--sc-cat-{slot}-fill)"
+
     # Edges first (they sit UNDER the halos + icons), as smooth curves that depart
     # and arrive along the correct side. A halo behind every icon means the rare
     # edge that passes behind one reads cleanly instead of tangling with it.
@@ -372,7 +478,8 @@ def compose_architecture_svg(arch: Arch, stencils: dict[str, dict[str, Any]]) ->
         ew, eh = float(entry["w"]), float(entry["h"])
         scale = ICON / max(ew, eh)
         parts.append(
-            f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="{r + 8:.1f}" fill="var(--rd-surface)"/>'
+            f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="{r + 8:.1f}" '
+            f'fill="{halo_of.get(n.id, "var(--rd-surface)")}"/>'
         )
         parts.append(
             f'<g transform="translate({cx - ew * scale / 2:.1f},{cy - eh * scale / 2:.1f}) '

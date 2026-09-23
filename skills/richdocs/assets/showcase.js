@@ -61,7 +61,11 @@ function applyTokens(b) {
       + "--rd-radius:" + (c.radius !== undefined ? c.radius : "12px") + ";"
       + "--rd-pill:" + (c.pill !== undefined ? c.pill : "999px") + ";"
       + "--rd-font-body:" + t.fonts.body + ";--rd-font-mono:" + t.fonts.mono + ";"
-      + "--rd-font-display:" + display + ";}";
+      + "--rd-font-display:" + display + ";"
+      // Categorical slots for SVG group containers: the slot, and a faint tint of it.
+      + t.canvas.plotly[m].series.map(function (hex, i) {
+          return "--sc-cat-" + (i + 1) + ":" + hex + ";--sc-cat-" + (i + 1) + "-fill:" + mixHex(hex, c.bg, 0.1) + ";";
+        }).join("") + "}";
   });
   var el = document.getElementById("sc-tokens-" + b.name);
   if (!el) {
@@ -519,11 +523,81 @@ function mixHex(a, b, t) {
   }).join("");
 }
 
+// ── category-colour variants ───────────────────────────────────────────────
+// The same diagrams with their groups told apart by the brand's categorical slots, assigned
+// in order of appearance (DT-CAT-1: sequential, for separation only). Fills are tints near
+// the ground carrying fg text; outlines are the slot itself, already solved to 3:1.
+// Each diagram family takes colour through whatever 11.4.1 supports: flowchart style and
+// classDef, a per-diagram themeCSS directive for erDiagram and gantt, sequence box rgb().
+function catSlot(th, series, i) {
+  var s = series[(i - 1) % series.length];
+  return { stroke: s, fill: mixHex(s, th.bg, 0.22), soft: mixHex(s, th.bg, 0.1), rgb: hexRgb(mixHex(s, th.bg, 0.16)) };
+}
+
+function initCss(css) {
+  return '%%{init: {"themeCSS": ' + JSON.stringify(css) + "}}%%\n";
+}
+
+function mermaidVariants(th, series) {
+  var c = function (i) { return catSlot(th, series, i); };
+  var detailGroups = [["edge", ["CDN", "LB"]], ["sec", ["WAF", "AUTH"]],
+    ["compute", ["API", "WRK", "AGT"]], ["data", ["PDB", "CACHE", "WH"]]];
+  var detail = MERMAID_DETAIL + "\n" + detailGroups.map(function (g, k) {
+    var s = c(k + 1);
+    return "  style " + g[0] + " fill:" + s.soft + ",stroke:" + s.stroke + ",color:" + th.fg + "\n"
+      // Nodes are surface cards with the slot outline: a slot is solved to 3:1 against the
+      // grounds, so a tint of the slot under its own outline would drop it below 3:1.
+      + "  classDef cat" + (k + 1) + " fill:" + th.surface + ",stroke:" + s.stroke + ",color:" + th.fg + ",stroke-width:2px\n"
+      + "  class " + g[1].join(",") + " cat" + (k + 1);
+  }).join("\n");
+
+  var erGroups = [["PROFILE", "SEED", "PARAMETER"], ["IR", "ROLE"], ["DTCG_TOKEN", "SURFACE"]];
+  // Each stage's entities read as one coloured block: header and attribute rows take the
+  // slot's faint tints (the same 10 % as a flowchart cluster), outlined in the slot itself.
+  // Mermaid ids entities as entity-<NAME without underscores>-<uuid>, and drops a directive
+  // whose themeCSS holds a quoted attribute value, so the selectors stay unquoted.
+  var er = initCss(erGroups.map(function (names, k) {
+    var s = c(k + 1);
+    var scope = function (part) {
+      return names.map(function (n) {
+        return "[id^=entity-" + n.replace(/[^A-Za-z0-9]/g, "") + "-] " + part;
+      }).join(",");
+    };
+    return scope(".entityBox") + "{fill:" + s.soft + " !important;stroke:" + s.stroke
+      + " !important;stroke-width:2px}"
+      + scope(".attributeBoxOdd") + "{fill:" + s.soft + " !important;stroke:" + s.stroke + " !important}"
+      + scope(".attributeBoxEven") + "{fill:" + mixHex(s.stroke, th.bg, 0.04) + " !important;stroke:"
+      + s.stroke + " !important}";
+  }).join("")) + MERMAID_ER;
+
+  var box = function (i, label) { var r = c(i).rgb; return "  box rgb(" + r.join(",") + ") " + label; };
+  var sequence = MERMAID_SEQUENCE.replace(
+    ["  actor U as Maintainer", "  participant S as Showcase", "  participant P as Pyodide",
+     "  participant G as generator.py", "  participant R as Renderers"].join("\n"),
+    ["  actor U as Maintainer", box(1, "Browser page"), "    participant S as Showcase",
+     "    participant R as Renderers", "  end", box(2, "Python runtime"),
+     "    participant P as Pyodide", "    participant G as generator.py", "  end"].join("\n"));
+
+  // gantt: mermaid classes each bar task|active|done + its section index (0-3), so one rule
+  // per section recolours every state; critical bars keep the status colour.
+  var gantt = initCss([0, 1, 2, 3].map(function (k) {
+    var s = c(k + 1);
+    // Bars carry fg text: 45 % is the strongest tint that keeps AA on every shipped brand.
+    return ".task" + k + "{fill:" + mixHex(s.stroke, th.bg, 0.35) + ";stroke:" + s.stroke + "}"
+      + ".active" + k + "{fill:" + mixHex(s.stroke, th.bg, 0.45) + ";stroke:" + s.stroke + "}"
+      + ".done" + k + "{fill:" + mixHex(s.stroke, th.bg, 0.15) + ";stroke:" + s.stroke + "}"
+      + ".taskText" + k + ",.activeText" + k + ",.doneText" + k + ",.critText" + k
+      + "{fill:" + th.fg + " !important}";
+  }).join("")) + MERMAID_GANTT;
+  return { detail: detail, er: er, sequence: sequence, gantt: gantt };
+}
+
 function drawMermaid() {
   var b = brand(), m = mode(), t = b.tokens, th = t.themes[m];
   var on = th.onAccent || th.bg;
   var tint = mixHex(th.accent, th.bg, 0.22);          // text-safe: near the ground, fg on top
   var crit = (t.status && t.status[m] && t.status[m].colours.critical) || th.accent;
+  var series = t.canvas.plotly[m].series;
   window.mermaid.initialize({
     startOnLoad: false, theme: "base", securityLevel: "loose",
     gantt: { leftPadding: 120, barHeight: 22, barGap: 6, fontSize: 12, sectionFontSize: 12 },
@@ -554,13 +628,22 @@ function drawMermaid() {
       doneTaskBkgColor: th.surface, doneTaskBorderColor: th.muted,
       critBkgColor: mixHex(crit, th.bg, 0.22), critBorderColor: crit,
       sectionBkgColor: th.surface, altSectionBkgColor: th.bg, sectionBkgColor2: th.surface,
-      gridColor: th.border, titleColor: th.fg
+      gridColor: th.border, titleColor: th.fg,
+      // Diagram families that colour by scale (pie, journey, timeline, mindmap) take the
+      // categorical slots in order.
+      cScale0: series[0], cScale1: series[1], cScale2: series[2], cScale3: series[3],
+      cScale4: series[4], cScale5: series[5], cScale6: series[6], cScale7: series[7],
+      cScale8: series[8 % series.length], cScale9: series[9 % series.length],
+      cScale10: series[10 % series.length], cScale11: series[11 % series.length]
     }
   });
+  var v = mermaidVariants(th, series);
   // Rendered mermaid SVG is not re-themable in place — always re-render every diagram.
   var jobs = [["sc-mermaid", MERMAID_OVERVIEW, "ov"], ["sc-mermaid-detail", MERMAID_DETAIL, "de"],
     ["sc-mermaid-er", MERMAID_ER, "er"], ["sc-mermaid-seq", MERMAID_SEQUENCE, "sq"],
-    ["sc-mermaid-gantt", MERMAID_GANTT, "gt"]];
+    ["sc-mermaid-gantt", MERMAID_GANTT, "gt"],
+    ["sc-mermaid-detail-cat", v.detail, "dec"], ["sc-mermaid-er-cat", v.er, "erc"],
+    ["sc-mermaid-seq-cat", v.sequence, "sqc"], ["sc-mermaid-gantt-cat", v.gantt, "gtc"]];
   return Promise.all(jobs.map(function (j) {
     var host = document.getElementById(j[0]);
     if (!host) return Promise.resolve();
@@ -921,6 +1004,21 @@ function runSql() {
 }
 
 // ── architecture (stencil SVG, drawio-editable) ────────────────────────────
+// A downloaded SVG or .drawio leaves the page's CSS behind, so every var(--x) (the
+// category slots on group containers included) becomes the active brand's value.
+function resolveVars(text) {
+  var cs = getComputedStyle(document.documentElement);
+  var once = function (str) {
+    return str.replace(/var\((--[A-Za-z0-9-]+)(?:,[^()]*)?\)/g, function (whole, name) {
+      var v = cs.getPropertyValue(name).trim();
+      return v ? v.replace(/"/g, "'") : whole;
+    });
+  };
+  var prev;
+  do { prev = text; text = once(text); } while (text !== prev);   // nested var() fallbacks
+  return text;
+}
+
 function mountArchitectures() {
   document.getElementById("sc-archs").innerHTML = SC.architectures.map(function (a, i) {
     return '<div class="sc-archwrap" style="margin-top:2rem">'
@@ -938,7 +1036,7 @@ function mountArchitectures() {
     btn.addEventListener("click", function () {
       var a = SC.architectures[Number(btn.dataset.arch)];
       var wrap = document.createElement("div");
-      wrap.innerHTML = a.svg;
+      wrap.innerHTML = resolveVars(a.svg);
       var svg = wrap.querySelector("svg");
       var name = a.title.toLowerCase().replace(/[^a-z0-9]+/g, "-");
       var blob, file;
