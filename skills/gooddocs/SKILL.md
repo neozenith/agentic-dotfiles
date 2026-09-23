@@ -44,13 +44,17 @@ When invoked on an explicit path set (the loop/schedule case), audit exactly tho
 
 ### 1b. Run the deterministic prose gate first
 
-The mechanical prose subset is checked by a bundled script, not by judgment.
+The mechanical prose subset is checked by the published [`@jpeakai/prose-gates`](https://www.npmjs.com/package/@jpeakai/prose-gates) package, not by judgment.
 Run it before fanning out subagents; its findings count as `confirmed-by-execution`:
 
 ```bash
-bun run .claude/skills/gooddocs/scripts/prose_gates.ts <files.md...> [--json]
-bun run .claude/skills/gooddocs/scripts/prose_gates.ts <files.md...> --fix   # sentence-per-line reflow only
+bunx @jpeakai/prose-gates@0.1.1 <files.md...> [--json] [--max-words N]
+bunx @jpeakai/prose-gates@0.1.1 <files.md...> --fix   # applies only fixes proven safe
 ```
+
+Where `bunx` is absent, `npx -y @jpeakai/prose-gates@0.1.1` runs the same command.
+A repo that declares the package as a dev dependency runs it as `prose-gates`.
+Exit codes: 0 clean, 1 findings remain, 2 usage error.
 
 Rules:
 - `PG001` mid-sentence line wrap,
@@ -67,7 +71,9 @@ PG006/PG007/PG008 findings are disguised flat lists; promote them to dot points.
 A PG009 finding is a two-level structure; promote it to a nested list (one parent per stacked line).
 Code blocks, inline code, tables, and YAML/TOML frontmatter are exempt by construction (it parses to mdast).
 Frontmatter is metadata rather than prose, so a document whose frontmatter carries long field values (an OKF decision record, a Jekyll or Astro page) is judged on its body alone.
-The exception: a fence tagged markdown/md is a template, and its body is audited recursively (check-only). `--fix` performs only the sentence-per-line reflow, never inside a fence; every other finding is report-only for the structure pass below.
+The exception: a fence tagged markdown/md is a template, and its body is audited recursively (check-only).
+`--fix` applies every autofix it can prove safe (all rules except PG002) and refuses any case it cannot read unambiguously.
+Whatever remains after `--fix` is report-only for the structure pass below.
 
 ### 1c. Structure pass — restructuring is part of the audit
 

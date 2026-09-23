@@ -74,6 +74,21 @@ export function apcaLc(fg: string, bg: string): number {
  * like `#1d4ed836` has no contrast of its own until you know what page background
  * bleeds through it (`compositeOver("#1d4ed836", "#ffffff")` → the visible box).
  */
+/**
+ * True when a colour carries alpha < 1, so its rendered value depends on whatever
+ * is painted behind it. Such a fill has no contrast of its own: it must be
+ * composited over a known backdrop before it can be scored.
+ */
+export function isTranslucent(color: string): boolean {
+  return alphaOf(color) < 1;
+}
+
+/** A colour's alpha channel, 0 (fully transparent) to 1 (opaque). */
+export function alphaOf(color: string): number {
+  const c = new Color(color).to("srgb");
+  return c.alpha ?? 1;
+}
+
 export function compositeOver(fg: string, bg: string): string {
   const f = new Color(fg).to("srgb");
   const b = new Color(bg).to("srgb");

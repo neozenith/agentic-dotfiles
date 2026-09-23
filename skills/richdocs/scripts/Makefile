@@ -47,24 +47,24 @@ debug:
 format: format-py
 
 format-py: $(PY_SRC)
-	$(UV) ruff format $(PY_SRC)
+	$(UV) --with ruff ruff format $(PY_SRC)
 
 format-check: format-check-py
 
 format-check-py: $(PY_SRC)
-	$(UV) ruff format --check $(PY_SRC)
+	$(UV) --with ruff ruff format --check $(PY_SRC)
 
 # ── Lint ───────────────────────────────────────────────────────────────────
 
 lint: lint-py
 
 lint-py: $(PY_SRC)
-	$(UV) ruff check --line-length 120 $(PY_SRC)
+	$(UV) --with ruff ruff check --line-length 120 $(PY_SRC)
 
 lint-fix: lint-fix-py
 
 lint-fix-py: $(PY_SRC)
-	$(UV) ruff check --fix --line-length 120 $(PY_SRC)
+	$(UV) --with ruff ruff check --fix --line-length 120 $(PY_SRC)
 
 # ── Typecheck ──────────────────────────────────────────────────────────────
 

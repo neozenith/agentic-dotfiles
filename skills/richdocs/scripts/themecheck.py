@@ -27,6 +27,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from itertools import pairwise
 from typing import Any
 
 from md2html import THEMES_DIR, available_themes
@@ -183,14 +184,13 @@ def check_ramps(name: str, mode: str, plot: dict[str, Any]) -> list[str]:
     if seq:
         ls = [lightness(c) for c in seq]
         if not (
-            all(x < y for x, y in zip(ls, ls[1:], strict=False))
-            or all(x > y for x, y in zip(ls, ls[1:], strict=False))
+            all(x < y for x, y in pairwise(ls)) or all(x > y for x, y in pairwise(ls))
         ):
             failures.append(
                 f"{name}/{mode}: sequential ramp is not monotone in lightness — "
                 "the steps cannot be ranked"
             )
-        for i, (x, y) in enumerate(zip(ls, ls[1:], strict=False)):
+        for i, (x, y) in enumerate(pairwise(ls)):
             if abs(x - y) < DL_FLOOR:
                 failures.append(
                     f"{name}/{mode}: sequential steps {i + 1}/{i + 2} differ by "
@@ -202,8 +202,7 @@ def check_ramps(name: str, mode: str, plot: dict[str, Any]) -> list[str]:
     if mut:
         ls = [lightness(c) for c in mut]
         if not (
-            all(x < y for x, y in zip(ls, ls[1:], strict=False))
-            or all(x > y for x, y in zip(ls, ls[1:], strict=False))
+            all(x < y for x, y in pairwise(ls)) or all(x > y for x, y in pairwise(ls))
         ):
             failures.append(f"{name}/{mode}: muted greys are not monotone in lightness")
 
@@ -285,7 +284,7 @@ def check_series(
                     f"{name}/{mode}: {key} {i + 1} — {colour} on {plot['plot']} "
                     f"= {got:.2f}:1 (needs {AA_UI}) · a mark you cannot see is not a mark"
                 )
-    for i, (a, b) in enumerate(zip(series, series[1:], strict=False)):
+    for i, (a, b) in enumerate(pairwise(series)):
         got = cvd_distance(a, b)
         if got < CVD_RELIEF:
             failures.append(

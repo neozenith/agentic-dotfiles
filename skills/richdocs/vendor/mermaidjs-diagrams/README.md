@@ -96,7 +96,7 @@ bash .claude/skills/mermaidjs-diagrams/scripts/render_mermaid.sh path/to/doc.md
 make -C .claude/skills/mermaidjs-diagrams/scripts cli-demo
 ```
 
-See [`SKILL.md`](SKILL.md) for usage, [`resources/`](resources/) for deep dives,
+See [`mermaidjs-diagrams.md`](mermaidjs-diagrams.md) for usage, [`resources/`](resources/) for deep dives,
 [render triage](resources/render_troubleshooting.md) when a render fails for
 reasons that aren't the diagram, and [`scripts/CLAUDE.md`](scripts/CLAUDE.md)
 for the maintenance guide.

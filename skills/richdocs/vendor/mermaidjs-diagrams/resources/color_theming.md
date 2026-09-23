@@ -247,9 +247,29 @@ The last two hex digits control alpha/opacity. `00` = fully transparent, `ff` = 
 opaque. Intermediate values create semi-transparent overlays:
 
 ```
-classDef sgTransparent fill:#3b82f620,stroke:#3b82f6,color:#1e293b
+classDef sgTransparent fill:#3b82f620,stroke:#3b82f6
 %%                              ^^ 20 = ~12% opacity -- very subtle tint
+%% NOTE: no color: here. See the warning below.
 ```
+
+> **Never** pair a translucent fill with a fixed `color:`.
+> The alpha lets the page background through, so the box tracks the reader's theme.
+> Your fixed text colour does not track it.
+> `fill:#3b82f620,color:#1e293b` measures 12.64:1 on GitHub's light canvas.
+> On its dark canvas the same pair measures 1.13:1.
+> No alpha value rescues it: dark-mode contrast peaks near 2.63:1 around `c0`.
+> Even a fully opaque fill reaches only 3.98:1, because the hue itself is too close.
+> `mermaid_contrast.ts` scores translucent fills on both canvases and gates on the worse.
+>
+> Two ways to stay readable:
+>
+> - **You control the text** (GitHub, `mmdc`): use an opaque fill with your `color:`.
+>   `fill:#dbeafe,color:#1e293b` scores 11.99:1 on both canvases.
+>   An opaque fill does not depend on what is painted behind it.
+> - **The host controls the text** (Material for MkDocs): drop `color:` and keep the fill translucent.
+>   The forced text and the box then track the theme together.
+>   That pattern lives in [`color_host_themed_renderers.md`](color_host_themed_renderers.md).
+>   Audit it with `--profile mkdocs-material`.
 
 | Alpha suffix | Opacity | Use case |
 |-------------|---------|----------|

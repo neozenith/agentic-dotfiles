@@ -26,6 +26,7 @@ claim about what the skill guarantees.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from pytest_xharness_eval import CaseOutput, evalcase
@@ -43,21 +44,12 @@ from pytest_xharness_eval.verify import (
     facets,
 )
 
-SKILL = "mermaidjs-diagrams"
+EVALS = Path(__file__).resolve().parent
+SKILL = re.search(r"^name:\s*(\S+)", (EVALS.parent / "SKILL.md").read_text(encoding="utf-8"), re.MULTILINE)[1]
 FIXTURE = "unstyled_diagram"  # evals/fixtures/unstyled_diagram/
 TARGET = "ARCHITECTURE.md"
-EVALS = Path(__file__).resolve().parent
 
 # The task is what a user types *after* naming the skill, and nothing more (ADR 0044).
-# It matches the skill's own `argument-hint: "[markdown-file]"`, so this is literally what
-# a human would run: `/mermaidjs-diagrams ARCHITECTURE.md ...` on Claude Code,
-# `$mermaidjs-diagrams ARCHITECTURE.md ...` on Codex. It does not mention SKILL.md, an
-# allowed directory, or a CLI -- registering and naming the skill is the harness's job.
-#
-# The two constraints that remain are about the *measurement*, not the harness: without
-# "edit in place" an agent can satisfy every check by writing a second, styled copy and
-# leaving the original exactly as unstyled as it found it; without "no images" the cell
-# pays for a headless render that this case does not grade.
 TASK = "ARCHITECTURE.md -- apply the mandatory colour theming to its diagram, editing the file in place. Do not add new files and do not render images."
 
 

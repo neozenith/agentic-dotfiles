@@ -23,11 +23,12 @@
 // Exit codes: 0 all pairs >= AA, 1 any pair fails AA (text <4.5 or border <3).
 
 import { parseArgs } from "node:util";
-import { existsSync, readdirSync, statSync } from "node:fs";
-import { basename, dirname, extname, join, resolve } from "node:path";
+import { existsSync } from "node:fs";
+import { basename, dirname, join, resolve } from "node:path";
 
-import { extractMarkdownFences } from "./mermaid_complexity.ts";
+import { collectFiles as collectDiagramFiles, extractMarkdownFences } from "./mermaid_complexity.ts";
 import {
+  alphaOf,
   compositeOver,
   extractStyleDirectives,
   wcagAssess,
@@ -55,6 +56,18 @@ const MKDOCS_MATERIAL = {
   dark: { bg: "#1e2129", text: "hsl(225 18% 86% / 0.82)" },
 } as const;
 
+// GitHub's page canvas, which a translucent fill composites against. The dark
+// value is measured, not assumed: sampling a rendered diagram in dark mode gives
+// #0d1117 both outside the diagram and inside its frame, so the Mermaid container
+// paints no surface of its own and the page canvas is the true backdrop.
+// Light is GitHub's --color-canvas-default. See docs/issues/mermaidjs-diagrams.
+const GITHUB = {
+  light: { bg: "#ffffff" },
+  dark: { bg: "#0d1117" },
+} as const;
+
+const THEMES: Theme[] = ["light", "dark"];
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export type PairKind = "text" | "border";
@@ -80,6 +93,12 @@ export interface SkippedDirective {
   directive_kind: StyleDirective["kind"];
   line: number;
   reason: string; // e.g. "no fill declared", "no color or stroke declared"
+  // A directive the gate could not score but which the profile REQUIRES to be
+  // scoreable — a github classDef with a fill and no color:, or a colour that
+  // will not parse. Counted in fail_count: an unscoreable mandatory pair is a
+  // failure to audit, and reporting it as an informational skip is how a gate
+  // exits 0 on a diagram it never actually checked.
+  blocking?: boolean;
 }
 
 export interface DiagramContrastReport {
@@ -134,50 +153,82 @@ export function scoreDirectives(directives: StyleDirective[]): {
     const fill = d.properties.fill;
     const color = d.properties.color;
     const stroke = d.properties.stroke;
-
-    if (!fill) {
-      // Without fill we have no background anchor for either pair.
+    const note = (reason: string, blocking?: boolean): void => {
       skipped.push({
         selector: d.selector,
         directive_kind: d.kind,
         line: d.line,
-        reason:
-          color || stroke ? "no fill declared — can't anchor text/border contrast" : "no color properties declared",
+        reason,
+        ...(blocking && { blocking }),
       });
+    };
+
+    if (!fill) {
+      // Without a fill there is no background anchor, and no fill to pair a
+      // colour with — the profile's contract does not apply.
+      note(color || stroke ? "no fill declared — can't anchor text/border contrast" : "no color properties declared");
       continue;
     }
 
-    if (color) {
-      try {
-        pairs.push(scorePair("text", d, color, fill));
-      } catch (err) {
-        skipped.push({
-          selector: d.selector,
-          directive_kind: d.kind,
-          line: d.line,
-          reason: `text pair unparseable: ${(err as Error).message}`,
-        });
-      }
+    // A translucent fill has no colour of its own; it renders as whatever the page
+    // canvas leaves showing through. Score it on BOTH GitHub canvases and let the
+    // worse result gate, so a fill that reads in one theme and vanishes in the
+    // other cannot pass. An opaque fill resolves identically on both, so it keeps
+    // its single untagged pair.
+    let alpha: number;
+    try {
+      alpha = alphaOf(fill);
+    } catch (err) {
+      note(`fill unparseable: ${(err as Error).message}`, true);
+      continue;
     }
-    if (stroke) {
-      try {
-        pairs.push(scorePair("border", d, stroke, fill));
-      } catch (err) {
-        skipped.push({
-          selector: d.selector,
-          directive_kind: d.kind,
-          line: d.line,
-          reason: `border pair unparseable: ${(err as Error).message}`,
-        });
-      }
+
+    // A fully transparent fill (alpha 0) declares "no box" — the pure-grouping
+    // subgraph wrapper in color_theming.md. There is no painted background to
+    // contrast against, and the label falls to the renderer's own theme text,
+    // which already tracks light and dark. Nothing to audit, and no author
+    // decision to gate: same standing as a directive with no fill at all.
+    if (alpha === 0) {
+      note("fill is fully transparent — no box to anchor contrast; renderer theme supplies the text");
+      continue;
     }
-    if (!color && !stroke) {
-      skipped.push({
-        selector: d.selector,
-        directive_kind: d.kind,
-        line: d.line,
-        reason: "only fill declared — text/border use theme defaults",
-      });
+    const translucent = alpha < 1;
+
+    // [box, theme] pairs to score this directive against.
+    const boxes: Array<[string, Theme | undefined]> = [];
+    if (translucent) {
+      for (const theme of THEMES) boxes.push([compositeOver(fill, GITHUB[theme].bg), theme]);
+    } else {
+      boxes.push([fill, undefined]);
+    }
+
+    // Under `github` the author owns the label text, so SKILL.md §2 requires a
+    // `color:` beside every `fill:`. Without one the text falls back to a Mermaid
+    // theme default that varies with the reader's theme, so the pair the gate
+    // exists to check cannot be checked. That is a blocking gap, not a skip.
+    if (!color) {
+      note(
+        "no color: declared — github profile requires a color: beside every fill: " +
+          "(if the host forces label text, audit with --profile mkdocs-material)",
+        true,
+      );
+    }
+
+    for (const [box, theme] of boxes) {
+      if (color) {
+        try {
+          pairs.push({ ...scorePair("text", d, color, box), ...(theme && { theme }) });
+        } catch (err) {
+          note(`text pair unparseable: ${(err as Error).message}`, true);
+        }
+      }
+      if (stroke) {
+        try {
+          pairs.push({ ...scorePair("border", d, stroke, box), ...(theme && { theme }) });
+        } catch (err) {
+          note(`border pair unparseable: ${(err as Error).message}`, true);
+        }
+      }
     }
   }
 
@@ -345,7 +396,8 @@ export async function auditFile(
       pairs: offsetPairs,
       skipped: offsetSkipped,
       pass_count: offsetPairs.filter((p) => p.passes).length,
-      fail_count: offsetPairs.filter((p) => !p.passes && !p.advisory).length,
+      fail_count:
+        offsetPairs.filter((p) => !p.passes && !p.advisory).length + offsetSkipped.filter((s) => s.blocking).length,
     });
   }
   return out;
@@ -364,7 +416,7 @@ export function auditContent(
     pairs,
     skipped,
     pass_count: pairs.filter((p) => p.passes).length,
-    fail_count: pairs.filter((p) => !p.passes && !p.advisory).length,
+    fail_count: pairs.filter((p) => !p.passes && !p.advisory).length + skipped.filter((s) => s.blocking).length,
   };
 }
 
@@ -410,6 +462,14 @@ function formatReport(r: DiagramContrastReport): string {
   }
 
   for (const s of r.skipped) {
+    // A blocking skip is a failure to audit a mandatory pair, so it reads like a
+    // failure rather than an aside — it is what makes the exit code non-zero.
+    if (s.blocking) {
+      lines.push(
+        `  ${C.red}✗${C.reset} L${String(s.line).padStart(3)} ${s.directive_kind} ${C.bold}${s.selector}${C.reset}  ${C.red}unaudited${C.reset}: ${s.reason}`,
+      );
+      continue;
+    }
     lines.push(
       `  ${C.dim}- L${String(s.line).padStart(3)} ${s.directive_kind} ${s.selector}  skipped: ${s.reason}${C.reset}`,
     );
@@ -428,29 +488,10 @@ function formatSummary(reports: DiagramContrastReport[]): string {
 
 // ─── CLI ─────────────────────────────────────────────────────────────────────
 
-const DIRECTORY_FILE_EXTS = new Set([".mmd", ".md", ".markdown"]);
-
-function collectFiles(paths: string[]): string[] {
-  const out: string[] = [];
-  for (const p of paths) {
-    const abs = resolve(p);
-    try {
-      const st = statSync(abs);
-      if (st.isDirectory()) {
-        for (const name of readdirSync(abs)) {
-          if (DIRECTORY_FILE_EXTS.has(extname(name).toLowerCase())) {
-            out.push(join(abs, name));
-          }
-        }
-      } else {
-        out.push(abs);
-      }
-    } catch {
-      console.error(`warning: cannot stat ${abs}`);
-    }
-  }
-  return out;
-}
+// Shared with mermaid_complexity.ts: both gates must scan the same file set, or
+// a diagram can clear one and never be seen by the other.
+const collectFiles = (paths: string[]): string[] =>
+  collectDiagramFiles(paths, (p) => console.error(`warning: cannot read ${p}`));
 
 function printHelp(): void {
   console.log(`\

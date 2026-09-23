@@ -24,6 +24,7 @@ only the second is the behaviour the skill mandates.
 
 from __future__ import annotations
 
+import re
 import subprocess
 from pathlib import Path
 
@@ -36,14 +37,13 @@ from pytest_xharness_eval.verify import (
     facets,
 )
 
-SKILL = "mermaidjs-diagrams"
+SKILL_DIR = Path(__file__).resolve().parent.parent
+SKILL = re.search(r"^name:\s*(\S+)", (SKILL_DIR / "SKILL.md").read_text(encoding="utf-8"), re.MULTILINE)[1]
 FIXTURE = "complex_diagram"  # evals/fixtures/complex_diagram/
 TARGET = "ARCHITECTURE.md"
-SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
+SCRIPTS = SKILL_DIR / "scripts"
 
-# What a user types after naming the skill. The skill's own doctrine supplies the budgets
-# and the pattern, so the task does not restate them: naming the file and the intent is
-# the whole ask, and a task that re-taught the skill its own rules would measure the task.
+# What a user types after naming the skill. 
 TASK = (
     "ARCHITECTURE.md -- its flowchart is over the complexity budget. Restructure it into "
     "the dual-density pattern, editing the file in place. Do not add new files and do not "

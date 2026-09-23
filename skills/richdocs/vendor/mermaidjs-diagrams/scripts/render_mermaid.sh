@@ -202,6 +202,13 @@ render_variant() {
   output="${OUTPUT_BASE}/${variant}/${input_path}/${input_filename}"
   mkdir -p "$output_target"
 
+  # Clear artifacts from a previous run BEFORE the first attempt. verify_output_dir
+  # globs this same pattern, so a stale PNG left in place would satisfy the check
+  # when mmdc exits 0 without writing — turning a silent render failure into a
+  # reported success. Done once, not per retry: a retry that succeeds against a
+  # cleared directory has genuinely rendered.
+  rm -f "${output_target}${stem}"-*.png "${output_target}${stem}"-*.svg
+
   while [ "$attempt" -lt 3 ]; do
     attempt=$((attempt + 1))
     status=0
