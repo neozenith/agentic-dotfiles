@@ -18,13 +18,32 @@
 <body>
 
 <div class="sc-bar">
+  <button class="sc-nav-toggle" id="sc-nav-toggle" aria-controls="sc-nav" aria-expanded="true"
+    aria-label="Toggle section navigation">&#9776;</button>
   <span class="sc-title" id="sc-title">{{TITLE}}</span>
   <div class="sc-seg" id="sc-brands" role="group" aria-label="Brand"></div>
+  <button class="sc-tune-toggle" id="sc-tune-toggle" aria-controls="sc-tune" aria-expanded="false" hidden>Tune seed</button>
   <div class="sc-seg" id="sc-modes" role="group" aria-label="Mode">
     <button data-mode="light" aria-pressed="true">Light</button>
     <button data-mode="dark" aria-pressed="false">Dark</button>
   </div>
 </div>
+
+<nav class="sc-nav" id="sc-nav" aria-label="Sections"></nav>
+
+<aside class="sc-tune" id="sc-tune" aria-label="Seed parameters">
+  <div class="sc-tune-head">
+    <strong>Seed parameters</strong>
+    <button class="sc-mini" id="sc-tune-reset">Reset</button>
+    <button class="sc-mini" id="sc-tune-close" aria-label="Close seed parameters">Close</button>
+  </div>
+  <p class="sc-tune-status" id="sc-tune-status" aria-live="polite">Changes run this brand's own
+    generator in the browser. Python loads on first change (about 10 MB, once).</p>
+  <div id="sc-tune-controls"></div>
+  <h4>seed.json</h4>
+  <pre class="sc-tune-seed" id="sc-tune-seed"></pre>
+  <button class="sc-mini" id="sc-tune-copy">Copy seed.json</button>
+</aside>
 
 <div class="wrap">
 
@@ -45,12 +64,23 @@
     <h2>The palette, doing its job.</h2>
     <h3>Theme surfaces</h3>
     <div class="sc-ramp" id="sc-theme-ramp"></div>
-    <h3>Chart series — the categorical order</h3>
-    <p style="font-size:.9rem">Assigned in fixed order, never cycled. Any prefix of the
-      sequence must stay separated.</p>
-    <div class="sc-ramp" id="sc-series-ramp"></div>
     <h3>Category colours</h3>
-    <div class="sc-ramp" id="sc-cat-ramp"></div>
+    <p style="font-size:.9rem">Every categorical encoding uses these: chart series, graph
+      clusters, any class that needs telling apart. Assigned in fixed order, never cycled, and
+      any prefix of the sequence must stay separated. Every slot the brand ships is shown.</p>
+    <div class="sc-ramp sc-ramp-wrap" id="sc-series-ramp"></div>
+  </section>
+
+  <section>
+    <div class="sc-eyebrow">Lineage</div>
+    <h2>Where every colour came from.</h2>
+    <p>A generated theme can ship a <code>lineage.json</code> beside its brandpack. Two Sankey
+      charts trace it: the seed's parameters into the intermediate representation (IR), and the
+      IR's roles into the keys this page renders. Each band is one recorded dependency, and each
+      role is painted in its own colour for the current mode. Hover a band to see its ends.</p>
+    <p id="sc-lineage-none" class="sc-note" hidden>This brand ships no <code>lineage.json</code>.
+      It was authored by hand, so there is no pipeline to trace.</p>
+    <div id="sc-lineage"></div>
   </section>
 
   <section>
@@ -171,15 +201,29 @@
   </section>
 
   <section>
-    <div class="sc-eyebrow">Mermaid diagram · dual density</div>
-    <h2>One system, two zoom levels.</h2>
+    <div class="sc-eyebrow">Mermaid diagrams</div>
+    <h2>Five diagram families, one palette.</h2>
     <p style="font-size:.9rem">The same architecture as an at-a-glance overview and a
-      detailed, clustered view. Dense diagrams are where layout, edge routing, and the
-      themed palette are actually stress-tested — a five-box flow proves nothing.</p>
+      detailed, clustered view, then an entity model, a sequence and a plan. Dense diagrams
+      are where layout, edge routing, and the themed palette are actually stress-tested — a
+      five-box flow proves nothing.</p>
     <h3>Overview</h3>
     <div class="sc-panel"><div class="sc-mermaid" id="sc-mermaid"></div></div>
     <h3>Detail — subgraph clusters</h3>
     <div class="sc-panel"><div class="sc-mermaid" id="sc-mermaid-detail"></div></div>
+    <h3>Entity relationships — the profile store</h3>
+    <p style="font-size:.9rem">Keys, cardinalities and a self-referencing relationship: a role
+      derived from another role.</p>
+    <div class="sc-panel"><div class="sc-mermaid" id="sc-mermaid-er"></div></div>
+    <h3>Sequence — one live-tuning round trip</h3>
+    <p style="font-size:.9rem">Numbered messages, activations, an optional branch, a loop, a
+      note and parallel work.</p>
+    <div class="sc-panel"><div class="sc-mermaid" id="sc-mermaid-seq"></div></div>
+    <h3>Gantt — the refactor plan</h3>
+    <p style="font-size:.9rem">Done, active, planned and critical tasks, dependencies and a
+      milestone. Planned bars wear the brand fill; the rest are tints, so every label keeps
+      its contrast.</p>
+    <div class="sc-panel"><div class="sc-mermaid sc-mermaid-wide" id="sc-mermaid-gantt"></div></div>
   </section>
 
   <section>

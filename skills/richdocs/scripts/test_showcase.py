@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from argparse import Namespace
 from pathlib import Path
@@ -179,9 +180,126 @@ def test_gallery_carries_the_oklch_palette_scene(tmp_path: Path) -> None:
     assert 'id="sc-oklch-readout"' in html
     js = showcase.SHOWCASE_JS.read_text(encoding="utf-8")
     start = js.index("function drawDeck()")
-    draw_deck = js[start:js.index("\n}\n", start)]
+    draw_deck = js[start : js.index("\n}\n", start)]
     assert "renderOklch();" in draw_deck
     assert "targetChroma" in js
+
+
+def _theme_with_lineage(tmp_path: Path, lineage: dict | None) -> md2html.Theme:
+    tokens = tmp_path / "design-tokens.json"
+    tokens.write_text("{}", encoding="utf-8")
+    if lineage is not None:
+        (tmp_path / "lineage.json").write_text(json.dumps(lineage), encoding="utf-8")
+    return md2html.Theme(name="t", tokens_path=tokens, css="")
+
+
+def test_lineage_is_optional(tmp_path: Path) -> None:
+    """A hand-authored theme has no lineage; the payload says so rather than inventing one."""
+    assert showcase._load_lineage(_theme_with_lineage(tmp_path, None)) is None
+
+
+def test_lineage_is_carried_when_present(tmp_path: Path) -> None:
+    lineage = {
+        "sankeys": [
+            {
+                "title": "Seed → IR",
+                "nodes": [{"id": "a", "label": "a"}, {"id": "b", "label": "b"}],
+                "links": [{"source": "a", "target": "b"}],
+            }
+        ]
+    }
+    assert showcase._load_lineage(_theme_with_lineage(tmp_path, lineage)) == lineage
+
+
+def test_lineage_link_to_an_unknown_node_crashes(tmp_path: Path) -> None:
+    """A dangling link would silently drop a band in Plotly; fail the build instead."""
+    lineage = {
+        "sankeys": [
+            {
+                "title": "x",
+                "nodes": [{"id": "a"}],
+                "links": [{"source": "a", "target": "zz"}],
+            }
+        ]
+    }
+    with pytest.raises(SystemExit, match="unknown node"):
+        showcase._load_lineage(_theme_with_lineage(tmp_path, lineage))
+
+
+def test_gallery_carries_lineage_section_and_section_nav(tmp_path: Path) -> None:
+    showcase.main(_args(tmp_path))
+    html = (tmp_path / "showcase.html").read_text(encoding="utf-8")
+    assert 'id="sc-lineage"' in html
+    assert 'id="sc-nav"' in html
+    assert 'aria-controls="sc-nav"' in html
+    js = showcase.SHOWCASE_JS.read_text(encoding="utf-8")
+    start = js.index("function render()")
+    render = js[start : js.index("\n}\n", start)]
+    assert "drawLineage();" in render
+    # every storage access is guarded: a private window must not break the page
+    storage = [ln for ln in js.splitlines() if "localStorage." in ln]
+    assert storage
+    assert all("try {" in ln for ln in storage), storage
+
+
+def _theme_with_generator(
+    tmp_path: Path, manifest: dict | None, source: str | None
+) -> md2html.Theme:
+    theme = _theme_with_lineage(tmp_path, None)
+    if manifest is not None:
+        (tmp_path / "generator.json").write_text(json.dumps(manifest), encoding="utf-8")
+    if source is not None:
+        (tmp_path / "generator.py").write_text(source, encoding="utf-8")
+    return theme
+
+
+GEN_MANIFEST = {
+    "entry": "generate",
+    "seed": {"hue": 1},
+    "params": [{"key": "hue", "default": None}],
+}
+
+
+def test_generator_is_optional(tmp_path: Path) -> None:
+    assert showcase._load_generator(_theme_with_generator(tmp_path, None, None)) is None
+
+
+def test_generator_carries_manifest_and_source(tmp_path: Path) -> None:
+    source = "def generate(seed):\n    return {'tokens': {}}\n"
+    gen = showcase._load_generator(
+        _theme_with_generator(tmp_path, GEN_MANIFEST, source)
+    )
+    assert gen == {"manifest": GEN_MANIFEST, "source": source}
+
+
+def test_generator_manifest_without_its_module_crashes(tmp_path: Path) -> None:
+    """A manifest promising live tuning with nothing to run must fail the build, not the page."""
+    with pytest.raises(SystemExit, match="no generator.py"):
+        showcase._load_generator(_theme_with_generator(tmp_path, GEN_MANIFEST, None))
+
+
+def test_generator_manifest_missing_a_key_crashes(tmp_path: Path) -> None:
+    with pytest.raises(SystemExit, match="missing 'params'"):
+        showcase._load_generator(
+            _theme_with_generator(
+                tmp_path, {"entry": "generate", "seed": {}}, "x = 1\n"
+            )
+        )
+
+
+def test_live_tuning_is_wired_and_lazy(tmp_path: Path) -> None:
+    """Pyodide is pinned, loaded only on demand, and the panel follows the brand switch."""
+    showcase.main(_args(tmp_path))
+    html = (tmp_path / "showcase.html").read_text(encoding="utf-8")
+    assert 'id="sc-tune"' in html
+    assert "pyodide@" in html
+    js = showcase.SHOWCASE_JS.read_text(encoding="utf-8")
+    start = js.index("function setBrand(")
+    set_brand = js[start : js.index("\n}\n", start)]
+    assert "syncTune();" in set_brand
+    assert 'loadScript("pyodide"' in js
+    boot = js[js.index("// ── boot / re-render") :]
+    assert "initPy(" not in boot  # never eager: ~10 MB only when a control changes
 
 
 def test_build_parser_defaults() -> None:

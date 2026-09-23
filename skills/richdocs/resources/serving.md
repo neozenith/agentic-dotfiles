@@ -57,6 +57,7 @@ versions** — floating majors is how a working document breaks a month later.
 | deck.gl | 9.0.36 | `cdn.jsdelivr.net/npm/deck.gl@9.0.36/dist.min.js` |
 | MapLibre GL (vector basemap) | 4.7.1 | `…/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js` + `…/maplibre-gl.css` |
 | duckdb-wasm (in-browser SQL) | 1.32.0 | `…/npm/@duckdb/duckdb-wasm@1.32.0/+esm` (ESM; **pin the stable, not `latest` = a -dev build**) |
+| Pyodide (showcase live generator) | 314.0.7 | `…/npm/pyodide@314.0.7/pyodide.js` (runtime files load from the same directory; ~10 MB once) |
 | Tailwind (play CDN) | 3.4.16 | `cdn.jsdelivr.net/npm/tailwindcss-cdn@3.4.16/tailwindcss.js` (or `cdn.tailwindcss.com/3.4.16`) |
 | Google Fonts | n/a | `fonts.googleapis.com/css2?family=…&display=swap` |
 

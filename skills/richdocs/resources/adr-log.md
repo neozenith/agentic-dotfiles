@@ -7,6 +7,53 @@ before changing anything: each entry carries a **Lens**, a forward-looking rule 
 apply to the next related decision.
 
 
+### ADR-022 — A generated theme may ship its generator; the showcase runs it live
+
+- **Status:** accepted (extends ADR-021)
+- **Context:** judging a generated theme meant editing a seed, re-running its
+  pipeline and rebuilding the showcase for every change. The producer is a
+  stdlib Python module, so the browser can run the same code instead of a port.
+- **Decision:** a theme directory may hold `generator.json` (`entry`, `seed`,
+  `params`: each `{key, default, source, min?, max?, step?, keywords?}`, and an
+  optional `resolved`) plus `generator.py`, whose `entry(seed)` returns
+  `{"tokens", "lineage"?, "resolved"?}`. `resolved` maps a parameter to the
+  number its keyword (`cusp`, `brand`, `auto`) produced, per mode if they differ,
+  so a keyword-mode control shows a real value.
+  `showcase.py` embeds both and crashes on a manifest with no module or a
+  missing key. For a brand that has one, the showcase shows a **Tune seed**
+  drawer: one control per parameter, marked stated or default, and the live
+  `seed.json`. A change loads Pyodide (pinned, lazy, ~10 MB once), runs the
+  module, and re-renders the page from its output. Reset restores the shipped
+  theme without Python.
+- **Consequences:** the first change waits for Pyodide (about 5 s); later ones
+  take about 0.1 s. richdocs still never computes a theme: it hosts the
+  producer's code, and an error from it is shown while the last good theme
+  stays up. Hand-authored brands get no drawer.
+- **Lens:** when a page needs to recompute what a producer made, run the
+  producer's own code, never a re-implementation of it.
+
+### ADR-021 — A generated theme may ship its lineage; the showcase traces it
+
+- **Status:** accepted (extends ADR-018)
+- **Context:** themes produced by a token pipeline (seed → IR → brandpack) looked
+  wrong in ways the swatches could not explain, because nothing showed which
+  parameter or role a rendered colour came from. Hand-authored themes have no
+  such history.
+- **Decision:** a theme directory may hold an optional `lineage.json` beside
+  `design-tokens.json`: `{"sankeys": [{title, caption, nodes: [{id, label,
+  group, colour: {light, dark}}], links: [{source, target, value?}]}]}`.
+  `showcase.py` carries it in the payload and crashes on a link that names an
+  unknown node. The showcase draws each entry as a Plotly Sankey, painting nodes
+  in their own colour for the current mode. A brand without one gets a one-line
+  note, never an invented diagram. The page also gains a collapsible section
+  navigation built from its own headings.
+- **Consequences:** richdocs renders lineage but never computes it; the
+  producer owns the graph. Bands whose source colour sits within 1.6:1 of the
+  canvas are drawn in the text colour, so surface roles stay visible.
+- **Lens:** when a brand's provenance exists, show it from the producer's own
+  record; when it does not, say so. Never reconstruct lineage from the rendered
+  values.
+
 ### ADR-020 — A vendored copy carries no `SKILL.md`
 
 - **Status:** accepted (refines ADR-007)

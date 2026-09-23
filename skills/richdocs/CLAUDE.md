@@ -30,12 +30,12 @@ make -C .claude/skills/richdocs/scripts ci    # gate: must exit 0 before handoff
 | `assets/viewer.js` | runtime renderer (marked → fenced-block upgrades → theme flip). **Placeholder-free by contract** — reads generation-time values from the `#rd-config` JSON block |
 | `assets/viewer-cytoscape.js` | graph styling + render (`rdRenderCytoscape`). Inlined *before* `viewer.js` so its functions are hoisted. Placeholder-free (ADR-008) |
 | `assets/viewer-deckgl.js` | 3D / geographic render (`rdRenderDeckGL`) + the OKLab/OKLCH maths and colour-space projections. Inlined *before* `viewer.js`, same hoisting contract (ADR-014) |
-| `resources/themes/<name>/` | a built-in brand theme: `design-tokens.json` (required) + `theme.css` (optional). Selected with `--theme`; default brand is `osakanights` (ADR-009, ADR-018) |
+| `resources/themes/<name>/` | a built-in brand theme: `design-tokens.json` (required) + `theme.css` (optional) + `lineage.json` + `generator.{json,py}` (optional, ADR-021, ADR-022). Selected with `--theme`; default brand is `osakanights` (ADR-009, ADR-018) |
 | `tmp/richdocs/theme/<name>/` | **optional** project-local theme override (cwd-relative, gitignored). Shadows the built-in of the same name and adds project-only themes; absent ⇒ built-in set only (ADR-018) |
 | `scripts/Makefile` | fix/ci contract per `.claude/rules/claude_skills/scripts.md` |
 | `assets/stencils.json.zip` | vendored draw.io icon packs (~3.4 MB; see `assets/NOTICE`) |
 | `assets/design-tokens.json` | default neutral brandpack (schema in `rich-blocks.md`) |
-| `resources/adr-log.md` | the **ADR log** (ADR-001…020) — decision lenses; split out of this file for the 500-line invariant |
+| `resources/adr-log.md` | the **ADR log** (ADR-001…022) — decision lenses; split out of this file for the 500-line invariant |
 | `resources/learned/` | self-curated adjudications/facts (statefulness Pathway 2) — read before re-litigating a past failure |
 | `vendor/mermaidjs-diagrams/` | wholesale vendored mermaid toolchain (parse/complexity + contrast gates, theming references) — refresh per ADR-007, never cherry-pick; its entrypoint is `mermaidjs-diagrams.md`, never a second `SKILL.md` |
 
@@ -55,7 +55,7 @@ make -C .claude/skills/richdocs/scripts ci    # gate: must exit 0 before handoff
 
 ## ADR log
 
-The full decision log (ADR-001 … ADR-020), each entry carrying its **Lens**, lives in
+The full decision log (ADR-001 … ADR-022), each entry carrying its **Lens**, lives in
 [`resources/adr-log.md`](resources/adr-log.md). Read it before changing anything and
 apply each ADR's Lens to the next related decision. It was promoted to its own node to
 keep this file under the 500-line invariant (`.claude/rules/claude_skills/index.md`); it

@@ -74,13 +74,20 @@ function applyTokens(b) {
 BRANDS.forEach(applyTokens);   // every brand's vars, all scoped — no flicker on switch
 
 // ── swatches ───────────────────────────────────────────────────────────────
-function swatch(hex, label, sub) {
+// Every swatch names its colour twice: the sRGB hex it renders as, and its OKLCH
+// coordinates, the space the token pipeline reasons in.
+function oklchText(hex) {
+  var c = rdRgbToOklch(rdHexToRgb(hex));
+  return "oklch " + c.L.toFixed(3) + " " + c.C.toFixed(3) + " " + (c.C < 0.0005 ? 0 : c.H).toFixed(1);
+}
+
+function swatch(hex, label) {
   var dark = (function () {
     var r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
     return (0.2126 * r + 0.7152 * g + 0.0722 * b) < 150;
   })();
   return '<div class="sc-sw" style="background:' + hex + ';color:' + (dark ? "#fff" : "#000") + '">'
-    + (label ? "<b>" + label + "</b>" : "") + "<span>" + (sub || hex) + "</span></div>";
+    + (label ? "<b>" + label + "</b>" : "") + "<span>" + hex + "</span><span>" + oklchText(hex) + "</span></div>";
 }
 
 function paintSwatches() {
@@ -88,26 +95,22 @@ function paintSwatches() {
   var th = t.themes[m];
   document.getElementById("sc-theme-ramp").innerHTML =
     ["bg", "surface", "border", "muted", "fg", "accent"].map(function (k) {
-      return swatch(th[k], k, th[k]);
+      return swatch(th[k], k);
     }).join("");
 
   var series = t.canvas.plotly[m].series || [];
   document.getElementById("sc-series-ramp").innerHTML =
-    series.map(function (c, i) { return swatch(c, String(i + 1), c); }).join("");
-
-  var cats = t.categoryColours || {};
-  document.getElementById("sc-cat-ramp").innerHTML =
-    Object.keys(cats).map(function (k) { return swatch(cats[k], k, cats[k]); }).join("");
+    series.map(function (c, i) { return swatch(c, String(i + 1)); }).join("");
 
   var plot = t.canvas.plotly[m];
   var muted = plot.muted || [];
   document.getElementById("sc-muted-ramp").innerHTML =
-    muted.map(function (c, i) { return swatch(c, "grey " + (i + 1), c); }).join("");
+    muted.map(function (c, i) { return swatch(c, "grey " + (i + 1)); }).join("");
 
   var seq = plot.sequential || [];
   document.getElementById("sc-seq-ramp").innerHTML =
     seq.map(function (c, i) {
-      return swatch(c, i === 0 ? "low" : i === seq.length - 1 ? "high" : "", c);
+      return swatch(c, i === 0 ? "low" : i === seq.length - 1 ? "high" : "");
     }).join("");
 }
 
@@ -146,7 +149,7 @@ function paintDiverging() {
       + s.note + "</span></h3>"
       + '<div class="sc-ramp">' + divScale(s.d).map(function (c, i) {
           var lab = i === 0 ? "good" : i === 3 ? "zero" : i === 6 ? "bad" : "";
-          return swatch(c, lab, c);
+          return swatch(c, lab);
         }).join("") + "</div>";
   }).join("") + (plot.divergingAlt ? "" :
     '<p style="font-size:.85rem;color:var(--rd-muted);margin-top:.6rem">'
@@ -402,21 +405,162 @@ var MERMAID_DETAIL = [
   "  AGT --> PDB"
 ].join("\n");
 
+// Three more diagram families, each semi-complex, on the token pipeline itself so the
+// content is real: the profile store's entities, one live-tuning round trip, and the plan.
+var MERMAID_ER = [
+  "erDiagram",
+  "  PROFILE ||--o| SEED : \"starts from\"",
+  "  PROFILE ||--|| IR : \"curates\"",
+  "  PROFILE ||--|{ DTCG_TOKEN : \"builds\"",
+  "  SEED ||--|{ PARAMETER : \"states\"",
+  "  IR ||--|{ ROLE : \"holds\"",
+  "  PARAMETER }o--o{ ROLE : \"feeds\"",
+  "  ROLE ||--o{ ROLE : \"derives\"",
+  "  ROLE ||--|{ DTCG_TOKEN : \"serialises to\"",
+  "  DTCG_TOKEN }|--|{ SURFACE : \"paints\"",
+  "  PROFILE {",
+  "    string name PK",
+  "    string scope \"project or user\"",
+  "    date curated_at",
+  "  }",
+  "  SEED {",
+  "    string profile FK",
+  "    float brand_hue",
+  "    float brand_lightness",
+  "  }",
+  "  PARAMETER {",
+  "    string key PK",
+  "    string value",
+  "    string provenance \"stated or default\"",
+  "  }",
+  "  ROLE {",
+  "    string name PK",
+  "    string light_hex",
+  "    string dark_hex",
+  "    string rule",
+  "  }",
+  "  DTCG_TOKEN {",
+  "    string path PK",
+  "    string colour_space",
+  "    string mode",
+  "  }",
+  "  SURFACE {",
+  "    string name PK",
+  "    string renderer \"plotly, cytoscape, mermaid\"",
+  "  }"
+].join("\n");
+
+var MERMAID_SEQUENCE = [
+  "sequenceDiagram",
+  "  autonumber",
+  "  actor U as Maintainer",
+  "  participant S as Showcase",
+  "  participant P as Pyodide",
+  "  participant G as generator.py",
+  "  participant R as Renderers",
+  "  U->>S: Drag L-light-bg to 0.97",
+  "  S->>S: Debounce 250 ms",
+  "  alt Python not loaded yet",
+  "    S->>P: loadPyodide()",
+  "    activate P",
+  "    P-->>S: Runtime ready (about 5 s)",
+  "    deactivate P",
+  "  end",
+  "  S->>P: generate(seed)",
+  "  activate P",
+  "  P->>G: Curator(seed).run()",
+  "  activate G",
+  "  loop Every role, both modes",
+  "    G->>G: Solve lightness to contrast target",
+  "  end",
+  "  G-->>P: tokens, lineage, resolved",
+  "  deactivate G",
+  "  P-->>S: JSON",
+  "  deactivate P",
+  "  Note over S,R: A newer change supersedes this run",
+  "  par Redraw",
+  "    S->>R: Plotly and Sankey",
+  "  and",
+  "    S->>R: Cytoscape and Mermaid",
+  "  and",
+  "    S->>R: deck.gl scenes",
+  "  end",
+  "  S-->>U: Regenerated in 101 ms"
+].join("\n");
+
+var MERMAID_GANTT = [
+  "gantt",
+  "  title Design-token refactor",
+  "  dateFormat YYYY-MM-DD",
+  "  axisFormat %d %b",
+  "  todayMarker off",
+  "  section Requirements",
+  "    Structure and location      :done, req1, 2026-09-01, 5d",
+  "    Override boundary           :done, req2, after req1, 3d",
+  "    Curation defaults           :active, req3, after req2, 12d",
+  "  section Prototype",
+  "    Seed to DTCG spike          :done, pro1, 2026-09-14, 2d",
+  "    Lineage Sankeys             :done, pro2, 2026-09-23, 1d",
+  "    Live seed tuning            :active, pro3, after pro2, 2d",
+  "  section Decisions",
+  "    DT-PROV-1 provenance        :crit, dec1, after pro3, 4d",
+  "    Status and surfaces         :dec2, after dec1, 5d",
+  "  section Migration",
+  "    Rename richdocs tokens      :mig1, after dec2, 4d",
+  "    Rename mermaid tokens       :mig2, after dec2, 4d",
+  "    Retire legacy keys          :milestone, mig3, after mig1, 0d"
+].join("\n");
+
+// Blend two hex colours; t = weight of `a`. Mermaid needs literal colours, not color-mix().
+function mixHex(a, b, t) {
+  var x = hexRgb(a), y = hexRgb(b);
+  return "#" + [0, 1, 2].map(function (i) {
+    return Math.round(x[i] * t + y[i] * (1 - t)).toString(16).padStart(2, "0");
+  }).join("");
+}
+
 function drawMermaid() {
   var b = brand(), m = mode(), t = b.tokens, th = t.themes[m];
+  var on = th.onAccent || th.bg;
+  var tint = mixHex(th.accent, th.bg, 0.22);          // text-safe: near the ground, fg on top
+  var crit = (t.status && t.status[m] && t.status[m].colours.critical) || th.accent;
   window.mermaid.initialize({
     startOnLoad: false, theme: "base", securityLevel: "loose",
+    gantt: { leftPadding: 120, barHeight: 22, barGap: 6, fontSize: 12, sectionFontSize: 12 },
+    sequence: { mirrorActors: false, showSequenceNumbers: true },
+    // Mermaid 11.4.1 paints a critical bar's label with taskTextColor (the on-fill colour)
+    // even though the bar is a tint; on a dark ground that is dark-on-dark. Pin it to fg.
+    themeCSS: ".critText0,.critText1,.critText2,.critText3{fill:" + th.fg + " !important}",
     themeVariables: {
       fontFamily: t.fonts.body, fontSize: "13px",
       background: th.bg, primaryColor: th.surface, primaryTextColor: th.fg,
       primaryBorderColor: th.accent, lineColor: th.muted, textColor: th.fg,
       mainBkg: th.surface, nodeBorder: th.accent,
       edgeLabelBackground: th.bg, tertiaryColor: th.surface,
-      clusterBkg: th.surface, clusterBorder: th.border
+      clusterBkg: th.surface, clusterBorder: th.border,
+      // erDiagram: alternate attribute rows on the two grounds.
+      attributeBackgroundColorOdd: th.surface, attributeBackgroundColorEven: th.bg,
+      // sequenceDiagram: actors are surfaces; notes and activations are accent tints.
+      actorBkg: th.surface, actorBorder: th.accent, actorTextColor: th.fg, actorLineColor: th.muted,
+      signalColor: th.fg, signalTextColor: th.fg,
+      labelBoxBkgColor: th.surface, labelBoxBorderColor: th.border, labelTextColor: th.fg,
+      loopTextColor: th.fg, noteBkgColor: tint, noteBorderColor: th.accent, noteTextColor: th.fg,
+      activationBkgColor: tint, activationBorderColor: th.accent, sequenceNumberColor: th.bg,
+      // gantt: planned bars are the fill with on-fill text; active, done and critical bars
+      // are tints carrying fg text, so every label clears contrast on its own bar.
+      taskBkgColor: th.accent, taskBorderColor: th.accent, taskTextColor: on,
+      taskTextOutsideColor: th.fg, taskTextLightColor: on, taskTextDarkColor: th.fg,
+      activeTaskBkgColor: tint, activeTaskBorderColor: th.accent,
+      doneTaskBkgColor: th.surface, doneTaskBorderColor: th.muted,
+      critBkgColor: mixHex(crit, th.bg, 0.22), critBorderColor: crit,
+      sectionBkgColor: th.surface, altSectionBkgColor: th.bg, sectionBkgColor2: th.surface,
+      gridColor: th.border, titleColor: th.fg
     }
   });
-  // Rendered mermaid SVG is not re-themable in place — always re-render both.
-  var jobs = [["sc-mermaid", MERMAID_OVERVIEW, "ov"], ["sc-mermaid-detail", MERMAID_DETAIL, "de"]];
+  // Rendered mermaid SVG is not re-themable in place — always re-render every diagram.
+  var jobs = [["sc-mermaid", MERMAID_OVERVIEW, "ov"], ["sc-mermaid-detail", MERMAID_DETAIL, "de"],
+    ["sc-mermaid-er", MERMAID_ER, "er"], ["sc-mermaid-seq", MERMAID_SEQUENCE, "sq"],
+    ["sc-mermaid-gantt", MERMAID_GANTT, "gt"]];
   return Promise.all(jobs.map(function (j) {
     var host = document.getElementById(j[0]);
     if (!host) return Promise.resolve();
@@ -814,6 +958,398 @@ function mountArchitectures() {
   });
 }
 
+// ── lineage (Sankey) ───────────────────────────────────────────────────────
+// Optional per brand: a generated theme ships lineage.json, a hand-authored one does not
+// (ADR-021). Nodes carry their own colour per mode; each link takes its source's colour,
+// translucent, so a band reads as "this value flowed from there".
+function hexA(hex, a) {
+  var h = hex.replace("#", "");
+  return "rgba(" + parseInt(h.slice(0, 2), 16) + "," + parseInt(h.slice(2, 4), 16) + ","
+    + parseInt(h.slice(4, 6), 16) + "," + a + ")";
+}
+
+// WCAG relative luminance contrast, so a band whose source matches the ground (a surface
+// role on its own surface) is drawn in the text colour instead of vanishing.
+function lumOf(hex) {
+  var c = [1, 3, 5].map(function (i) {
+    var v = parseInt(hex.slice(i, i + 2), 16) / 255;
+    return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+}
+function contrastOf(a, b) {
+  var x = lumOf(a), y = lumOf(b);
+  return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+}
+
+function lineageHeight(s) {
+  // Size to the busiest column, so labels never overprint. Columns are inferred the way
+  // Plotly lays them out: a node's depth is the longest path that reaches it.
+  var depth = {};
+  s.nodes.forEach(function (n) { depth[n.id] = 0; });
+  for (var pass = 0; pass < s.nodes.length; pass++) {
+    var moved = false;
+    s.links.forEach(function (l) {
+      if (depth[l.target] < depth[l.source] + 1) { depth[l.target] = depth[l.source] + 1; moved = true; }
+    });
+    if (!moved) break;
+  }
+  var per = {};
+  Object.keys(depth).forEach(function (k) { per[depth[k]] = (per[depth[k]] || 0) + 1; });
+  var busiest = Math.max.apply(null, Object.keys(per).map(function (k) { return per[k]; }));
+  return Math.max(360, busiest * 17 + 60);
+}
+
+function drawLineage() {
+  var host = document.getElementById("sc-lineage");
+  var none = document.getElementById("sc-lineage-none");
+  var lin = brand().lineage;
+  if (!lin || !lin.sankeys || !lin.sankeys.length) {
+    host.innerHTML = ""; none.hidden = false;
+    buildNav();
+    return Promise.resolve();
+  }
+  none.hidden = true;
+  host.innerHTML = lin.sankeys.map(function (s, i) {
+    return '<h3 id="sc-lineage-' + i + '">' + escapeHtml(s.title) + "</h3>"
+      + '<p class="sc-lineage-caption">' + escapeHtml(s.caption || "").replace(/`([^`]+)`/g, "<code>$1</code>") + "</p>"
+      + '<div class="sc-panel"><div id="sc-sankey-' + i + '" style="height:' + lineageHeight(s) + 'px"></div></div>';
+  }).join("");
+  buildNav();   // the lineage headings are per brand, so the nav follows them
+  return loadScript("plotly", SC.cdn.plotly).then(function () {
+    var t = brand().tokens, m = mode(), p = t.canvas.plotly[m];
+    lin.sankeys.forEach(function (s, i) {
+      var idx = {};
+      s.nodes.forEach(function (n, k) { idx[n.id] = k; });
+      var colour = function (n) { return (n.colour && n.colour[m]) || p.font; };
+      Plotly.react("sc-sankey-" + i, [{
+        type: "sankey", arrangement: "snap",
+        node: {
+          label: s.nodes.map(function (n) { return n.label; }),
+          customdata: s.nodes.map(function (n) { return n.group || ""; }),
+          hovertemplate: "%{label}<br>%{customdata}<extra></extra>",
+          color: s.nodes.map(colour),
+          line: { color: p.grid, width: 0.5 },
+          pad: 6, thickness: 14
+        },
+        link: {
+          source: s.links.map(function (l) { return idx[l.source]; }),
+          target: s.links.map(function (l) { return idx[l.target]; }),
+          value: s.links.map(function (l) { return l.value || 1; }),
+          color: s.links.map(function (l) {
+            var c = colour(s.nodes[idx[l.source]]);
+            return contrastOf(c, p.paper) < 1.6 ? hexA(p.font, 0.2) : hexA(c, 0.35);
+          }),
+          hovertemplate: "%{source.label} → %{target.label}<extra></extra>"
+        }
+      }], {
+        paper_bgcolor: p.paper, plot_bgcolor: p.plot,
+        font: { family: t.fonts.mono, color: p.font, size: 10.5 },
+        margin: { l: 8, r: 8, t: 8, b: 8 }
+      }, { displayModeBar: false, responsive: true });
+    });
+  });
+}
+
+// ── section navigation ─────────────────────────────────────────────────────
+// Built from the page's own headings, so a new section appears here without a second
+// list to maintain. Open/closed is a per-viewer convenience, remembered when storage
+// is available and harmless when it is not.
+var NAV_KEY = "richdocs-showcase-nav";
+var navSpy = null;
+
+function slug(s) { return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""); }
+
+function buildNav() {
+  var items = [];
+  document.querySelectorAll(".wrap > section").forEach(function (sec, i) {
+    var eyebrow = sec.querySelector(".sc-eyebrow");
+    var label = eyebrow ? eyebrow.textContent.trim() : (sec.querySelector("h2") || {}).textContent || "Section " + (i + 1);
+    if (!sec.id) sec.id = "sc-s-" + slug(label);
+    var subs = [];
+    sec.querySelectorAll("h3").forEach(function (h) {
+      if (!h.id) h.id = sec.id + "-" + slug(h.textContent);
+      subs.push('<li class="sc-nav-sub"><a href="#' + h.id + '">' + escapeHtml(h.textContent.trim()) + "</a></li>");
+    });
+    items.push('<li class="sc-nav-top"><a href="#' + sec.id + '">' + escapeHtml(label) + "</a>"
+      + (subs.length ? "<ol>" + subs.join("") + "</ol>" : "") + "</li>");
+  });
+  document.getElementById("sc-nav").innerHTML = "<ol>" + items.join("") + "</ol>";
+  spyNav();
+}
+
+function spyNav() {
+  if (navSpy) navSpy.disconnect();
+  if (!("IntersectionObserver" in window)) return;
+  var links = {};
+  document.querySelectorAll("#sc-nav a").forEach(function (a) { links[a.getAttribute("href").slice(1)] = a; });
+  navSpy = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      if (!e.isIntersecting || !links[e.target.id]) return;
+      var sec = e.target.closest("section");
+      Object.keys(links).forEach(function (k) { links[k].removeAttribute("aria-current"); });
+      links[e.target.id].setAttribute("aria-current", "true");
+      if (sec && links[sec.id]) links[sec.id].setAttribute("aria-current", "true");
+    });
+  }, { rootMargin: "-15% 0px -75% 0px" });
+  document.querySelectorAll(".wrap > section, .wrap > section h3").forEach(function (el) {
+    if (el.id) navSpy.observe(el);
+  });
+}
+
+function setNav(open, remember) {
+  document.documentElement.classList.toggle("sc-nav-open", open);
+  document.getElementById("sc-nav-toggle").setAttribute("aria-expanded", String(open));
+  if (remember) { try { localStorage.setItem(NAV_KEY, open ? "open" : "closed"); } catch (e) { /* storage blocked */ } }
+}
+
+function initNav() {
+  var saved = null;
+  try { saved = localStorage.getItem(NAV_KEY); } catch (e) { /* storage blocked */ }
+  var narrow = window.matchMedia("(max-width: 1099px)");
+  setNav(saved ? saved === "open" : !narrow.matches, false);
+  document.getElementById("sc-nav-toggle").addEventListener("click", function () {
+    setNav(!document.documentElement.classList.contains("sc-nav-open"), true);
+  });
+  // On a narrow screen the nav overlays the page, so following a link closes it.
+  document.getElementById("sc-nav").addEventListener("click", function (e) {
+    if (e.target.closest("a") && narrow.matches) setNav(false, false);
+  });
+  var bar = document.querySelector(".sc-bar");
+  var sizeBar = function () {
+    document.documentElement.style.setProperty("--sc-bar-h", bar.offsetHeight + "px");
+  };
+  sizeBar();
+  window.addEventListener("resize", sizeBar);
+  buildNav();
+}
+
+// ── live seed tuning (Pyodide) ─────────────────────────────────────────────
+// A generated theme may ship its own producer (ADR-022): generator.json names the seed and
+// a range per parameter, generator.py is the stdlib module that turns a seed into this
+// brandpack. Changing a control runs THAT module in the browser, so the page and the CLI
+// share one curation and nothing here re-implements it.
+var py = { ready: null };
+var tune = { timer: null, seq: 0 };
+
+function initPy() {
+  if (py.ready) return py.ready;
+  py.ready = loadScript("pyodide", SC.cdn.pyodide).then(function () {
+    return loadPyodide({ indexURL: SC.cdn.pyodide.replace(/[^/]*$/, "") });
+  }).then(function (p) {
+    p.runPython("import sys\nif '/home/pyodide' not in sys.path: sys.path.insert(0, '/home/pyodide')");
+    py.p = p;
+    return p;
+  });
+  py.ready.catch(function () { py.ready = null; });   // a failed load may be retried
+  return py.ready;
+}
+
+function runGenerator(b) {
+  var g = b.generator;
+  return initPy().then(function (p) {
+    var mod = "rd_gen_" + b.name.replace(/[^A-Za-z0-9_]/g, "_");
+    if (!g.written) { p.FS.writeFile("/home/pyodide/" + mod + ".py", g.source); g.written = true; }
+    p.globals.set("_rd_seed", JSON.stringify(b.seedLive));
+    return JSON.parse(p.runPython("import json\nimport " + mod + " as _rd_m\n"
+      + "json.dumps(_rd_m." + g.manifest.entry + "(json.loads(_rd_seed)))"));
+  });
+}
+
+function tuneStatus(text, err) {
+  var el = document.getElementById("sc-tune-status");
+  el.textContent = text;
+  el.classList.toggle("err", !!err);
+}
+
+function paramValue(b, prm) {
+  return Object.prototype.hasOwnProperty.call(b.seedLive, prm.key) ? b.seedLive[prm.key] : prm.default;
+}
+
+function keywordLabel(k) { return k === null ? "auto" : String(k); }
+
+// What a keyword (cusp, brand, auto) resolved to on the last run, as the generator reports it.
+function resolvedOf(b, key) {
+  var r = (b.resolved || {})[key];
+  if (r === undefined || r === null) return null;
+  return typeof r === "number" ? { light: r, dark: r } : r;
+}
+function resolvedText(b, key) {
+  var r = resolvedOf(b, key);
+  if (!r) return "";
+  var f = function (x) { return Math.round(x * 1000) / 1000; };
+  return "resolves to " + (r.light === r.dark ? f(r.light) : "light " + f(r.light) + " · dark " + f(r.dark));
+}
+
+// After a run, show keyword-mode rows at the value the keyword resolved to. Only the
+// disabled inputs change, so a slider being dragged elsewhere keeps its focus.
+function refreshResolved(b) {
+  document.querySelectorAll(".sc-tune-row").forEach(function (row) {
+    var key = row.dataset.key, r = resolvedOf(b, key);
+    var out = row.querySelector(".sc-tune-resolved");
+    if (out) out.textContent = resolvedText(b, key);
+    if (!r) return;
+    row.querySelectorAll('[data-role="range"]:disabled, [data-role="num"]:disabled').forEach(function (el) {
+      el.value = r.light;
+    });
+  });
+}
+
+function setParam(b, prm, value) {
+  // A value equal to the default is not stated: the seed stays minimal (brand.hue always stays).
+  if (value === prm.default && prm.key !== "brand.hue") delete b.seedLive[prm.key];
+  else b.seedLive[prm.key] = value;
+  document.getElementById("sc-tune-seed").textContent = JSON.stringify(b.seedLive, null, 2);
+  var row = document.querySelector('.sc-tune-row[data-key="' + prm.key + '"]');
+  if (row) {
+    var stated = Object.prototype.hasOwnProperty.call(b.seedLive, prm.key);
+    row.classList.toggle("stated", stated);
+    row.querySelector(".sc-tune-badge").textContent = stated ? "stated" : "default";
+  }
+  clearTimeout(tune.timer);
+  tune.timer = setTimeout(function () { regenerate(b); }, 250);
+}
+
+function regenerate(b) {
+  var seq = ++tune.seq, t0 = performance.now();
+  tuneStatus(py.p ? "Curating…" : "Loading Python (once), then curating…");
+  return runGenerator(b).then(function (out) {
+    if (seq !== tune.seq) return;          // a newer change superseded this one
+    b.tokens = out.tokens;
+    b.lineage = out.lineage || null;
+    b.resolved = out.resolved || {};
+    refreshResolved(b);
+    applyTokens(b);
+    if (brand() === b) render();
+    tuneStatus("Regenerated in " + Math.round(performance.now() - t0) + " ms. Stated values are marked.");
+  }).catch(function (e) {
+    if (seq !== tune.seq) return;
+    var msg = String(e && e.message || e).trim().split("\n").filter(Boolean).pop();
+    tuneStatus("Generator stopped: " + msg + ". The page still shows the last good theme.", true);
+  });
+}
+
+function controlHtml(b, prm) {
+  var v = paramValue(b, prm);
+  var kws = prm.keywords || [];
+  var numeric = typeof prm.min === "number";
+  var isKw = kws.some(function (k) { return k === v; });
+  var res = resolvedOf(b, prm.key);
+  var num = typeof v === "number" ? v : res ? res.light : (numeric ? (prm.min + prm.max) / 2 : 0);
+  var id = "sc-tp-" + prm.key.replace(/[^A-Za-z0-9]/g, "-");
+  var html = '<div class="sc-tune-ctl">';
+  if (kws.length) {
+    html += '<select data-role="kw" aria-label="' + escapeHtml(prm.key) + ' mode">'
+      + kws.map(function (k, i) {
+          return '<option value="' + i + '"' + (isKw && k === v ? " selected" : "") + ">" + keywordLabel(k) + "</option>";
+        }).join("")
+      + (numeric ? '<option value="num"' + (isKw ? "" : " selected") + ">number</option>" : "")
+      + "</select>";
+  }
+  if (numeric) {
+    html += '<input type="range" data-role="range" id="' + id + '" min="' + prm.min + '" max="' + prm.max
+      + '" step="' + prm.step + '" value="' + num + '"' + (isKw ? " disabled" : "") + ">"
+      + '<input type="number" data-role="num" aria-label="' + escapeHtml(prm.key) + ' value" min="' + prm.min
+      + '" max="' + prm.max + '" step="' + prm.step + '" value="' + num + '"' + (isKw ? " disabled" : "") + ">";
+  }
+  return html + "</div>";
+}
+
+// The groups a first look needs; the rest start collapsed.
+var TUNE_OPEN = ["brand", "walk"];
+
+function buildTune() {
+  var b = brand();
+  var host = document.getElementById("sc-tune-controls");
+  if (!b.generator) { host.innerHTML = ""; return; }
+  var groups = {};
+  b.generator.manifest.params.forEach(function (prm) {
+    var g = prm.key.split(/[.-]/)[0];
+    (groups[g] = groups[g] || []).push(prm);
+  });
+  host.innerHTML = Object.keys(groups).map(function (g) {
+    return "<details" + (TUNE_OPEN.indexOf(g) >= 0 ? " open" : "") + "><summary>" + escapeHtml(g)
+      + "</summary>" + groups[g].map(function (prm) {
+      var stated = Object.prototype.hasOwnProperty.call(b.seedLive, prm.key);
+      var id = "sc-tp-" + prm.key.replace(/[^A-Za-z0-9]/g, "-");
+      return '<div class="sc-tune-row' + (stated ? " stated" : "") + '" data-key="' + escapeHtml(prm.key) + '">'
+        + '<label for="' + id + '"><span>' + escapeHtml(prm.key) + '</span><span class="sc-tune-badge">'
+        + (stated ? "stated" : "default") + "</span></label>"
+        + controlHtml(b, prm)
+        + '<div class="sc-tune-src">default '
+        + escapeHtml(prm.default === null && !prm.keywords ? "required" : keywordLabel(prm.default)) + " · "
+        + escapeHtml(prm.source) + '</div><div class="sc-tune-src sc-tune-resolved">'
+        + escapeHtml(resolvedText(b, prm.key)) + "</div></div>";
+    }).join("") + "</details>";
+  }).join("");
+  document.getElementById("sc-tune-seed").textContent = JSON.stringify(b.seedLive, null, 2);
+
+  host.querySelectorAll(".sc-tune-row").forEach(function (row) {
+    var prm = b.generator.manifest.params.find(function (x) { return x.key === row.dataset.key; });
+    var kw = row.querySelector('[data-role="kw"]');
+    var range = row.querySelector('[data-role="range"]');
+    var num = row.querySelector('[data-role="num"]');
+    var fromNumber = function (raw) {
+      var x = Number(raw);
+      if (!isFinite(x)) return;
+      if (range) range.value = x;
+      if (num) num.value = x;
+      setParam(b, prm, x);
+    };
+    if (kw) kw.addEventListener("change", function () {
+      var isNum = kw.value === "num";
+      if (range) { range.disabled = !isNum; num.disabled = !isNum; }
+      if (isNum) fromNumber(range.value); else setParam(b, prm, prm.keywords[Number(kw.value)]);
+    });
+    if (range) range.addEventListener("input", function () { fromNumber(range.value); });
+    if (num) num.addEventListener("change", function () { fromNumber(num.value); });
+  });
+}
+
+function setTune(open) {
+  document.documentElement.classList.toggle("sc-tune-open", open);
+  document.getElementById("sc-tune-toggle").setAttribute("aria-expanded", String(open));
+}
+
+// Called on every brand switch: the panel only exists for a brand that ships a generator.
+function syncTune() {
+  var b = brand();
+  var has = !!b.generator;
+  document.getElementById("sc-tune-toggle").hidden = !has;
+  if (!has) setTune(false);
+  buildTune();
+}
+
+function initTune() {
+  BRANDS.forEach(function (b) {
+    if (!b.generator) return;
+    b.seedLive = JSON.parse(JSON.stringify(b.generator.manifest.seed));
+    b.resolved = b.generator.manifest.resolved || {};
+    b.original = { tokens: b.tokens, lineage: b.lineage, resolved: b.resolved };
+  });
+  document.getElementById("sc-tune-toggle").addEventListener("click", function () {
+    setTune(!document.documentElement.classList.contains("sc-tune-open"));
+  });
+  document.getElementById("sc-tune-close").addEventListener("click", function () { setTune(false); });
+  document.getElementById("sc-tune-reset").addEventListener("click", function () {
+    var b = brand();
+    if (!b.generator) return;
+    tune.seq++;                              // drop any curation still in flight
+    b.seedLive = JSON.parse(JSON.stringify(b.generator.manifest.seed));
+    b.tokens = b.original.tokens;
+    b.lineage = b.original.lineage;
+    b.resolved = b.original.resolved;
+    applyTokens(b);
+    buildTune();
+    render();
+    tuneStatus("Reset to the shipped seed.");
+  });
+  document.getElementById("sc-tune-copy").addEventListener("click", function () {
+    var text = document.getElementById("sc-tune-seed").textContent;
+    if (navigator.clipboard) navigator.clipboard.writeText(text).then(function () { tuneStatus("seed.json copied."); });
+  });
+}
+
 // ── boot / re-render ───────────────────────────────────────────────────────
 function labelFor(t, key) {
   var v = (t.fonts[key] || "").split(",")[0].replace(/['"]/g, "");
@@ -839,6 +1375,7 @@ function render() {
   paintSwatches();
   paintDiverging();
   paintStatus();
+  drawLineage();
   drawCharts();
   drawGraph();
   drawMermaid();
@@ -854,6 +1391,7 @@ function setBrand(name) {
   var b = BRANDS.find(function (x) { return x.name === name; });
   var def = b && b.tokens.defaultTheme;
   if (def === "light" || def === "dark") setMode(def, true);
+  syncTune();
   render();
 }
 
@@ -898,5 +1436,7 @@ if (sqlInput) {
 }
 
 mountArchitectures();
+initNav();
+initTune();
 setBrand(BRANDS[0].name);
 
