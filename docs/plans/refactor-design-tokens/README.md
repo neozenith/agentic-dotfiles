@@ -46,8 +46,8 @@ The work was framed as five topics. Two are closed, one is active, two are downs
 | 1 | **Structure** | What are the layers, and what does indirection mean? | **Mostly closed** — DT-ROLES-1 locks 15 role names; DT-PIPE-1 locks the three-artifact model |
 | 2 | **Location** | Where does a profile live, how is it found? | **Closed** — DT-LOC-1 |
 | 3 | **Override** | How does a project override, and where is the authoring boundary? | **Closed** — DT-PIPE-1; override *is* editing the IR or the DTCG |
-| 4 | **Curation** | How is a profile authored? What is stated vs imputed? | **Mostly closed** — DT-PROV-1 decides stated vs imputed; the prototype-tagged defaults remain |
-| 5 | **Ripple** | How does one value reach every surface, and what stays consistent? | **Downstream** — expected to fall out of topics 1 and 4 |
+| 4 | **Curation** | How is a profile authored? What is stated vs imputed? | **Closed** — DT-PROV-1 decides stated vs imputed; every default carries a measured source (CURATION stages 3, 5, 7) |
+| 5 | **Ripple** | How does one value reach every surface, and what stays consistent? | **Next** — surface expansion (CURATION stage 6) and the migration in [`MIGRATION.md`](MIGRATION.md) |
 
 **Out of scope:** `pytest-xharness-eval` usage on either skill. Dropped by the maintainer.
 
@@ -56,6 +56,7 @@ The work was framed as five topics. Two are closed, one is active, two are downs
 | Path | What it holds |
 |---|---|
 | [`DECISIONS.md`](DECISIONS.md) | The fourteen locked decisions, each with a four-clause lens and its rejected alternatives. **Canonical.** |
+| [`MIGRATION.md`](MIGRATION.md) | The build, sequenced: surface expansion, the real tool, both skills' migration. One decision (DT-TOOL-1) gates it. |
 | [`OPEN-QUESTIONS.md`](OPEN-QUESTIONS.md) | No decision questions remain open; the low-stakes list and the closed questions' history. |
 | [`CURATION.md`](CURATION.md) | The seed → IR pipeline, stage by stage. Partly settled, partly draft — each stage says which. |
 | [`research/`](research/) | Six sourced dossiers plus a grounding quote-sheet. Every claim carries a URL. **Do not re-derive.** |

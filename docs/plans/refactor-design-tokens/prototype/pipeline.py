@@ -42,36 +42,36 @@ STEP = 0.005
 # --------------------------------------------------------------------------------------------------
 DEFAULTS: dict[str, tuple[Any, str]] = {
     "brand.hue": (None, "DT-ACCENT-1 (required)"),
-    "brand.chroma": ("cusp", "prototype"),
-    "brand.lightness": ("cusp", "prototype (a stated value pins the light accent verbatim)"),
-    "brand.dark.hue": (None, "prototype (defaults to brand.hue)"),
-    "brand.dark.chroma": (None, "prototype (defaults to brand.chroma)"),
-    "brand.dark.lightness": (None, "prototype (stated: pins the dark accent verbatim; else solved)"),
+    "brand.chroma": ("cusp", "CURATION stage 3 (hue-only fallback: the hue's most colourful in-gamut point)"),
+    "brand.lightness": ("cusp", "CURATION stage 3 (hue-only fallback; a stated value pins the light accent)"),
+    "brand.dark.hue": (None, "DT-ACCENT-1 (defaults to brand.hue)"),
+    "brand.dark.chroma": (None, "DT-ACCENT-1 (defaults to brand.chroma)"),
+    "brand.dark.lightness": (None, "DT-ACCENT-1 (stated: pins the dark accent verbatim; else solved)"),
     "L-dark-bg": (0.15, "DT-REF-1"),
     "L-light-bg": (0.97, "DT-REF-1 (revised 2026-09-24, was 0.90)"),
     "offset.surface.sunken": (-0.05, "DT-REF-1"),
     "offset.surface.raised": (0.05, "DT-REF-1"),
     "offset.text": (0.90, "DT-REF-1"),
     "offset.text.subtle": (0.65, "DT-REF-1"),
-    "target.text.subtlest": (4.5, "prototype"),
+    "target.text.subtlest": (4.5, "WCAG 2.2 SC 1.4.3 (AA: the lowest text tier still reads)"),
     "alpha.border": (0.14, "DT-BORDER-1"),
     "offset.border.bold": (0.35, "DT-BORDER-1 (search start; solved to 3:1)"),
     "target.graphic": (3.0, "WCAG 2.2 SC 1.4.11"),
-    "target.text.inverse": (7.0, "prototype (DT-CONTRAST-1: maximise)"),
-    "target.link": (4.5, "prototype"),
-    "alpha.brand.subtlest": (0.16, "prototype (richdocs rdMix 0.84)"),
+    "target.text.inverse": (7.0, "DT-CONTRAST-1 (maximise: WCAG 2.2 SC 1.4.6 AAA on the brand fill)"),
+    "target.link": (4.5, "WCAG 2.2 SC 1.4.3 (AA text)"),
+    "alpha.brand.subtlest": (0.16, "richdocs rdMix 0.84 (the tint already shipped)"),
     "secondary.hue": (None, "DT-ACCENT-1 (defaults to brand.hue)"),
     "secondary.chromaRatio": (0.444, "DT-ACCENT-1 (M3 chroma 16/36)"),
-    "offset.background.selected": (0.10, "prototype"),
+    "offset.background.selected": (0.07, "DT-ACCENT-1 (M3 secondaryContainer sits 0.068 L from its surface)"),
     "walk.slots": (12, "DT-WALK-1"),
     "walk.angle": (137.5, "DT-WALK-1"),
     "walk.lightness": ("brand", "DT-WALK-2 (the seed's lightness: each mode's accent)"),
     "walk.chromaCeiling": ("floor", "DT-WALK-2"),
-    "status.hue.danger": (25.0, "prototype"),
-    "status.hue.warning": (80.0, "prototype"),
-    "status.hue.success": (145.0, "prototype"),
-    "status.chromaCap": (0.18, "prototype"),
-    "target.status": (4.5, "prototype"),
+    "status.hue.danger": (25.0, "CURATION stage 5 (Primer danger.fg 24.6, Tailwind red-600 27.3, M3 error 28.7)"),
+    "status.hue.warning": (75.0, "CURATION stage 5 (Primer attention.fg 75.0, a text role)"),
+    "status.hue.success": (148.0, "CURATION stage 5 (Primer success.fg 148.0, Tailwind green-600 149.2)"),
+    "status.chromaCap": (0.18, "CURATION stage 5 (M3 error chroma 0.178)"),
+    "target.status": (4.5, "WCAG 2.2 SC 1.4.3 (AA text)"),
 }
 
 # Live-control ranges for the richdocs showcase (generator.json). A key may take a number in
@@ -524,6 +524,34 @@ def stated_values(ir: dict[str, Any]) -> dict[str, dict[str, str]]:
     return stated
 
 
+AA_TEXT = 4.5  # WCAG 2.2 SC 1.4.3: the floor every text pairing is scored against
+
+
+def score_contrast(ir: dict[str, Any]) -> list[dict[str, Any]]:
+    """CURATION stage 7 / DT-CONTRAST-1: score every text-on-background pairing, per mode.
+
+    A miss is a `defect` in the defaults only when both colours are imputed and neither was driven
+    by a stated seed parameter (the brand hue aside, which every seed states). Any other miss is the
+    user's `choice`: reported, never a failure.
+    """
+    def driven_by_statement(role: str, m: str) -> bool:
+        ext = ir[role]["$extensions"][EXT]
+        if ext["origin"].get(m) == "stated":
+            return True
+        return any(c.endswith("[stated]") and not c.startswith("brand.hue=") for c in ext["inputs"])
+
+    scores = []
+    for text, grounds in TEXT_CHECKS:
+        for ground in grounds:
+            for m in MODES:
+                ratio = contrast(ir[text][m], ir[ground][m])
+                verdict = "pass" if ratio >= AA_TEXT else (
+                    "choice" if driven_by_statement(text, m) or driven_by_statement(ground, m) else "defect")
+                scores.append({"text": text, "on": ground, "mode": m, "ratio": round(ratio, 2),
+                               "target": AA_TEXT, "verdict": verdict})
+    return scores
+
+
 def curate_profile(folder: Path) -> list[str]:
     """Curate one profile in place: idempotent and additive (DT-BUILD-1, DT-PROV-1).
 
@@ -547,19 +575,30 @@ def curate_profile(folder: Path) -> list[str]:
                 report.append(f"new     {role} {m} {after}")
             elif before != after:
                 report.append(f"updated {role} {m} {before} -> {after}")
+    scores = score_contrast(ir)
+    ir["$extensions"][EXT]["contrast"] = scores
+    for sc in scores:
+        if sc["verdict"] != "pass":
+            report.append(f"{sc['verdict']:7} {sc['text']} on {sc['on']} {sc['mode']} {sc['ratio']}:1 "
+                          f"(AA {sc['target']}:1)")
     ir_path.write_text(json.dumps(ir, indent=2) + "\n", encoding="utf-8")
     return report
 
 
 def cmd_curate(args: argparse.Namespace) -> None:
+    defects = 0
     for name in profile_names(args):
         report = curate_profile(PROFILES / name)
-        count = {k: sum(r.startswith(k) for r in report) for k in ("held", "updated", "new")}
-        log.info("curated %-16s held %d stated, updated %d, imputed %d new", name,
-                 count["held"], count["updated"], count["new"])
+        count = {k: sum(r.startswith(k) for r in report) for k in ("held", "updated", "new", "defect", "choice")}
+        log.info("curated %-16s held %d stated, updated %d, imputed %d new; contrast: %d defect, %d choice",
+                 name, count["held"], count["updated"], count["new"], count["defect"], count["choice"])
         for line in report:
             if not line.startswith("new"):
                 log.info("  %s", line)
+        defects += count["defect"]
+    if defects:
+        # DT-CONTRAST-1: a miss the defaults caused is a failure of curation, never of the user.
+        raise SystemExit(f"curation failed: {defects} text pairing(s) below AA from defaults alone")
 
 
 # --------------------------------------------------------------------------------------------------
@@ -752,23 +791,26 @@ def build_lineage(ir: dict[str, Any], seed: dict[str, Any]) -> dict[str, Any]:
     return {"sankeys": [seed_to_ir, ir_to_final]}
 
 
-def generate(seed: dict[str, Any]) -> dict[str, Any]:
+def generate(seed: dict[str, Any], context: dict[str, Any] | None = None) -> dict[str, Any]:
     """richdocs' live-generator entry point (ADR-022): one seed in, a brandpack and its lineage out.
 
     The showcase runs this very file in the browser under Pyodide, so the controls and the CLI share
-    one curation, not a port of it.
+    one curation, not a port of it. `context.stated` carries the profile's hand edits (DT-PROV-1), so
+    tuning the seed live keeps them exactly as `curate` would.
     """
-    curator = Curator(seed)
+    curator = Curator(seed, (context or {}).get("stated"))
     ir = curator.run()
     return {"tokens": project_richdocs(ir), "lineage": build_lineage(ir, seed), "resolved": curator.resolved}
 
 
-def generator_manifest(seed: dict[str, Any]) -> dict[str, Any]:
+def generator_manifest(seed: dict[str, Any], ir: dict[str, Any]) -> dict[str, Any]:
     """The controls the showcase offers: every seed parameter with a range, its default and its source."""
+    context = {"stated": stated_values(ir)}
     return {
         "entry": "generate",
         "seed": seed,
-        "resolved": generate(seed)["resolved"],
+        "context": context,
+        "resolved": generate(seed, context)["resolved"],
         "params": [{"key": k, "default": v, "source": src, **CONTROLS[k]}
                    for k, (v, src) in DEFAULTS.items() if k in CONTROLS],
     }
@@ -783,7 +825,8 @@ def cmd_install(args: argparse.Namespace) -> None:
         (target / "lineage.json").write_text(
             (PROFILES / name / "lineage.json").read_text(encoding="utf-8"), encoding="utf-8")
         seed = json.loads((PROFILES / name / "seed.json").read_text(encoding="utf-8"))
-        (target / "generator.json").write_text(json.dumps(generator_manifest(seed), indent=2) + "\n",
+        ir = json.loads((PROFILES / name / "ir.json").read_text(encoding="utf-8"))
+        (target / "generator.json").write_text(json.dumps(generator_manifest(seed, ir), indent=2) + "\n",
                                                encoding="utf-8")
         (target / "generator.py").write_text(Path(__file__).read_text(encoding="utf-8"), encoding="utf-8")
         # The showcase scopes each brand's CSS under :root[data-brand=...]; a brand with no

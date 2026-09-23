@@ -21,36 +21,36 @@ pipeline uses a **prototype default** so it can run, and says so.
 | Parameter | Default | Source |
 |---|---|---|
 | `brand.hue` | `None` | DT-ACCENT-1 (required) |
-| `brand.chroma` | `cusp` | prototype |
-| `brand.lightness` | `cusp` | prototype (a stated value pins the light accent verbatim) |
-| `brand.dark.hue` | `None` | prototype (defaults to brand.hue) |
-| `brand.dark.chroma` | `None` | prototype (defaults to brand.chroma) |
-| `brand.dark.lightness` | `None` | prototype (stated: pins the dark accent verbatim; else solved) |
+| `brand.chroma` | `cusp` | CURATION stage 3 (hue-only fallback: the hue's most colourful in-gamut point) |
+| `brand.lightness` | `cusp` | CURATION stage 3 (hue-only fallback; a stated value pins the light accent) |
+| `brand.dark.hue` | `None` | DT-ACCENT-1 (defaults to brand.hue) |
+| `brand.dark.chroma` | `None` | DT-ACCENT-1 (defaults to brand.chroma) |
+| `brand.dark.lightness` | `None` | DT-ACCENT-1 (stated: pins the dark accent verbatim; else solved) |
 | `L-dark-bg` | `0.15` | DT-REF-1 |
 | `L-light-bg` | `0.97` | DT-REF-1 (revised 2026-09-24, was 0.90) |
 | `offset.surface.sunken` | `-0.05` | DT-REF-1 |
 | `offset.surface.raised` | `0.05` | DT-REF-1 |
 | `offset.text` | `0.9` | DT-REF-1 |
 | `offset.text.subtle` | `0.65` | DT-REF-1 |
-| `target.text.subtlest` | `4.5` | prototype |
+| `target.text.subtlest` | `4.5` | WCAG 2.2 SC 1.4.3 (AA: the lowest text tier still reads) |
 | `alpha.border` | `0.14` | DT-BORDER-1 |
 | `offset.border.bold` | `0.35` | DT-BORDER-1 (search start; solved to 3:1) |
 | `target.graphic` | `3.0` | WCAG 2.2 SC 1.4.11 |
-| `target.text.inverse` | `7.0` | prototype (DT-CONTRAST-1: maximise) |
-| `target.link` | `4.5` | prototype |
-| `alpha.brand.subtlest` | `0.16` | prototype (richdocs rdMix 0.84) |
+| `target.text.inverse` | `7.0` | DT-CONTRAST-1 (maximise: WCAG 2.2 SC 1.4.6 AAA on the brand fill) |
+| `target.link` | `4.5` | WCAG 2.2 SC 1.4.3 (AA text) |
+| `alpha.brand.subtlest` | `0.16` | richdocs rdMix 0.84 (the tint already shipped) |
 | `secondary.hue` | `None` | DT-ACCENT-1 (defaults to brand.hue) |
 | `secondary.chromaRatio` | `0.444` | DT-ACCENT-1 (M3 chroma 16/36) |
-| `offset.background.selected` | `0.1` | prototype |
+| `offset.background.selected` | `0.07` | DT-ACCENT-1 (M3 secondaryContainer sits 0.068 L from its surface) |
 | `walk.slots` | `12` | DT-WALK-1 |
 | `walk.angle` | `137.5` | DT-WALK-1 |
 | `walk.lightness` | `brand` | DT-WALK-2 (the seed's lightness: each mode's accent) |
 | `walk.chromaCeiling` | `floor` | DT-WALK-2 |
-| `status.hue.danger` | `25.0` | prototype |
-| `status.hue.warning` | `80.0` | prototype |
-| `status.hue.success` | `145.0` | prototype |
-| `status.chromaCap` | `0.18` | prototype |
-| `target.status` | `4.5` | prototype |
+| `status.hue.danger` | `25.0` | CURATION stage 5 (Primer danger.fg 24.6, Tailwind red-600 27.3, M3 error 28.7) |
+| `status.hue.warning` | `75.0` | CURATION stage 5 (Primer attention.fg 75.0, a text role) |
+| `status.hue.success` | `148.0` | CURATION stage 5 (Primer success.fg 148.0, Tailwind green-600 149.2) |
+| `status.chromaCap` | `0.18` | CURATION stage 5 (M3 error chroma 0.178) |
+| `target.status` | `4.5` | WCAG 2.2 SC 1.4.3 (AA text) |
 
 ## Showcase
 
@@ -75,7 +75,7 @@ The gallery places each generated theme beside the theme its accent came from:
 ```
 
 Stated: `brand.hue`, `brand.chroma`, `brand.lightness`, `brand.dark.hue`, `brand.dark.chroma`, `brand.dark.lightness`. Every other parameter is a default; the ones marked prototype are not decided
-yet: `target.text.subtlest`, `target.text.inverse`, `target.link`, `alpha.brand.subtlest`, `offset.background.selected`, `status.hue.danger`, `status.hue.warning`, `status.hue.success`, `status.chromaCap`, `target.status`.
+yet: .
 
 ### 2. The IR
 
@@ -94,14 +94,14 @@ yet: `target.text.subtlest`, `target.text.inverse`, `target.link`, `alpha.brand.
 | `color.background.brand.subtlest` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#e8eeda"></span> `#e8eeda` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#222717"></span> `#222717` | brand fill at alpha over color.surface |
 | `color.border.brand` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#6f8d00"></span> `#6f8d00` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#9bb856"></span> `#9bb856` | the mode's accent, lightness solved to reach the target on every ground |
 | `color.link` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#566f00"></span> `#566f00` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#9bb856"></span> `#9bb856` | the mode's accent, lightness solved to reach the target on every ground |
-| `color.background.selected` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#cbdcab"></span> `#cbdcab` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#1c2600"></span> `#1c2600` | secondary at reduced chroma, offset from the ground toward text |
-| `color.background.selected.hovered` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#bbcc9b"></span> `#bbcc9b` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#273305"></span> `#273305` | secondary at reduced chroma, offset from the ground toward text |
+| `color.background.selected` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#d5e6b4"></span> `#d5e6b4` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#161e00"></span> `#161e00` | secondary at reduced chroma, offset from the ground toward text |
+| `color.background.selected.hovered` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#c5d6a4"></span> `#c5d6a4` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#202b00"></span> `#202b00` | secondary at reduced chroma, offset from the ground toward text |
 | `color.border.selected` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#6f8d00"></span> `#6f8d00` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#a5c84d"></span> `#a5c84d` | secondary hue reaching 3:1 on every ground |
 | `color.border.focused` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#6f8d00"></span> `#6f8d00` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#a5c84d"></span> `#a5c84d` | alias of `color.border.selected` |
 | `color.text.selected` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#010101"></span> `#010101` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#ffffff"></span> `#ffffff` | alias of `color.text` |
 | `color.text.danger` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#be2e31"></span> `#be2e31` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#de4e4b"></span> `#de4e4b` | conventional hue reaching the target on every ground |
-| `color.text.warning` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#875f00"></span> `#875f00` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#a77600"></span> `#a77600` | conventional hue reaching the target on every ground |
-| `color.text.success` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#00771d"></span> `#00771d` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#189a30"></span> `#189a30` | conventional hue reaching the target on every ground |
+| `color.text.warning` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#8b5d00"></span> `#8b5d00` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#ae7500"></span> `#ae7500` | conventional hue reaching the target on every ground |
+| `color.text.success` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#00752c"></span> `#00752c` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#009b3d"></span> `#009b3d` | conventional hue reaching the target on every ground |
 | `color.chart.categorical.1` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#748a42"></span> `#748a42` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#9bb859"></span> `#9bb859` | golden walk slot 1: hue +0x137.5 deg, lightness solved to 3:1, chroma ceiling |
 | `color.chart.categorical.2` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#5f83bf"></span> `#5f83bf` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#7dabfa"></span> `#7dabfa` | golden walk slot 2: hue +1x137.5 deg, lightness solved to 3:1, chroma ceiling |
 | `color.chart.categorical.3` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#b96f57"></span> `#b96f57` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#ee8d6e"></span> `#ee8d6e` | golden walk slot 3: hue +2x137.5 deg, lightness solved to 3:1, chroma ceiling |
@@ -239,11 +239,11 @@ inputs under `$extensions`.
      "label": "dark brand fill"
     },
     {
-     "hex": "#cbdcab",
+     "hex": "#d5e6b4",
      "label": "light selected"
     },
     {
-     "hex": "#1c2600",
+     "hex": "#161e00",
      "label": "dark selected"
     }
    ]
@@ -269,12 +269,12 @@ inputs under `$extensions`.
 | `color.link` | `color.surface` | 5.25:1 AA | 8.80:1 AAA |
 | `color.link` | `color.surface.raised` | 5.72:1 AA | 8.09:1 AAA |
 | `color.text.danger` | `color.surface` | 5.31:1 AA | 4.96:1 AA |
-| `color.text.warning` | `color.surface` | 5.25:1 AA | 4.91:1 AA |
-| `color.text.success` | `color.surface` | 5.27:1 AA | 5.35:1 AA |
+| `color.text.warning` | `color.surface` | 5.26:1 AA | 5.01:1 AA |
+| `color.text.success` | `color.surface` | 5.38:1 AA | 5.39:1 AA |
 | `color.text.inverse` | `color.background.brand.bold` | 10.97:1 AAA | 9.38:1 AAA |
 | `color.text` | `color.background.brand.subtlest` | 17.57:1 AAA | 15.32:1 AAA |
-| `color.text.selected` | `color.background.selected` | 14.28:1 AAA | 15.83:1 AAA |
-| `color.text.selected` | `color.background.selected.hovered` | 12.15:1 AAA | 13.44:1 AAA |
+| `color.text.selected` | `color.background.selected` | 15.71:1 AAA | 17.22:1 AAA |
+| `color.text.selected` | `color.background.selected.hovered` | 13.45:1 AAA | 14.93:1 AAA |
 
 ### 5. The DTCG build
 
@@ -335,7 +335,7 @@ light mode, showing colour objects and an alias:
 ```
 
 Stated: `brand.hue`, `brand.chroma`, `brand.lightness`, `brand.dark.hue`, `brand.dark.chroma`, `brand.dark.lightness`. Every other parameter is a default; the ones marked prototype are not decided
-yet: `target.text.subtlest`, `target.text.inverse`, `target.link`, `alpha.brand.subtlest`, `offset.background.selected`, `status.hue.danger`, `status.hue.warning`, `status.hue.success`, `status.chromaCap`, `target.status`.
+yet: .
 
 ### 2. The IR
 
@@ -354,14 +354,14 @@ yet: `target.text.subtlest`, `target.text.inverse`, `target.link`, `alpha.brand.
 | `color.background.brand.subtlest` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#f7dfd3"></span> `#f7dfd3` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#302019"></span> `#302019` | brand fill at alpha over color.surface |
 | `color.border.brand` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#de5700"></span> `#de5700` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#ef8e65"></span> `#ef8e65` | the mode's accent, lightness solved to reach the target on every ground |
 | `color.link` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#b04300"></span> `#b04300` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#ef8e65"></span> `#ef8e65` | the mode's accent, lightness solved to reach the target on every ground |
-| `color.background.selected` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#ffc5ae"></span> `#ffc5ae` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#3d1200"></span> `#3d1200` | secondary at reduced chroma, offset from the ground toward text |
-| `color.background.selected.hovered` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#f5b297"></span> `#f5b297` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#501b01"></span> `#501b01` | secondary at reduced chroma, offset from the ground toward text |
+| `color.background.selected` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#ffd3c1"></span> `#ffd3c1` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#320d00"></span> `#320d00` | secondary at reduced chroma, offset from the ground toward text |
+| `color.background.selected.hovered` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#ffbca1"></span> `#ffbca1` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#451500"></span> `#451500` | secondary at reduced chroma, offset from the ground toward text |
 | `color.border.selected` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#de5700"></span> `#de5700` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#ff6d22"></span> `#ff6d22` | secondary hue reaching 3:1 on every ground |
 | `color.border.focused` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#de5700"></span> `#de5700` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#ff6d22"></span> `#ff6d22` | alias of `color.border.selected` |
 | `color.text.selected` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#010101"></span> `#010101` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#ffffff"></span> `#ffffff` | alias of `color.text` |
 | `color.text.danger` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#be2e31"></span> `#be2e31` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#de4e4b"></span> `#de4e4b` | conventional hue reaching the target on every ground |
-| `color.text.warning` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#875f00"></span> `#875f00` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#a77600"></span> `#a77600` | conventional hue reaching the target on every ground |
-| `color.text.success` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#00771d"></span> `#00771d` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#189a30"></span> `#189a30` | conventional hue reaching the target on every ground |
+| `color.text.warning` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#8b5d00"></span> `#8b5d00` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#ae7500"></span> `#ae7500` | conventional hue reaching the target on every ground |
+| `color.text.success` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#00752c"></span> `#00752c` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#009b3d"></span> `#009b3d` | conventional hue reaching the target on every ground |
 | `color.chart.categorical.1` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#b87052"></span> `#b87052` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#ed8f68"></span> `#ed8f68` | golden walk slot 1: hue +0x137.5 deg, lightness solved to 3:1, chroma ceiling |
 | `color.chart.categorical.2` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#1c9282"></span> `#1c9282` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#29c5af"></span> `#29c5af` | golden walk slot 2: hue +1x137.5 deg, lightness solved to 3:1, chroma ceiling |
 | `color.chart.categorical.3` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#9e71ac"></span> `#9e71ac` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#cc91de"></span> `#cc91de` | golden walk slot 3: hue +2x137.5 deg, lightness solved to 3:1, chroma ceiling |
@@ -499,11 +499,11 @@ inputs under `$extensions`.
      "label": "dark brand fill"
     },
     {
-     "hex": "#ffc5ae",
+     "hex": "#ffd3c1",
      "label": "light selected"
     },
     {
-     "hex": "#3d1200",
+     "hex": "#320d00",
      "label": "dark selected"
     }
    ]
@@ -529,12 +529,12 @@ inputs under `$extensions`.
 | `color.link` | `color.surface` | 5.28:1 AA | 8.18:1 AAA |
 | `color.link` | `color.surface.raised` | 5.76:1 AA | 7.52:1 AAA |
 | `color.text.danger` | `color.surface` | 5.31:1 AA | 4.96:1 AA |
-| `color.text.warning` | `color.surface` | 5.25:1 AA | 4.91:1 AA |
-| `color.text.success` | `color.surface` | 5.27:1 AA | 5.35:1 AA |
+| `color.text.warning` | `color.surface` | 5.26:1 AA | 5.01:1 AA |
+| `color.text.success` | `color.surface` | 5.38:1 AA | 5.39:1 AA |
 | `color.text.inverse` | `color.background.brand.bold` | 7.46:1 AAA | 8.73:1 AAA |
 | `color.text` | `color.background.brand.subtlest` | 16.35:1 AAA | 15.60:1 AAA |
-| `color.text.selected` | `color.background.selected` | 13.77:1 AAA | 16.34:1 AAA |
-| `color.text.selected` | `color.background.selected.hovered` | 11.63:1 AAA | 14.02:1 AAA |
+| `color.text.selected` | `color.background.selected` | 15.25:1 AAA | 17.60:1 AAA |
+| `color.text.selected` | `color.background.selected.hovered` | 12.88:1 AAA | 15.44:1 AAA |
 
 ### 5. The DTCG build
 
@@ -595,7 +595,7 @@ light mode, showing colour objects and an alias:
 ```
 
 Stated: `brand.hue`, `brand.chroma`, `brand.lightness`, `brand.dark.hue`, `brand.dark.chroma`, `brand.dark.lightness`. Every other parameter is a default; the ones marked prototype are not decided
-yet: `target.text.subtlest`, `target.text.inverse`, `target.link`, `alpha.brand.subtlest`, `offset.background.selected`, `status.hue.danger`, `status.hue.warning`, `status.hue.success`, `status.chromaCap`, `target.status`.
+yet: .
 
 ### 2. The IR
 
@@ -614,14 +614,14 @@ yet: `target.text.subtlest`, `target.text.inverse`, `target.link`, `alpha.brand.
 | `color.background.brand.subtlest` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#dcd8e6"></span> `#dcd8e6` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#292632"></span> `#292632` | brand fill at alpha over color.surface |
 | `color.border.brand` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#5c4295"></span> `#5c4295` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#c3b0fd"></span> `#c3b0fd` | the mode's accent, lightness solved to reach the target on every ground |
 | `color.link` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#5c4295"></span> `#5c4295` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#c3b0fd"></span> `#c3b0fd` | the mode's accent, lightness solved to reach the target on every ground |
-| `color.background.selected` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#d6cdf7"></span> `#d6cdf7` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#241b3a"></span> `#241b3a` | secondary at reduced chroma, offset from the ground toward text |
-| `color.background.selected.hovered` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#c6bde7"></span> `#c6bde7` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#302748"></span> `#302748` | secondary at reduced chroma, offset from the ground toward text |
+| `color.background.selected` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#e0d8ff"></span> `#e0d8ff` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#1d1432"></span> `#1d1432` | secondary at reduced chroma, offset from the ground toward text |
+| `color.background.selected.hovered` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#d0c7f1"></span> `#d0c7f1` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#292040"></span> `#292040` | secondary at reduced chroma, offset from the ground toward text |
 | `color.border.selected` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#5c4295"></span> `#5c4295` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#6d54a8"></span> `#6d54a8` | secondary hue reaching 3:1 on every ground |
 | `color.border.focused` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#5c4295"></span> `#5c4295` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#6d54a8"></span> `#6d54a8` | alias of `color.border.selected` |
 | `color.text.selected` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#010101"></span> `#010101` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#ffffff"></span> `#ffffff` | alias of `color.text` |
 | `color.text.danger` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#be2e31"></span> `#be2e31` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#de4e4b"></span> `#de4e4b` | conventional hue reaching the target on every ground |
-| `color.text.warning` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#875f00"></span> `#875f00` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#a77600"></span> `#a77600` | conventional hue reaching the target on every ground |
-| `color.text.success` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#00771d"></span> `#00771d` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#189a30"></span> `#189a30` | conventional hue reaching the target on every ground |
+| `color.text.warning` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#8b5d00"></span> `#8b5d00` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#ae7500"></span> `#ae7500` | conventional hue reaching the target on every ground |
+| `color.text.success` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#00752c"></span> `#00752c` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#009b3d"></span> `#009b3d` | conventional hue reaching the target on every ground |
 | `color.chart.categorical.1` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#584c7c"></span> `#584c7c` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#c2b1f8"></span> `#c2b1f8` | golden walk slot 1: hue +0x137.5 deg, lightness solved to 3:1, chroma ceiling |
 | `color.chart.categorical.2` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#704e1e"></span> `#704e1e` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#e6b474"></span> `#e6b474` | golden walk slot 2: hue +1x137.5 deg, lightness solved to 3:1, chroma ceiling |
 | `color.chart.categorical.3` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#00616d"></span> `#00616d` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#67d0e2"></span> `#67d0e2` | golden walk slot 3: hue +2x137.5 deg, lightness solved to 3:1, chroma ceiling |
@@ -759,11 +759,11 @@ inputs under `$extensions`.
      "label": "dark brand fill"
     },
     {
-     "hex": "#d6cdf7",
+     "hex": "#e0d8ff",
      "label": "light selected"
     },
     {
-     "hex": "#241b3a",
+     "hex": "#1d1432",
      "label": "dark selected"
     }
    ]
@@ -789,12 +789,12 @@ inputs under `$extensions`.
 | `color.link` | `color.surface` | 7.22:1 AAA | 10.26:1 AAA |
 | `color.link` | `color.surface.raised` | 7.87:1 AAA | 9.43:1 AAA |
 | `color.text.danger` | `color.surface` | 5.31:1 AA | 4.96:1 AA |
-| `color.text.warning` | `color.surface` | 5.25:1 AA | 4.91:1 AA |
-| `color.text.success` | `color.surface` | 5.27:1 AA | 5.35:1 AA |
+| `color.text.warning` | `color.surface` | 5.26:1 AA | 5.01:1 AA |
+| `color.text.success` | `color.surface` | 5.38:1 AA | 5.39:1 AA |
 | `color.text.inverse` | `color.background.brand.bold` | 7.87:1 AAA | 10.95:1 AAA |
 | `color.text` | `color.background.brand.subtlest` | 14.92:1 AAA | 14.81:1 AAA |
-| `color.text.selected` | `color.background.selected` | 13.85:1 AAA | 16.24:1 AAA |
-| `color.text.selected` | `color.background.selected.hovered` | 11.76:1 AAA | 13.91:1 AAA |
+| `color.text.selected` | `color.background.selected` | 15.34:1 AAA | 17.52:1 AAA |
+| `color.text.selected` | `color.background.selected.hovered` | 13.04:1 AAA | 15.27:1 AAA |
 
 ### 5. The DTCG build
 
@@ -852,7 +852,7 @@ light mode, showing colour objects and an alias:
 ```
 
 Stated: `brand.hue`, `brand.chroma`, `brand.lightness`. Every other parameter is a default; the ones marked prototype are not decided
-yet: `brand.dark.hue`, `brand.dark.chroma`, `brand.dark.lightness`, `target.text.subtlest`, `target.text.inverse`, `target.link`, `alpha.brand.subtlest`, `offset.background.selected`, `status.hue.danger`, `status.hue.warning`, `status.hue.success`, `status.chromaCap`, `target.status`.
+yet: .
 
 ### 2. The IR
 
@@ -871,14 +871,14 @@ yet: `brand.dark.hue`, `brand.dark.chroma`, `brand.dark.lightness`, `target.text
 | `color.background.brand.subtlest` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#f7ecce"></span> `#f7ecce` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#322809"></span> `#322809` | brand fill at alpha over color.surface |
 | `color.border.brand` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#a67c00"></span> `#a67c00` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#ffc000"></span> `#ffc000` | the mode's accent, lightness solved to reach the target on every ground |
 | `color.link` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#826100"></span> `#826100` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#ffc000"></span> `#ffc000` | the mode's accent, lightness solved to reach the target on every ground |
-| `color.background.selected` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#ecd19a"></span> `#ecd19a` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#2d1f00"></span> `#2d1f00` | secondary at reduced chroma, offset from the ground toward text |
-| `color.background.selected.hovered` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#dbc18b"></span> `#dbc18b` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#3c2b00"></span> `#3c2b00` | secondary at reduced chroma, offset from the ground toward text |
+| `color.background.selected` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#f6dba4"></span> `#f6dba4` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#241800"></span> `#241800` | secondary at reduced chroma, offset from the ground toward text |
+| `color.background.selected.hovered` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#e5ca94"></span> `#e5ca94` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#332400"></span> `#332400` | secondary at reduced chroma, offset from the ground toward text |
 | `color.border.selected` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#a67c00"></span> `#a67c00` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#ffc000"></span> `#ffc000` | secondary hue reaching 3:1 on every ground |
 | `color.border.focused` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#a67c00"></span> `#a67c00` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#ffc000"></span> `#ffc000` | alias of `color.border.selected` |
 | `color.text.selected` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#010101"></span> `#010101` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#ffffff"></span> `#ffffff` | alias of `color.text` |
 | `color.text.danger` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#be2e31"></span> `#be2e31` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#de4e4b"></span> `#de4e4b` | conventional hue reaching the target on every ground |
-| `color.text.warning` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#875f00"></span> `#875f00` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#a77600"></span> `#a77600` | conventional hue reaching the target on every ground |
-| `color.text.success` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#00771d"></span> `#00771d` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#189a30"></span> `#189a30` | conventional hue reaching the target on every ground |
+| `color.text.warning` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#8b5d00"></span> `#8b5d00` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#ae7500"></span> `#ae7500` | conventional hue reaching the target on every ground |
+| `color.text.success` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#00752c"></span> `#00752c` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#009b3d"></span> `#009b3d` | conventional hue reaching the target on every ground |
 | `color.chart.categorical.1` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#9f7d2f"></span> `#9f7d2f` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#e3c890"></span> `#e3c890` | golden walk slot 1: hue +0x137.5 deg, lightness solved to 3:1, chroma ceiling |
 | `color.chart.categorical.2` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#1d8cab"></span> `#1d8cab` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#91d7f0"></span> `#91d7f0` | golden walk slot 2: hue +1x137.5 deg, lightness solved to 3:1, chroma ceiling |
 | `color.chart.categorical.3` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#b96b85"></span> `#b96b85` | <span style="display:inline-block;width:38px;height:16px;border-radius:3px;vertical-align:middle;border:1px solid #8886;background:#f7b6c9"></span> `#f7b6c9` | golden walk slot 3: hue +2x137.5 deg, lightness solved to 3:1, chroma ceiling |
@@ -1016,11 +1016,11 @@ inputs under `$extensions`.
      "label": "dark brand fill"
     },
     {
-     "hex": "#ecd19a",
+     "hex": "#f6dba4",
      "label": "light selected"
     },
     {
-     "hex": "#2d1f00",
+     "hex": "#241800",
      "label": "dark selected"
     }
    ]
@@ -1046,12 +1046,12 @@ inputs under `$extensions`.
 | `color.link` | `color.surface` | 5.26:1 AA | 11.99:1 AAA |
 | `color.link` | `color.surface.raised` | 5.74:1 AA | 11.02:1 AAA |
 | `color.text.danger` | `color.surface` | 5.31:1 AA | 4.96:1 AA |
-| `color.text.warning` | `color.surface` | 5.25:1 AA | 4.91:1 AA |
-| `color.text.success` | `color.surface` | 5.27:1 AA | 5.35:1 AA |
+| `color.text.warning` | `color.surface` | 5.26:1 AA | 5.01:1 AA |
+| `color.text.success` | `color.surface` | 5.38:1 AA | 5.39:1 AA |
 | `color.text.inverse` | `color.background.brand.bold` | 12.79:1 AAA | 12.79:1 AAA |
 | `color.text` | `color.background.brand.subtlest` | 17.74:1 AAA | 14.55:1 AAA |
-| `color.text.selected` | `color.background.selected` | 14.07:1 AAA | 16.06:1 AAA |
-| `color.text.selected` | `color.background.selected.hovered` | 11.94:1 AAA | 13.66:1 AAA |
+| `color.text.selected` | `color.background.selected` | 15.49:1 AAA | 17.42:1 AAA |
+| `color.text.selected` | `color.background.selected.hovered` | 13.13:1 AAA | 15.07:1 AAA |
 
 ### 5. The DTCG build
 

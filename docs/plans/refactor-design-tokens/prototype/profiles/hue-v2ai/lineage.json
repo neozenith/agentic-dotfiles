@@ -88,7 +88,7 @@
         {
           "id": "param:target.text.subtlest",
           "label": "target.text.subtlest = 4.5",
-          "group": "prototype default",
+          "group": "decided default",
           "colour": {
             "light": "#8a8a8a",
             "dark": "#8a8a8a"
@@ -124,7 +124,7 @@
         {
           "id": "param:target.text.inverse",
           "label": "target.text.inverse = 7.0",
-          "group": "prototype default",
+          "group": "decided default",
           "colour": {
             "light": "#8a8a8a",
             "dark": "#8a8a8a"
@@ -133,7 +133,7 @@
         {
           "id": "param:target.link",
           "label": "target.link = 4.5",
-          "group": "prototype default",
+          "group": "decided default",
           "colour": {
             "light": "#8a8a8a",
             "dark": "#8a8a8a"
@@ -142,7 +142,7 @@
         {
           "id": "param:alpha.brand.subtlest",
           "label": "alpha.brand.subtlest = 0.16",
-          "group": "prototype default",
+          "group": "decided default",
           "colour": {
             "light": "#8a8a8a",
             "dark": "#8a8a8a"
@@ -168,8 +168,8 @@
         },
         {
           "id": "param:offset.background.selected",
-          "label": "offset.background.selected = 0.1",
-          "group": "prototype default",
+          "label": "offset.background.selected = 0.07",
+          "group": "decided default",
           "colour": {
             "light": "#8a8a8a",
             "dark": "#8a8a8a"
@@ -214,7 +214,7 @@
         {
           "id": "param:status.hue.danger",
           "label": "status.hue.danger = 25.0",
-          "group": "prototype default",
+          "group": "decided default",
           "colour": {
             "light": "#8a8a8a",
             "dark": "#8a8a8a"
@@ -222,8 +222,8 @@
         },
         {
           "id": "param:status.hue.warning",
-          "label": "status.hue.warning = 80.0",
-          "group": "prototype default",
+          "label": "status.hue.warning = 75.0",
+          "group": "decided default",
           "colour": {
             "light": "#8a8a8a",
             "dark": "#8a8a8a"
@@ -231,8 +231,8 @@
         },
         {
           "id": "param:status.hue.success",
-          "label": "status.hue.success = 145.0",
-          "group": "prototype default",
+          "label": "status.hue.success = 148.0",
+          "group": "decided default",
           "colour": {
             "light": "#8a8a8a",
             "dark": "#8a8a8a"
@@ -241,7 +241,7 @@
         {
           "id": "param:status.chromaCap",
           "label": "status.chromaCap = 0.18",
-          "group": "prototype default",
+          "group": "decided default",
           "colour": {
             "light": "#8a8a8a",
             "dark": "#8a8a8a"
@@ -250,7 +250,7 @@
         {
           "id": "param:target.status",
           "label": "target.status = 4.5",
-          "group": "prototype default",
+          "group": "decided default",
           "colour": {
             "light": "#8a8a8a",
             "dark": "#8a8a8a"
@@ -378,8 +378,8 @@
           "label": "color.background.selected",
           "group": "IR role",
           "colour": {
-            "light": "#ecd19a",
-            "dark": "#2d1f00"
+            "light": "#f6dba4",
+            "dark": "#241800"
           }
         },
         {
@@ -387,8 +387,8 @@
           "label": "color.background.selected.hovered",
           "group": "IR role",
           "colour": {
-            "light": "#dbc18b",
-            "dark": "#3c2b00"
+            "light": "#e5ca94",
+            "dark": "#332400"
           }
         },
         {
@@ -432,8 +432,8 @@
           "label": "color.text.warning",
           "group": "IR role",
           "colour": {
-            "light": "#875f00",
-            "dark": "#a77600"
+            "light": "#8b5d00",
+            "dark": "#ae7500"
           }
         },
         {
@@ -441,8 +441,8 @@
           "label": "color.text.success",
           "group": "IR role",
           "colour": {
-            "light": "#00771d",
-            "dark": "#189a30"
+            "light": "#00752c",
+            "dark": "#009b3d"
           }
         },
         {
@@ -657,8 +657,8 @@
           "label": "color.chart.diverging.alt-positive.1",
           "group": "IR role",
           "colour": {
-            "light": "#83f68a",
-            "dark": "#003909"
+            "light": "#79f791",
+            "dark": "#003911"
           }
         },
         {
@@ -666,8 +666,8 @@
           "label": "color.chart.diverging.alt-positive.2",
           "group": "IR role",
           "colour": {
-            "light": "#31aa40",
-            "dark": "#008d24"
+            "light": "#1bab49",
+            "dark": "#008d36"
           }
         },
         {
@@ -675,8 +675,8 @@
           "label": "color.chart.diverging.alt-positive.3",
           "group": "IR role",
           "colour": {
-            "light": "#005e15",
-            "dark": "#6fe276"
+            "light": "#005e22",
+            "dark": "#64e37e"
           }
         },
         {
@@ -1604,8 +1604,8 @@
           "label": "color.background.selected",
           "group": "IR role",
           "colour": {
-            "light": "#ecd19a",
-            "dark": "#2d1f00"
+            "light": "#f6dba4",
+            "dark": "#241800"
           }
         },
         {
@@ -1631,8 +1631,8 @@
           "label": "color.text.warning",
           "group": "IR role",
           "colour": {
-            "light": "#875f00",
-            "dark": "#a77600"
+            "light": "#8b5d00",
+            "dark": "#ae7500"
           }
         },
         {
@@ -1640,8 +1640,8 @@
           "label": "color.text.success",
           "group": "IR role",
           "colour": {
-            "light": "#00771d",
-            "dark": "#189a30"
+            "light": "#00752c",
+            "dark": "#009b3d"
           }
         },
         {
@@ -1856,8 +1856,8 @@
           "label": "color.chart.diverging.alt-positive.1",
           "group": "IR role",
           "colour": {
-            "light": "#83f68a",
-            "dark": "#003909"
+            "light": "#79f791",
+            "dark": "#003911"
           }
         },
         {
@@ -1865,8 +1865,8 @@
           "label": "color.chart.diverging.alt-positive.2",
           "group": "IR role",
           "colour": {
-            "light": "#31aa40",
-            "dark": "#008d24"
+            "light": "#1bab49",
+            "dark": "#008d36"
           }
         },
         {
@@ -1874,8 +1874,8 @@
           "label": "color.chart.diverging.alt-positive.3",
           "group": "IR role",
           "colour": {
-            "light": "#005e15",
-            "dark": "#6fe276"
+            "light": "#005e22",
+            "dark": "#64e37e"
           }
         },
         {
@@ -2018,8 +2018,8 @@
           "label": "cytoscape \u00b7 nodeFillAlt",
           "group": "cytoscape",
           "colour": {
-            "light": "#ecd19a",
-            "dark": "#2d1f00"
+            "light": "#f6dba4",
+            "dark": "#241800"
           }
         },
         {
@@ -2369,8 +2369,8 @@
           "label": "plotly \u00b7 divergingAlt \u00b7 good \u00b7 1",
           "group": "plotly",
           "colour": {
-            "light": "#83f68a",
-            "dark": "#003909"
+            "light": "#79f791",
+            "dark": "#003911"
           }
         },
         {
@@ -2378,8 +2378,8 @@
           "label": "plotly \u00b7 divergingAlt \u00b7 good \u00b7 2",
           "group": "plotly",
           "colour": {
-            "light": "#31aa40",
-            "dark": "#008d24"
+            "light": "#1bab49",
+            "dark": "#008d36"
           }
         },
         {
@@ -2387,8 +2387,8 @@
           "label": "plotly \u00b7 divergingAlt \u00b7 good \u00b7 3",
           "group": "plotly",
           "colour": {
-            "light": "#005e15",
-            "dark": "#6fe276"
+            "light": "#005e22",
+            "dark": "#64e37e"
           }
         },
         {
@@ -2495,8 +2495,8 @@
           "label": "status \u00b7 good",
           "group": "status",
           "colour": {
-            "light": "#00771d",
-            "dark": "#189a30"
+            "light": "#00752c",
+            "dark": "#009b3d"
           }
         },
         {
@@ -2504,8 +2504,8 @@
           "label": "status \u00b7 warning",
           "group": "status",
           "colour": {
-            "light": "#875f00",
-            "dark": "#a77600"
+            "light": "#8b5d00",
+            "dark": "#ae7500"
           }
         },
         {

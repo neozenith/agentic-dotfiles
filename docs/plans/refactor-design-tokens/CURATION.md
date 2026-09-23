@@ -34,14 +34,15 @@ extrapolated into a full IR.
 | `offset.surface.raised` | no | **+0.05** | DT-REF-1 |
 | `offset.text.subtle` | no | **+0.65** | DT-REF-1 |
 | `offset.text` | no | **+0.90** | DT-REF-1 |
-| fonts | no | a fallback stack | 🟡 |
+| fonts | no | a system stack; a brand states its own faces | ✅ low stakes, OPEN-QUESTIONS |
 
 Name→role heuristics for the scrape path are already worked out in
 `~/foss/diagram-design/references/onboarding.md:228-235` — `background|bg|surface|canvas` → ground,
 `accent|brand|primary|cta|highlight` → brand hue, and so on. That table is directly reusable.
 
-Everything else the brand states is imputed. Whether the seed carries more than the above is
-deliberately not locked; the maintainer wants it small.
+The full seed is the `DEFAULTS` keys in `prototype/pipeline.py`, every one optional except the brand
+hue, each with its default's source. A scraped brand usually states only its accents: `brand.hue`,
+`brand.chroma` and `brand.lightness`, plus `brand.dark.*` when its dark accent differs.
 
 ---
 
@@ -97,7 +98,7 @@ Reproduce with `scripts/build_q9_doc.py`.
 
 ---
 
-## Stage 3 — the brand hue in context 🟡 draft
+## Stage 3 — the brand hue in context ✅ settled (DT-ACCENT-1, DT-CONTRAST-1, DT-PROV-1)
 
 The brand hue comes *from the brand*, so unlike neutrals it is not fully derivable. Its lightness
 mirrors between modes so it stays legible on each ground — real anchor, `osakanights`: light accent
@@ -117,6 +118,13 @@ Roles to produce: `color.background.brand.bold`, `color.background.brand.subtles
 
 Lightness for these roles is solved against their grounds by default, and a stated value is never
 pushed (DT-WALK-2, applied by cascade; DT-CONTRAST-1).
+
+**As implemented (2026-09-24):** a stated accent (`brand.lightness`, `brand.dark.lightness`) is the
+brand fill verbatim in its mode. A hue-only seed falls back to the hue's most colourful in-gamut
+point (the cusp), then solves lightness so inverse text reaches 7:1 (DT-CONTRAST-1's "maximise") and
+the fill 3:1 on every ground. `color.link` and `color.border.brand` solve from the same accent to
+4.5:1 and 3:1. `color.background.brand.subtlest` is the fill at 16% over the surface, the tint
+richdocs already shipped (`rdMix 0.84`).
 
 ---
 
@@ -157,7 +165,7 @@ ring cannot be CVD-safe (ColorBrewer flags zero qualitative schemes safe at ≥5
 
 ---
 
-## Stage 5 — status colours 🟡 draft
+## Stage 5 — status colours ✅ settled (measured precedent)
 
 `color.text.danger` / `.warning` / `.success`, per mode. **Not from the walk** — roles carrying
 conventional meaning get conventional hues, then solve for contrast.
@@ -167,6 +175,18 @@ hue 25 / chroma 84**.
 
 Real anchor: `osakanights` already does this, with a `status` group carrying per-mode
 `good/warning/serious/critical` alongside `categoryColours`.
+
+**Defaults, measured in OKLCH on 2026-09-24** (each then solved to 4.5:1 on its ground):
+
+| Role | Hue | Evidence |
+|---|---|---|
+| `color.text.danger` | **25** | Primer `danger.fg` 24.6, Tailwind red-600 27.3, M3 error 28.7 |
+| `color.text.warning` | **75** | Primer `attention.fg` 75.0, a text role (Tailwind amber 49–58 is a fill) |
+| `color.text.success` | **148** | Primer `success.fg` 148.0, Tailwind green-600 149.2 |
+| chroma cap | **0.18** | M3 error `#B3261E` at 0.178 |
+
+The selected container (`offset.background.selected`) moved from a placeholder 0.10 to **0.07**:
+M3's `secondaryContainer` sits 0.068 L from its surface.
 
 **Categorical classes are not status colours.** Storage, compute, Input, Process and every other
 class take sequential `color.chart.categorical.<N>` slots (DT-CAT-1), for visual separation only.
@@ -205,7 +225,7 @@ this.cScale2 = this.cScale2 || this.tertiaryColor
 
 ---
 
-## Stage 7 — scoring, not gating 🟡 draft
+## Stage 7 — scoring, not gating ✅ settled (DT-CONTRAST-1, DT-PROV-1)
 
 Curation maximises WCAG **pragmatically, not optimally** (DT-PIPE-1 rule 5), then records what it
 achieved. Nothing downstream re-checks: loading a DTCG runs no WCAG or CVD gate, because editing
@@ -216,3 +236,9 @@ passes within its own tier, and stated values are never pushed. Contrast severit
 DT-CONTRAST-1: text on a background colour is what gets checked, a miss produced by defaults is a
 failure, and a miss produced by any stated seed parameter is the user's choice, reported as
 information and never as a failure.
+
+**As implemented (2026-09-24):** `curate` scores every text-on-background pairing per mode against
+AA (4.5:1) and writes the scores to the IR's top-level `$extensions`. A miss is a `defect` only when
+both colours are imputed and neither was driven by a stated seed parameter (the brand hue aside);
+any other miss is the user's `choice`. `curate` exits non-zero on a defect. Verified: hue-only seeds
+every 15° round the wheel score zero defects, worst pairing 4.50:1.

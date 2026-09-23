@@ -84,17 +84,34 @@ now stale, with nothing reporting it.
 
 ---
 
-## Also unresolved, low stakes
+## Low-stakes items, resolved 2026-09-24
 
-- **A `contrastLevel` dial.** M3 ships a system-wide −1 to 1 shift of every contrast target.
-  Not adopted by DT-WALK-2; add only if a brand needs a global high- or low-contrast variant.
+Each was settled as a pragmatic default (evidence or a recorded lens points one way, and it is cheap
+to reverse), not put to the maintainer. Reopen any of them with evidence.
 
-- **Alpha support per surface.** DT-BORDER-1 makes `color.border` translucent. Cytoscape and deck.gl
-  accept alpha; mermaid `themeVariables` and draw.io stencil styles are unverified. A surface that
-  cannot composite needs a baked opaque value per ground.
+- **~~A `contrastLevel` dial~~ — not adopted.** DT-WALK-2 already said "add only if a brand needs
+  it", and no brand does: every hue-only seed round the wheel scores zero contrast defects (worst
+  pairing 4.50:1, `color.link` on `surface.sunken` at hue 255). Add it the day a brand asks for a
+  global high- or low-contrast variant.
+- **~~Alpha support per surface~~ — every projection flattens alpha onto its ground.** Probed in the
+  showcase: Mermaid 11.4.1 passes an 8-digit hex through for `lineColor` but drops it for
+  `primaryColor`, and draw.io expresses alpha as a separate `opacity` style, not in the colour. So
+  the DTCG keeps `color.border`'s alpha, and any surface projection composites it over the ground it
+  sits on, as the richdocs projection already does (`border`, `grid`, `compoundBorder`).
+- **~~`.design-profiles/` spelling~~ — kept.** It is the name every decision and doc already uses,
+  matches the `.claude/` and `.codex/` dot-directory convention, and a rename is a string change.
+- **~~The rest of the seed~~ — the seed is exactly the `DEFAULTS` keys in `prototype/pipeline.py`**,
+  every one optional except `brand.hue`. A scraped brand typically states its accents (`brand.*`,
+  `brand.dark.*`) and nothing else; everything else is a tuning knob with a sourced default.
+- **~~Hand-authored osakanights' pastel light series~~ — the brand's choice.** Its light-mode series
+  sit at 1.6–2.0:1 as outlines on white. The pack is hand-authored, so under DT-CONTRAST-1 that is a
+  stated value and information only. Its generated sibling `hue-osakanights` passes.
+- **~~The Tune seed drawer ignores IR edits~~ — it now keeps them.** The generator manifest carries
+  the profile's stated values (DT-PROV-1) as `context`, so live tuning keeps hand edits exactly as
+  `curate` does (richdocs ADR-022).
 
-- **`.design-profiles/` spelling.** DT-LOC-1 fixed the *scope* of the shared store, not its name.
-- **The rest of the seed.** Beyond the brand hue and the neutral parameters, what else does
-  `seed.json` carry? Deliberately not locked; the maintainer wants it small.
-- **Migration.** Both skills' packs need a rename to the DT-ROLES-1 vocabulary. `richdocs` ADR-004's
-  two-palette split (chrome CSS vars + canvas JS palette) survives — only the keys change.
+## Still open: the build, not a decision
+
+- **Migration.** Both skills' packs need a rename to the DT-ROLES-1 vocabulary, and the real curation
+  tool replaces the prototype. `richdocs` ADR-004's two-palette split (chrome CSS vars + canvas JS
+  palette) survives; only the keys change. Sequenced in [`MIGRATION.md`](MIGRATION.md).
