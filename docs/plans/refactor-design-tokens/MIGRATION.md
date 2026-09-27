@@ -25,10 +25,10 @@ richdocs' current schema. That projection is the stand-in this plan retires.
 | **M0** | Where the curation tool lives: **`skills/design-profiles/`** | — | DT-TOOL-1 |
 | M1 | Surface expansion into the IR (CURATION stage 6) | M0 | DT-BUILD-1 |
 | M2 | Promote the prototype to the real tool and the shared store | M0 | DT-LOC-1, DT-PROV-1 |
-| M3 | Port the four built-in brands to IRs, every value stated | M2 | DT-BUILD-1, DT-PROV-1 |
-| M4 | `richdocs` reads the DTCG | M1, M3 | DT-PIPE-1, DT-ROLES-1 |
-| M5 | `mermaidjs-diagrams` reads the DTCG; re-vendor into `richdocs` | M1, M2 | DT-LOC-1, ADR-007 |
-| M6 | Retire the legacy keys and the projection | M4, M5 | DT-ROLES-1, DT-CAT-1 |
+| M3 | Ship the four brands' exact-accent seeds as `design-profiles` examples | M2 | DT-TOOL-1 cascade |
+| M4 | `richdocs` reads a profile first, else its built-ins | M1, M2, DT-DTCG-1 | DT-TOOL-1, DT-PIPE-1 |
+| M5 | `mermaidjs-diagrams` reads a profile first, else its palettes; re-vendor into `richdocs` | M1, M2, DT-DTCG-1 | DT-TOOL-1, ADR-007 |
+| M6 | Retire the prototype's projection | M4, M5 | DT-TOOL-1 cascade |
 
 ### M0 — decided: `skills/design-profiles/` (DT-TOOL-1)
 
@@ -83,18 +83,21 @@ Move each surface into curation as IR groups, so the DTCG carries them and no sk
 
 ### M3 — the built-in brands
 
-freshgreens, locomotif, osakanights and v2ai become IRs with **every value stated** (DT-PROV-1), so
-porting is lossless and curation never rewrites them; each keeps its `theme.css` and `DESIGN.md`.
-Their seeds (exact accents) stay available for regeneration by choice.
+*Revised by DT-TOOL-1's cascade:* freshgreens, locomotif, osakanights and v2ai **stay in richdocs**
+as its fallback, hand-authored and gated by `themecheck.py`. `design-profiles` ships their
+exact-accent seeds as examples, so any of them can be curated into a profile by choice.
 
-### M4 — `richdocs` reads the DTCG
+### M4 — `richdocs` reads a profile first, else its built-ins
 
-- Replace `theme_search_dirs`/`load_theme`/`resolve_brand` with the M2 resolver copy.
-- `viewer.js`, `viewer-cytoscape.js`, `viewer-deckgl.js` and `showcase.js` read DT-ROLES-1 roles and
-  M1 surface groups instead of `themes`/`canvas`/`categoryColours`/`status`.
-- `themecheck.py` shrinks: its gates moved to curation (DT-PIPE-1 rule 4, DT-CONTRAST-1), and
-  ADR-016's `waivers` are redundant.
-- Tests pinned to the old schema, to be rewritten against roles:
+- Add the profile lookup (its own copy of the M2 resolver) ahead of `theme_search_dirs`/
+  `load_theme`/`resolve_brand`; with no profile, those run exactly as today, and the output says
+  which was used.
+- A profile is mapped on read onto richdocs' internal keys (`themes`/`canvas`/`status`), a rename
+  with no design knowledge, so `viewer.js`, `viewer-cytoscape.js`, `viewer-deckgl.js` and
+  `showcase.js` keep their current schema.
+- `themecheck.py` keeps gating the built-in themes and never runs on a profile (DT-PIPE-1 rule 4).
+- Tests pinned to the internal schema stay valid; new tests cover the profile-first lookup and the
+  mapping. The survey's list, kept for reference:
   - `test_themecheck.py`: 12 tests (:26, :32, :41, :61, :72, :95, :105, :130, :141, :158, :169, :192)
   - `test_md2html.py`: 7 key-level tests (:118, :148, :185, :206, :299, :348, :362) plus the
     path-based ones at :171–200 and :319–337
@@ -103,16 +106,13 @@ Their seeds (exact accents) stay available for regeneration by choice.
 ### M5 — `mermaidjs-diagrams` reads the DTCG
 
 - `render_mermaid.sh` passes the profile's `surface.mermaid` `themeVariables` as an mmdc config.
-- `mermaid_contrast.ts --profile <name>` takes its grounds from the profile's surfaces instead of the
-  hard-coded host constants; the host profiles remain as fallbacks.
+- `mermaid_contrast.ts --design-profile <name>` takes its grounds from the profile's surfaces;
+  `--profile` (host: GitHub, MkDocs) and its hard-coded grounds remain the fallback.
 - `color_theming.md` points at profiles; the prose palettes become examples.
 - Re-vendor wholesale into `richdocs/vendor/` (ADR-007, ADR-020).
 
-### M6 — retire the legacy
+### M6 — retire the prototype's projection
 
-- Delete `project_richdocs()` and the showcase's projection path.
-- Named `categoryColours` go (DT-CAT-1: sequential slots only). The Cytoscape cluster tint reads
-  `color.chart.categorical.<N>` by cluster order.
-- `status` has four levels (`good`/`warning`/`serious`/`critical`) and DT-ROLES-1 three
-  (`success`/`warning`/`danger`). The projection maps `serious` and `critical` to `danger`; confirm
-  or add a role when M4 reaches `viewer-deckgl.js` and `showcase.js`.
+- Delete `project_richdocs()`: M4's on-read mapping replaces it.
+- A profile's categorical slots feed richdocs' `categoryColours` by cluster order (DT-CAT-1).
+- Status: `serious` and `critical` both read `color.text.danger` (pragmatic default above).
