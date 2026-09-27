@@ -1,7 +1,11 @@
 # Migration: from the prototype to both skills
 
-Topics 1–4 are closed. What remains is **build**, sequenced below. One decision gates it (M0); every
-other step follows from locked decisions. Surveyed 2026-09-24; paths are relative to `skills/`.
+Topics 1–4 are closed. What remains is **build**, sequenced below. Surveyed 2026-09-24; paths are
+relative to `skills/`.
+
+> **Parked 2026-09-28, mid-way through a `concise-decisions` loop** whose goal is a migration with
+> zero open questions. DT-TOOL-1 is decided (DECISIONS.md, with its cascade). **One question is left:
+> DT-DTCG-1**, below. Resume by asking it; everything else is settled.
 
 ## Where things stand
 
@@ -18,7 +22,7 @@ richdocs' current schema. That projection is the stand-in this plan retires.
 
 | # | Step | Depends on | Decided by |
 |---|---|---|---|
-| **M0** | **Decide where the curation tool lives** (DT-TOOL-1, below) | — | open |
+| **M0** | Where the curation tool lives: **`skills/design-profiles/`** | — | DT-TOOL-1 |
 | M1 | Surface expansion into the IR (CURATION stage 6) | M0 | DT-BUILD-1 |
 | M2 | Promote the prototype to the real tool and the shared store | M0 | DT-LOC-1, DT-PROV-1 |
 | M3 | Port the four built-in brands to IRs, every value stated | M2 | DT-BUILD-1, DT-PROV-1 |
@@ -26,14 +30,39 @@ richdocs' current schema. That projection is the stand-in this plan retires.
 | M5 | `mermaidjs-diagrams` reads the DTCG; re-vendor into `richdocs` | M1, M2 | DT-LOC-1, ADR-007 |
 | M6 | Retire the legacy keys and the projection | M4, M5 | DT-ROLES-1, DT-CAT-1 |
 
-### M0 — DT-TOOL-1: where does the curation tool live? (open)
+### M0 — decided: `skills/design-profiles/` (DT-TOOL-1)
 
-Curation is **one act** for both skills (DT-LOC-1), but a skill may not depend on a sibling
-(`skills/CLAUDE.md`). Candidates, to be put through `concise-decisions`:
+An independent skill is the only producer. `richdocs` and `mermaidjs-diagrams` look for a profile in
+`.design-profiles/` first and use it by preference, falling back to what they do today and saying
+which they used. See DT-TOOL-1's cascade for cutover, shipped copies, DT-ROLES-1's scope,
+`themecheck.py`, `slides`/`cli` (out of scope) and the built-in brands.
 
-1. **Its own skill** (e.g. `design-profiles`): curates into the shared store; both skills only read.
-2. **Inside `richdocs`**, which already hosts the showcase and the live generator (ADR-022).
-3. **A repo-level tool** outside `skills/`, since it writes a store no single skill owns.
+### Pragmatic defaults applied in the loop (reversible; reopen with evidence)
+
+- **Status levels:** richdocs' `serious` and `critical` both read `color.text.danger`; the glyph
+  distinguishes them, since status is never shown by colour alone.
+- **`mermaid_contrast.ts`:** the new flag is `--design-profile <name>`; `--profile` keeps meaning the
+  host (GitHub, MkDocs).
+- **Fonts:** a profile carries `font.family.{display,body,mono}` as DTCG `fontFamily` tokens plus an
+  optional web-font stylesheet URL (a typeface is a brand value, richdocs ADR-018).
+- **`.default-profile`:** a one-line text file inside `.design-profiles/` naming the default
+  profile, resolved through the same cascade (DT-LOC-1's derived rule).
+
+### Open — DT-DTCG-1: the file layout a consumer reads
+
+The only remaining ambiguity; it changes a stored data shape, so it goes to the maintainer.
+DT-BUILD-1 names one `design-tokens.json` as "the only file skills read", but the prototype writes
+the DTCG 2025.10 resolver layout (`dtcg/{light,dark}.tokens.json` + `profile.resolver.json`).
+Drafted options, same read in each (`color.text` light for osakanights → `#010101`):
+
+| Option | Files a consumer reads | Outside DTCG tools | Matches DT-BUILD-1 | Main cost |
+|---|---|---|---|---|
+| A: one `design-tokens.json` with `light`/`dark` groups | 1 | need the mode convention | yes | no standard layout |
+| B: the 2025.10 resolver set only | 3 | yes | no | a resolver in 3 languages; 3 copies per richdocs doc |
+| **C (recommended):** both, built from the same IR; consumers read the single file | 1 | yes (`dtcg/`) | yes | a second serialisation + an agreement test |
+
+Useful spike if unsure: does Style Dictionary read the 2025.10 resolver today? If nothing does, C's
+second form buys nothing and A wins.
 
 ### M1 — surface expansion into the IR
 

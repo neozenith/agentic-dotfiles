@@ -40,6 +40,14 @@ independently curatable, and that is the trade the maintainer chose.
   (the 500-line invariant, the docs/scripts contracts) is fine and
   expected. The prohibition is on depending on a **sibling skill**.
 
+### The one named exception: the shared design-profile store
+
+Decided by the maintainer (DT-TOOL-1, `docs/plans/refactor-design-tokens/DECISIONS.md`): skills that
+consume brand colours (`richdocs`, `mermaidjs-diagrams`) may **read the `.design-profiles/` store**
+and **name the `design-profiles` skill** so the agent can run it. That is awareness of shared *data*
+and of a skill's *existence*, not a dependency: a consumer never imports, runs or reads
+`design-profiles`' files, and it keeps working, on its own fallback, when no profile exists.
+
 ## The 500-line invariant still applies
 
 Every prose file in every skill stays ≤ 500 lines

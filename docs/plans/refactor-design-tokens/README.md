@@ -1,5 +1,7 @@
 # Design-token refactor
 
+> **Parked 2026-09-28:** one decision left before the build, DT-DTCG-1 — see [`MIGRATION.md`](MIGRATION.md).
+>
 > **Status:** 2026-09-24 — the seed → IR → DTCG pipeline is prototyped in [`prototype/`](prototype/) and
 > accepted by the maintainer. The richdocs theme showcase is its visual test suite: each generated
 > theme ships its lineage and its generator, so the seed can be tuned live in the browser.

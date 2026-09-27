@@ -875,3 +875,61 @@ updated color.border.bold dark #636363 -> #676767     (solved against the edited
   `prototype/pipeline.py`); before this it rebuilt `ir.json` from the seed and lost hand edits.
 - The showcase's Tune seed drawer still generates from the seed alone; whether it should respect
   IR edits is a separate question.
+
+---
+
+## DT-TOOL-1 — curation is its own skill; consuming skills prefer its profiles, then fall back
+
+- **Status:** decided 2026-09-28 (user-directed, option A of two, through `concise-decisions`).
+  Housing the tool inside `richdocs` was ruled out before asking, by richdocs ADR-021/022's lens:
+  richdocs renders, the producer computes.
+
+### The maintainer's reasoning, verbatim
+
+> *"Let's make it, it's own independent skill and then we will make the mermaidjs-diagrams and the
+> richdocs skills 'aware' of the .design-profiles/ folder and agent skill existing and that it
+> should be used when this is discovered. Then each of these mermaidjs-diagrams and richdocs skills
+> have their usual fallbacks but will look for and try the design-profiles first as the
+> preference."*
+
+### The decision
+
+- **`skills/design-profiles/`** is an independent skill and the only producer: seed → IR → DTCG,
+  contrast scoring, lineage and the live generator. It writes the shared `.design-profiles/` store
+  (DT-LOC-1).
+- **`richdocs` and `mermaidjs-diagrams` are profile-aware consumers.** Each looks for a profile in the
+  store first and uses it by preference. When none resolves, each keeps its **usual fallback**:
+  richdocs its built-in themes, mermaidjs-diagrams its prose palettes and host grounds. The skill
+  says which it used, and why, in its output.
+- **Awareness is of the store and the skill's name, never its files.** A consumer reads
+  `.design-profiles/` (data) and may tell the agent to run `/design-profiles` when a profile is
+  wanted; it never imports or runs design-profiles' code. `skills/CLAUDE.md` records this as the
+  one named exception to "not aware of another skill".
+
+### Rejected alternatives
+
+- **A repo-level tool (`scripts/design_profiles/`)** — it would not ship with the plugins, so the
+  scrape-a-brand on-ramp (DT-PIPE-1 rule 6) would only work in this checkout.
+- **Inside `richdocs`** — contradicts richdocs ADR-021/022: richdocs hosts a producer's output and
+  code, it never computes a theme.
+
+### Lens
+
+- **Given** curation must travel with the skills, and each consumer must stay usable on its own,
+- **we prefer** an independent `design-profiles` skill whose profiles consumers try first, **over**
+  a repo-level tool or a producer housed in a consumer,
+- **because** a brand can then become a profile wherever the skills are installed, while a consumer
+  with no profile degrades to what it already does, visibly,
+- **unless** a consumer can no longer work without a profile, at which point its fallback is dead
+  weight and should be removed rather than maintained.
+
+### Cascade — ambiguities this settled
+
+| Ambiguity | Resolution | By |
+|---|---|---|
+| Cutover: big-bang rename or gradual | **Profile-first with fallback**: nothing breaks when no profile exists | the choice |
+| Shipped profile copies per skill (DT-LOC-1 tiers 3–5) | Tier 5 is each skill's **existing** fallback (richdocs' built-in themes); no DTCG copies are shipped in consumers | the choice |
+| DT-ROLES-1's "both skills' existing names are retired" | Applies to the **shared profile vocabulary**. A skill's internal fallback schema keeps its keys; a consumer maps profile roles onto them on read (a rename, not design knowledge) | the choice, narrowing DT-ROLES-1 |
+| `themecheck.py`'s fate | Keeps gating richdocs' **built-in** themes, which stay hand-authored; it never runs on a profile (DT-PIPE-1 rule 4) | the choice + DT-PIPE-1 |
+| `slides` and `cli`, which also read a `design-tokens.json` | **Out of scope** for this migration: the maintainer named two consumers. Recorded as a seam; the same pattern extends to them later | the choice |
+| The four built-in brands (MIGRATION M3) | Stay in richdocs as its fallback. `design-profiles` ships their exact-accent **seeds** as examples, not copies of the packs | the lens |
