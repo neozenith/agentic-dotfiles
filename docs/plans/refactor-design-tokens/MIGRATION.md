@@ -5,7 +5,8 @@ relative to `skills/`.
 
 > **Parked 2026-09-28, mid-way through a `concise-decisions` loop** whose goal is a migration with
 > zero open questions. DT-TOOL-1 is decided (DECISIONS.md, with its cascade). **One question is left:
-> DT-DTCG-1**, below. Resume by asking it; everything else is settled.
+> DT-DTCG-1**, below, now narrowed to D vs A after an `explain`. Resume by re-asking it; everything
+> else is settled. (Re-parked 2026-09-30.)
 
 ## Where things stand
 
@@ -51,18 +52,32 @@ which they used. See DT-TOOL-1's cascade for cutover, shipped copies, DT-ROLES-1
 ### Open — DT-DTCG-1: the file layout a consumer reads
 
 The only remaining ambiguity; it changes a stored data shape, so it goes to the maintainer.
-DT-BUILD-1 names one `design-tokens.json` as "the only file skills read", but the prototype writes
-the DTCG 2025.10 resolver layout (`dtcg/{light,dark}.tokens.json` + `profile.resolver.json`).
-Drafted options, same read in each (`color.text` light for osakanights → `#010101`):
 
-| Option | Files a consumer reads | Outside DTCG tools | Matches DT-BUILD-1 | Main cost |
-|---|---|---|---|---|
-| A: one `design-tokens.json` with `light`/`dark` groups | 1 | need the mode convention | yes | no standard layout |
-| B: the 2025.10 resolver set only | 3 | yes | no | a resolver in 3 languages; 3 copies per richdocs doc |
-| **C (recommended):** both, built from the same IR; consumers read the single file | 1 | yes (`dtcg/`) | yes | a second serialisation + an agreement test |
+**History.** First asked 2026-09-28 with options A (one file, `light`/`dark` groups), B (the
+2025.10 resolver set, three files) and C (both). The maintainer answered **`explain`**: *"is option A
+(also impacts option C) the design-tokens.json a valid DTCG document still? I recall discussing
+implementing our own custom schema which is part of the DTCG loader conventions just not out of the
+box."* The explanation, researched and verified on 2026-09-28:
 
-Useful spike if unsure: does Style Dictionary read the 2025.10 resolver today? If nothing does, C's
-second form buys nothing and A wins.
+| Question | Answer |
+|---|---|
+| Is A valid DTCG? | **Yes, syntactically** (validates against `format.json` 2025.10). But the Format module defines no modes: a DTCG tool reads `light.color.text.default` and `dark.color.text.default` as two unrelated tokens, and aliases must be rewritten with the mode prefix. |
+| The "custom schema via DTCG conventions" | **`$extensions`** under our reverse-domain key `dev.agentic-dotfiles.curation`. Tools *must* preserve extensions they don't understand. In a resolver document it may sit on sets and modifiers (and inside token trees), **not at the root**. |
+| Does the standard need several files? | **No.** Resolver 2025.10 lets a set or context carry its tokens **inline**, so one file can be a complete multi-mode document. |
+
+That made C's premise wrong and B dominated, leaving two options. Both are built from the real
+osakanights profile and schema-validated, in [`scripts/dtcg1/`](scripts/dtcg1/)
+(`uv run docs/plans/refactor-design-tokens/scripts/dtcg1/validate.py`):
+
+| Option | File | Valid DTCG | A DTCG tool sees modes | Aliases | Reader |
+|---|---|---|---|---|---|
+| **D (recommended):** one resolver document, both modes inline under `modifiers.mode.contexts` | `D.design-tokens.json` | yes, `resolver.json` | yes | unchanged | about 10 lines to walk contexts |
+| A: one format document, `light`/`dark` as plain groups | `A.design-tokens.json` | yes, `format.json` | no, two token sets | mode-prefixed | a dictionary lookup |
+
+**Resume here:** re-ask the revised binary (D vs A) through `concise-decisions`; the second asking
+was interrupted by the maintainer before an answer. Sources:
+[Resolver Module 2025.10](https://www.designtokens.org/tr/drafts/resolver/),
+[Format Module 2025.10](https://www.designtokens.org/tr/drafts/format/).
 
 ### M1 — surface expansion into the IR
 
