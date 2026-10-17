@@ -3,10 +3,8 @@
 Topics 1–4 are closed. What remains is **build**, sequenced below. Surveyed 2026-09-24; paths are
 relative to `skills/`.
 
-> **Parked 2026-09-28, mid-way through a `concise-decisions` loop** whose goal is a migration with
-> zero open questions. DT-TOOL-1 is decided (DECISIONS.md, with its cascade). **One question is left:
-> DT-DTCG-1**, below, now narrowed to D vs A after an `explain`. Resume by re-asking it; everything
-> else is settled. (Re-parked 2026-09-30.)
+> **Zero open questions (2026-10-17).** DT-TOOL-1 and DT-DTCG-1 are both decided (DECISIONS.md, with
+> cascades). What remains is build.
 
 ## Where things stand
 
@@ -27,8 +25,8 @@ richdocs' current schema. That projection is the stand-in this plan retires.
 | M1 | Surface expansion into the IR (CURATION stage 6) | M0 | DT-BUILD-1 |
 | M2 | Promote the prototype to the real tool and the shared store | M0 | DT-LOC-1, DT-PROV-1 |
 | M3 | Ship the four brands' exact-accent seeds as `design-profiles` examples | M2 | DT-TOOL-1 cascade |
-| M4 | `richdocs` reads a profile first, else its built-ins | M1, M2, DT-DTCG-1 | DT-TOOL-1, DT-PIPE-1 |
-| M5 | `mermaidjs-diagrams` reads a profile first, else its palettes; re-vendor into `richdocs` | M1, M2, DT-DTCG-1 | DT-TOOL-1, ADR-007 |
+| M4 | `richdocs` reads a profile first, else its built-ins | M1, M2 | DT-TOOL-1, DT-PIPE-1, DT-DTCG-1 |
+| M5 | `mermaidjs-diagrams` reads a profile first, else its palettes; re-vendor into `richdocs` | M1, M2 | DT-TOOL-1, DT-DTCG-1, ADR-007 |
 | M6 | Retire the prototype's projection | M4, M5 | DT-TOOL-1 cascade |
 
 ### M0 — decided: `skills/design-profiles/` (DT-TOOL-1)
@@ -49,9 +47,11 @@ which they used. See DT-TOOL-1's cascade for cutover, shipped copies, DT-ROLES-1
 - **`.default-profile`:** a one-line text file inside `.design-profiles/` naming the default
   profile, resolved through the same cascade (DT-LOC-1's derived rule).
 
-### Open — DT-DTCG-1: the file layout a consumer reads
+### Decided — DT-DTCG-1: one resolver document, both modes inline (option D)
 
-The only remaining ambiguity; it changes a stored data shape, so it goes to the maintainer.
+Decided 2026-10-17; see DECISIONS.md. A profile's `design-tokens.json` is a DTCG 2025.10 resolver
+document with `modifiers.mode.contexts.{light,dark}` holding the per-mode token trees. M2 writes it,
+M4 and M5 read it. The record below is kept for its history.
 
 **History.** First asked 2026-09-28 with options A (one file, `light`/`dark` groups), B (the
 2025.10 resolver set, three files) and C (both). The maintainer answered **`explain`**: *"is option A
@@ -74,8 +74,7 @@ osakanights profile and schema-validated, in [`scripts/dtcg1/`](scripts/dtcg1/)
 | **D (recommended):** one resolver document, both modes inline under `modifiers.mode.contexts` | `D.design-tokens.json` | yes, `resolver.json` | yes | unchanged | about 10 lines to walk contexts |
 | A: one format document, `light`/`dark` as plain groups | `A.design-tokens.json` | yes, `format.json` | no, two token sets | mode-prefixed | a dictionary lookup |
 
-**Resume here:** re-ask the revised binary (D vs A) through `concise-decisions`; the second asking
-was interrupted by the maintainer before an answer. Sources:
+**Answer (2026-10-17): D.** Sources:
 [Resolver Module 2025.10](https://www.designtokens.org/tr/drafts/resolver/),
 [Format Module 2025.10](https://www.designtokens.org/tr/drafts/format/).
 

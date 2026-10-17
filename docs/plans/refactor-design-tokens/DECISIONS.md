@@ -933,3 +933,53 @@ updated color.border.bold dark #636363 -> #676767     (solved against the edited
 | `themecheck.py`'s fate | Keeps gating richdocs' **built-in** themes, which stay hand-authored; it never runs on a profile (DT-PIPE-1 rule 4) | the choice + DT-PIPE-1 |
 | `slides` and `cli`, which also read a `design-tokens.json` | **Out of scope** for this migration: the maintainer named two consumers. Recorded as a seam; the same pattern extends to them later | the choice |
 | The four built-in brands (MIGRATION M3) | Stay in richdocs as its fallback. `design-profiles` ships their exact-accent **seeds** as examples, not copies of the packs | the lens |
+
+---
+
+## DT-DTCG-1 — a profile's `design-tokens.json` is a DTCG resolver document with both modes inline
+
+- **Status:** decided 2026-10-17 (user-directed, option D of two, through `concise-decisions`
+  after an `explain`). Option A was rejected.
+
+### The maintainer's reasoning, verbatim
+
+> *"Option D makes the most sense because there are whole coherent subtrees for each theme mode so
+> theme switching is selecting the subtree"*
+
+### The decision
+
+- **`design-tokens.json` is a DTCG 2025.10 `resolver.json` document.** Light and dark are two inline
+  contexts under `modifiers.mode.contexts`; the per-mode token trees are the same coherent trees
+  curation already emits. `resolutionOrder` references the `mode` modifier.
+- **Aliases are unchanged** (`{color.border.selected}`), identical in both modes.
+- **The curation schema rides on `$extensions`** under `dev.agentic-dotfiles.curation`, placed on
+  `modifiers.mode`, never at the document root.
+- **Reader contract:** select a context by mode, merge its list, resolve aliases. Each skill carries
+  its own copy of that reader beside the M2 profile resolver (self-containment).
+
+### Rejected alternatives
+
+- **A, one format document with `light`/`dark` groups** — valid DTCG, but the Format module has no
+  modes: a tool reads two unrelated token sets and every alias needs a mode prefix.
+- **B, the resolver set across three files** — the standard allows inline contexts, so extra files
+  buy nothing. **C, both** — redundant once B falls away.
+
+### Lens
+
+- **Given** each mode is a whole coherent token tree and a consumer's job is to pick one,
+- **we prefer** the standard's own mode mechanism (resolver contexts) **over** modes encoded as
+  token-path prefixes,
+- **because** theme switching is then selecting a subtree, aliases stay mode-agnostic, and any
+  resolver-aware DTCG tool can build both themes,
+- **unless** a consumer needs only a bare dictionary lookup and no DTCG tool ever reads the file, at
+  which point A's simpler reader would win.
+
+### Cascade — ambiguities this settled
+
+| Ambiguity | Resolution | By |
+|---|---|---|
+| Alias rewriting in curation | None: per-mode trees are emitted as they are | the choice |
+| Where `$extensions` sits | On `modifiers.mode`, not the root (resolver rule) | the choice |
+| richdocs' `defaultTheme` | Reads from `modifiers.mode.default` on a profile | derived |
+| `scripts/dtcg1/` samples | Kept as evidence: `D.design-tokens.json` is the target shape, `A.design-tokens.json` the rejected one | the choice |
+| M4 and M5 blocking | Unblocked: both read the resolver layout | the choice |

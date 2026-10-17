@@ -1,6 +1,6 @@
 # Design-token refactor
 
-> **Parked 2026-09-28:** one decision left before the build, DT-DTCG-1 — see [`MIGRATION.md`](MIGRATION.md).
+> **No decisions remain open (2026-10-17):** DT-DTCG-1 chose a resolver document; the build is sequenced in [`MIGRATION.md`](MIGRATION.md).
 >
 > **Status:** 2026-09-24 — the seed → IR → DTCG pipeline is prototyped in [`prototype/`](prototype/) and
 > accepted by the maintainer. The richdocs theme showcase is its visual test suite: each generated
@@ -58,7 +58,7 @@ The work was framed as five topics. Two are closed, one is active, two are downs
 | Path | What it holds |
 |---|---|
 | [`DECISIONS.md`](DECISIONS.md) | The fourteen locked decisions, each with a four-clause lens and its rejected alternatives. **Canonical.** |
-| [`MIGRATION.md`](MIGRATION.md) | The build, sequenced: surface expansion, the real tool, both skills' migration. One decision (DT-TOOL-1) gates it. |
+| [`MIGRATION.md`](MIGRATION.md) | The build, sequenced: surface expansion, the real tool, both skills' migration. Gated by DT-TOOL-1 and DT-DTCG-1, both decided. |
 | [`OPEN-QUESTIONS.md`](OPEN-QUESTIONS.md) | No decision questions remain open; the low-stakes list and the closed questions' history. |
 | [`CURATION.md`](CURATION.md) | The seed → IR pipeline, stage by stage. Partly settled, partly draft — each stage says which. |
 | [`research/`](research/) | Six sourced dossiers plus a grounding quote-sheet. Every claim carries a URL. **Do not re-derive.** |
