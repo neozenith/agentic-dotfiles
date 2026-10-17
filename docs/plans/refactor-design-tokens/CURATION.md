@@ -78,7 +78,8 @@ between the two spaces; *bases* do not. At OKLCH `bg = 0.05`, `Y = 0.000125` bec
 three specified surfaces into one visible colour. Any value carried over from an HSL sketch needs
 re-anchoring, not re-labelling.
 
-`color.text.subtlest` is a third toward-text offset, not yet set.
+`color.text.subtlest` is a third toward-text offset, set as the value nearest the ground that still
+reaches 4.5:1 (WCAG 2.2 SC 1.4.3) on every ground (`target.text.subtlest` in `prototype/pipeline.py`).
 
 ---
 
@@ -193,9 +194,10 @@ class take sequential `color.chart.categorical.<N>` slots (DT-CAT-1), for visual
 
 ---
 
-## Stage 6 — surface expansion 🟡 draft
+## Stage 6 — surface expansion ✅ settled (DT-BUILD-1); built in MIGRATION M1
 
-Curation writes all of these into the IR; build only serialises them.
+Curation writes all of these into the IR; build only serialises them. The design is settled; today
+`project_richdocs()` still builds these at projection time until M1 moves them into curation.
 
 | Surface | Shape emitted |
 |---|---|

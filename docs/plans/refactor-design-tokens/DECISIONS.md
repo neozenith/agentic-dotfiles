@@ -417,7 +417,8 @@ Verified against the shipped artifact
   output restores the bare name.
 - The three grounds map straight onto DT-REF-1: `surface.sunken` / `surface` / `surface.raised`
   are `bg-dark` / `bg` / `bg-light`. `text` and `text.subtle` are the two stated foreground
-  offsets; `text.subtlest` is a third offset still to be set.
+  offsets; `text.subtlest` is a third offset, since set to the nearest value reaching 4.5:1 on every
+  ground (`CURATION.md` stage 1).
 - **`color.border` has no value yet** — measured at `L 0.47–0.50` dark, `L 0.55–0.63` light for
   3:1. `color.border.bold` is a second, stronger step above it.
 - Both skills' existing packs need a rename migration; `richdocs` ADR-004's two-palette split
@@ -613,8 +614,9 @@ looked the nicer of the 2 options."*
 - `color.border` is the first role whose rendered colour depends on its ground. It is still a
   **stated** value, so DT-PIPE-1's "nothing computed at load" holds: compositing happens at paint.
 - The IR cannot state `color.border`'s contrast in isolation. Curation can report it per ground.
-- **Surface support for alpha must be verified** before stage 6 is final: cytoscape and deck.gl accept
-  it; mermaid `themeVariables` and draw.io are unverified. Logged in `OPEN-QUESTIONS.md`.
+- **Surface support for alpha is resolved:** every projection flattens alpha onto its ground. Mermaid
+  11.4.1 drops an 8-digit hex for `primaryColor` and draw.io carries alpha as a separate `opacity`
+  style (`OPEN-QUESTIONS.md`, low-stakes items).
 - `color.border.brand` (DT-ROLES-1) is unaffected; its value belongs with the brand roles (Q3).
 
 ---
